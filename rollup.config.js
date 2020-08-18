@@ -1,7 +1,5 @@
 import { terser } from "rollup-plugin-terser";
 import externals from "rollup-plugin-node-externals";
-import commonjs from "@rollup/plugin-commonjs";
-import resolve from "@rollup/plugin-node-resolve";
 
 export default [{
   input: "tsc/ts-basic-gltf-viewer.js",
@@ -14,13 +12,6 @@ export default [{
     externals({
       deps: true,
       devDeps: false,
-      // exclude: [
-      //   "css-element-queries"
-      // ]
     }),
-    // commonjs(),
-    // resolve({
-    //   browser: true,
-    // }),
   ]
 }];
