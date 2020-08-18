@@ -1,6 +1,11 @@
 import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
 
-import * as THREE from "three";
+import { WebGLRenderer, NoToneMapping, sRGBEncoding, 
+  Scene, Mesh, PerspectiveCamera, 
+  AmbientLight, HemisphereLight, DirectionalLight,
+  Color, Box3, Object3D, Vector3, WebGLRenderTarget,
+  MeshPhysicalMaterial, Material, 
+  DoubleSide, NormalBlending, NoBlending, MeshStandardMaterial  } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -59,27 +64,27 @@ export class GltfViewer {
   // #endregion
 
   // #region renderer related fieds
-  private _renderer: THREE.WebGLRenderer;
-  private _mainScene: THREE.Scene;
+  private _renderer: WebGLRenderer;
+  private _mainScene: Scene;
   private _loader: GLTFLoader;
-  private _camera: THREE.PerspectiveCamera;
+  private _camera: PerspectiveCamera;
   private _orbitControls: OrbitControls;
   // #endregion
 
   // #region materials related fieds
-  private _selectionMaterial: THREE.Material;
-  private _isolateMaterial: THREE.Material;
-  private _highlightMaterial: THREE.Material;
+  private _selectionMaterial: Material;
+  private _isolateMaterial: Material;
+  private _highlightMaterial: Material;
   // #endregion
 
   // #region selection related fieds
-  private _selectedMeshes: THREE.Mesh[] = [];
-  private _isolatedMeshes: THREE.Mesh[] = [];
-  private _highlightedMesh: THREE.Mesh;
+  private _selectedMeshes: Mesh[] = [];
+  private _isolatedMeshes: Mesh[] = [];
+  private _highlightedMesh: Mesh;
 
-  private _pickingTarget: THREE.WebGLRenderTarget;
-  private _pickingScene: THREE.Scene;
-  private _pickingColorToMesh = new Map<string, THREE.Mesh>();
+  private _pickingTarget: WebGLRenderTarget;
+  private _pickingScene: Scene;
+  private _pickingColorToMesh = new Map<string, Mesh>();
   private _lastPickingColor = 0;
 
   private _pointerEventHelper: {
@@ -93,8 +98,8 @@ export class GltfViewer {
   // #region model loading related fieds
   private _loadingInProgress = false;
   private _loadingQueue: {url: string; guid: string; name: string}[] = [];
-  private _loadedModelsByGuid = new Map<string, {gltf: GLTF; meshes: THREE.Mesh[]; handles: Set<string>; name: string}>();
-  private _loadedMeshesById = new Map<string, THREE.Mesh[]>();
+  private _loadedModelsByGuid = new Map<string, {gltf: GLTF; meshes: Mesh[]; handles: Set<string>; name: string}>();
+  private _loadedMeshesById = new Map<string, Mesh[]>();
   // #endregion
 
   constructor(containerId: string, options: GltfViewerOptions) { 
@@ -234,22 +239,22 @@ export class GltfViewer {
 
   // #region renderer base
   private initRendererWithScene() {
-    const scene = new THREE.Scene();
+    const scene = new Scene();
 
-    const ambientLight = new THREE.AmbientLight(0x222222, 1);
-    const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+    const ambientLight = new AmbientLight(0x222222, 1);
+    const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 1);
     hemiLight.translateY(2000);
     scene.add(ambientLight);
     scene.add(hemiLight);
     
-    const renderer = new THREE.WebGLRenderer({alpha: true, antialias: true});
+    const renderer = new WebGLRenderer({alpha: true, antialias: true});
     renderer.setSize(this._containerWidth, this._containerHeight, false);
     renderer.setClearColor(0x000000, 0);
-    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.outputEncoding = sRGBEncoding;
     renderer.physicallyCorrectLights = false;
-    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMapping = NoToneMapping;
 
-    const camera = new THREE.PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);    
+    const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);    
     const orbitControls = new OrbitControls(camera, renderer.domElement);
     orbitControls.addEventListener("change", () => this.render());
     camera.position.set (0, 1000, 1000);
@@ -267,30 +272,30 @@ export class GltfViewer {
   }
 
   private initSpecialMaterials() {
-    const selectionMaterial = new THREE.MeshPhysicalMaterial(<THREE.MeshPhysicalMaterial>{ 
-      color: new THREE.Color(0xFF0000), 
-      emissive: new THREE.Color(0xFF0000),
-      blending: THREE.NormalBlending,
+    const selectionMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0xFF0000), 
+      emissive: new Color(0xFF0000),
+      blending: NormalBlending,
       flatShading: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       roughness: 1,
       metalness: 0,
     });
-    const highlightMaterial = new THREE.MeshPhysicalMaterial(<THREE.MeshPhysicalMaterial>{ 
-      color: new THREE.Color(0xFFFF00), 
-      emissive: new THREE.Color(0x000000),
-      blending: THREE.NormalBlending,
+    const highlightMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0xFFFF00), 
+      emissive: new Color(0x000000),
+      blending: NormalBlending,
       flatShading: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       roughness: 1,
       metalness: 0,
     });
-    const isolateMaterial = new THREE.MeshPhysicalMaterial(<THREE.MeshPhysicalMaterial>{ 
-      color: new THREE.Color(0x555555), 
-      emissive: new THREE.Color(0x000000),
-      blending: THREE.NormalBlending,
+    const isolateMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0x555555), 
+      emissive: new Color(0x000000),
+      blending: NormalBlending,
       flatShading: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       roughness: 1,
       metalness: 0,
       opacity: 0.2,
@@ -308,18 +313,18 @@ export class GltfViewer {
     }
   }
   
-  private fitCameraToObjects(objects: THREE.Object3D[], offset = 1.2 ) { 
+  private fitCameraToObjects(objects: Object3D[], offset = 1.2 ) { 
     if (!objects?.length) {
       return;
     }
     
-    const box = new THREE.Box3();    
+    const box = new Box3();    
     for (const object of objects) {
       box.expandByObject(object);
     }      
     
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new Vector3());
+    const center = box.getCenter(new Vector3());
     
     const maxSize = Math.max(size.x, size.y, size.z);
     const fitHeightDistance = maxSize / (2 * Math.atan( Math.PI * this._camera.fov / 360 ));
@@ -345,10 +350,10 @@ export class GltfViewer {
 
   // #region picking scene 
   private initPickingScene() {
-    const pickingTarget = new THREE.WebGLRenderTarget(1, 1);
+    const pickingTarget = new WebGLRenderTarget(1, 1);
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0);
+    const scene = new Scene();
+    scene.background = new Color(0);
 
     this._pickingTarget = pickingTarget;
     this._pickingScene = scene;
@@ -361,20 +366,20 @@ export class GltfViewer {
     return ++this._lastPickingColor;
   } 
 
-  private addMeshToPickingScene(mesh: THREE.Mesh) {
-    const pickingMeshMaterial = new THREE.MeshStandardMaterial({ 
-      color: new THREE.Color(this.nextPickingColor()), 
-      emissive: new THREE.Color(this._lastPickingColor),
-      blending: THREE.NoBlending,
+  private addMeshToPickingScene(mesh: Mesh) {
+    const pickingMeshMaterial = new MeshStandardMaterial({ 
+      color: new Color(this.nextPickingColor()), 
+      emissive: new Color(this._lastPickingColor),
+      blending: NoBlending,
       flatShading: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       
       roughness: 1,
       metalness: 0,
     });
     const colorString = this._lastPickingColor.toString(16);
     
-    const pickingMesh = new THREE.Mesh(mesh.geometry, pickingMeshMaterial);
+    const pickingMesh = new Mesh(mesh.geometry, pickingMeshMaterial);
     pickingMesh.userData.originalUuid = mesh.uuid;
     pickingMesh.userData.color = colorString;
     pickingMesh.position.copy(mesh.position);
@@ -385,7 +390,7 @@ export class GltfViewer {
     this._pickingColorToMesh.set(colorString, mesh);
   }
 
-  private removeMeshFromPickingScene(mesh: THREE.Mesh) {
+  private removeMeshFromPickingScene(mesh: Mesh) {
     const pickingMesh = this._pickingScene.children.find(x => x.userData.originalUuid === mesh.uuid);
     if (pickingMesh) {
       this._pickingScene.remove(pickingMesh);
@@ -400,7 +405,7 @@ export class GltfViewer {
     return {x, y};
   }
 
-  private getItemAtPickingPosition(position: {x: number; y: number}): THREE.Mesh {
+  private getItemAtPickingPosition(position: {x: number; y: number}): Mesh {
     const pixelRatio = this._renderer.getPixelRatio();
     this._camera.setViewOffset(
       this._renderer.getContext().drawingBufferWidth,
@@ -408,7 +413,7 @@ export class GltfViewer {
       position.x * pixelRatio || 0,
       position.y * pixelRatio || 0,
       1, 1);
-    const light = new THREE.DirectionalLight(0xFFFFFF, 1);
+    const light = new DirectionalLight(0xFFFFFF, 1);
     light.position.set(-1, 2, 4);
     this._camera.add(light);
     this._renderer.setRenderTarget(this._pickingTarget);
@@ -519,10 +524,10 @@ export class GltfViewer {
     scene.userData.guid = modelGuid;
     scene.name = name;
 
-    const meshes: THREE.Mesh[] = [];
+    const meshes: Mesh[] = [];
     const handles = new Set<string>();
     scene.traverse(x => {
-      if (x instanceof THREE.Mesh) {
+      if (x instanceof Mesh) {
         const id = `${modelGuid}|${x.name}`;
         x.userData.id = id;
         meshes.push(x);
@@ -572,8 +577,8 @@ export class GltfViewer {
   // #endregion
 
   // #region item selection
-  private findMeshesByIds(ids: Set<string>): {found: THREE.Mesh[]; notFound: Set<string>} {
-    const found: THREE.Mesh[] = [];
+  private findMeshesByIds(ids: Set<string>): {found: Mesh[]; notFound: Set<string>} {
+    const found: Mesh[] = [];
     const notFound = new Set<string>();
 
     ids.forEach(x => {
@@ -613,7 +618,7 @@ export class GltfViewer {
     }
   }
 
-  private addToSelection(mesh: THREE.Mesh): boolean {    
+  private addToSelection(mesh: Mesh): boolean {    
     if (!mesh || this._selectedMeshes.includes(mesh)) {
       return false;
     }
@@ -623,7 +628,7 @@ export class GltfViewer {
     return true;
   }
 
-  private removeFromSelection(mesh: THREE.Mesh): boolean {        
+  private removeFromSelection(mesh: Mesh): boolean {        
     if (!mesh || !this._selectedMeshes.includes(mesh)) {
       return false;
     }
@@ -633,7 +638,7 @@ export class GltfViewer {
     return true;
   }
  
-  private selectMeshes(meshes: THREE.Mesh[], manual: boolean, isolateSelected = false) { 
+  private selectMeshes(meshes: Mesh[], manual: boolean, isolateSelected = false) { 
     this.removeSelection();
     this.removeIsolation();
 
