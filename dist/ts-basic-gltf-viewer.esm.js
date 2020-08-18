@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject } from 'rxjs';
-import { Scene, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, MeshPhysicalMaterial, Color, NormalBlending, DoubleSide, Box3, Vector3, WebGLRenderTarget, MeshStandardMaterial, NoBlending, Mesh, DirectionalLight } from 'three';
+import { Scene, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, DirectionalLight, MeshPhysicalMaterial, NormalBlending } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -18,6 +18,7 @@ class GltfViewerOptions {
     constructor(item = null) {
         this.dracoDecoderEnabled = true;
         this.dracoDecoderPath = "/assets/draco/";
+        this.highlightingEnabled = true;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -34,11 +35,14 @@ class GltfViewer {
         this._selectionChange = new Subject();
         this._manualSelectionChange = new Subject();
         this._bakMatProp = "materialBackup";
-        this._selectedProp = "selected";
-        this._isolatedProp = "isolated";
+        this._hlProp = "highlighted";
+        this._selProp = "selected";
+        this._isolProp = "isolated";
+        this._colProp = "colored";
         this._subscriptions = [];
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
+        this._highlightedMesh = null;
         this._pickingColorToMesh = new Map();
         this._lastPickingColor = 0;
         this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, waitForDouble: false };
@@ -70,10 +74,18 @@ class GltfViewer {
                 setTimeout(() => {
                     this._pointerEventHelper.waitForDouble = false;
                 }, 300);
-                this.selectMeshAtPoint(x, y);
+                this.selectMeshAtPoint(x, y, e.ctrlKey);
             }
             this._pointerEventHelper.downX = null;
             this._pointerEventHelper.downY = null;
+        };
+        this._onCanvasMouseMove = (e) => {
+            if (e.buttons) {
+                return;
+            }
+            const x = e.clientX;
+            const y = e.clientY;
+            this.highlightMeshAtPoint(x, y);
         };
         this._container = document.getElementById(containerId);
         if (!this._container) {
@@ -92,6 +104,7 @@ class GltfViewer {
         this.initSpecialMaterials();
         this.initPickingScene();
         this.initLoader();
+        this.addCanvasEventListeners();
         this._initialized.next(true);
     }
     destroy() {
@@ -162,6 +175,13 @@ class GltfViewer {
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
     }
+    addCanvasEventListeners() {
+        this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
+        this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
+        if (this._options.highlightingEnabled) {
+            this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
+        }
+    }
     initRendererWithScene() {
         const scene = new Scene();
         const ambientLight = new AmbientLight(0x222222, 1);
@@ -187,40 +207,6 @@ class GltfViewer {
         this._camera = camera;
         this._orbitControls = orbitControls;
         this.render();
-    }
-    initSpecialMaterials() {
-        const selectionMaterial = new MeshPhysicalMaterial({
-            color: new Color(0xFF0000),
-            emissive: new Color(0xFF0000),
-            blending: NormalBlending,
-            flatShading: true,
-            side: DoubleSide,
-            roughness: 1,
-            metalness: 0,
-        });
-        const highlightMaterial = new MeshPhysicalMaterial({
-            color: new Color(0xFFFF00),
-            emissive: new Color(0x000000),
-            blending: NormalBlending,
-            flatShading: true,
-            side: DoubleSide,
-            roughness: 1,
-            metalness: 0,
-        });
-        const isolateMaterial = new MeshPhysicalMaterial({
-            color: new Color(0x555555),
-            emissive: new Color(0x000000),
-            blending: NormalBlending,
-            flatShading: true,
-            side: DoubleSide,
-            roughness: 1,
-            metalness: 0,
-            opacity: 0.2,
-            transparent: true,
-        });
-        this._selectionMaterial = selectionMaterial;
-        this._highlightMaterial = highlightMaterial;
-        this._isolateMaterial = isolateMaterial;
     }
     render() {
         if (this._renderer) {
@@ -259,8 +245,6 @@ class GltfViewer {
         scene.background = new Color(0);
         this._pickingTarget = pickingTarget;
         this._pickingScene = scene;
-        this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
-        this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
     }
     nextPickingColor() {
         return ++this._lastPickingColor;
@@ -397,6 +381,7 @@ class GltfViewer {
             if (x instanceof Mesh) {
                 const id = `${modelGuid}|${x.name}`;
                 x.userData.id = id;
+                this.backupMeshMaterial(x);
                 meshes.push(x);
                 handles.add(x.name);
                 if (this._loadedMeshesById.has(id)) {
@@ -450,40 +435,43 @@ class GltfViewer {
     }
     removeSelection() {
         for (const mesh of this._selectedMeshes) {
-            mesh.material = mesh[this._bakMatProp];
-            mesh[this._selectedProp] = undefined;
+            mesh[this._selProp] = undefined;
+            this.refreshMeshMaterial(mesh);
         }
         this._selectedMeshes.length = 0;
     }
     removeIsolation() {
         for (const mesh of this._isolatedMeshes) {
-            mesh.material = mesh[this._bakMatProp];
-            mesh[this._isolatedProp] = undefined;
+            mesh[this._isolProp] = undefined;
+            this.refreshMeshMaterial(mesh);
         }
         this._isolatedMeshes.length = 0;
     }
-    selectMeshAtPoint(x, y) {
+    selectMeshAtPoint(x, y, keepPreviousSelection = false) {
         const position = this.getPickingPosition(x, y);
         const mesh = this.getItemAtPickingPosition(position);
-        if (mesh) {
-            this.selectMeshes([mesh], true);
+        if (!mesh) {
+            this.selectMeshes([], true);
+            return;
+        }
+        if (keepPreviousSelection) {
+            if (mesh[this._selProp]) {
+                this.removeFromSelection(mesh);
+            }
+            else {
+                this.addToSelection(mesh);
+            }
         }
         else {
-            this.selectMeshes([], true);
+            this.selectMeshes([mesh], true);
         }
     }
     addToSelection(mesh) {
-        if (!mesh || this._selectedMeshes.includes(mesh)) {
-            return false;
-        }
         const meshes = [mesh, ...this._selectedMeshes];
         this.selectMeshes(meshes, true);
         return true;
     }
     removeFromSelection(mesh) {
-        if (!mesh || !this._selectedMeshes.includes(mesh)) {
-            return false;
-        }
         const meshes = this._selectedMeshes.filter(x => x !== mesh);
         this.selectMeshes(meshes, true);
         return true;
@@ -496,11 +484,8 @@ class GltfViewer {
             return null;
         }
         meshes.forEach(x => {
-            if (!x[this._bakMatProp]) {
-                x[this._bakMatProp] = x.material;
-            }
-            x[this._selectedProp] = true;
-            x.material = this._selectionMaterial;
+            x[this._selProp] = true;
+            this.refreshMeshMaterial(x);
         });
         if (isolateSelected) {
             this.isolateSelectedMeshes();
@@ -511,12 +496,9 @@ class GltfViewer {
     isolateSelectedMeshes() {
         const loadedMeshes = [...this._loadedMeshesById.values()].flatMap(x => x);
         loadedMeshes.forEach(x => {
-            if (!x[this._selectedProp]) {
-                if (!x[this._bakMatProp]) {
-                    x[this._bakMatProp] = x.material;
-                }
-                x[this._isolatedProp] = true;
-                x.material = this._isolateMaterial;
+            if (!x[this._selProp]) {
+                x[this._isolProp] = true;
+                this.refreshMeshMaterial(x);
                 this._isolatedMeshes.push(x);
             }
         });
@@ -531,6 +513,83 @@ class GltfViewer {
         this._selectionChange.next(ids);
         if (manual) {
             this._manualSelectionChange.next(ids);
+        }
+    }
+    highlightMeshAtPoint(x, y) {
+        const position = this.getPickingPosition(x, y);
+        const mesh = this.getItemAtPickingPosition(position);
+        this.highlightItem(mesh);
+    }
+    highlightItem(mesh) {
+        if (mesh === this._highlightedMesh) {
+            return;
+        }
+        this.removeHighlighting();
+        if (mesh) {
+            mesh[this._hlProp] = true;
+            this.refreshMeshMaterial(mesh);
+            this._highlightedMesh = mesh;
+        }
+        this.render();
+    }
+    removeHighlighting() {
+        if (this._highlightedMesh) {
+            const mesh = this._highlightedMesh;
+            mesh[this._hlProp] = undefined;
+            this.refreshMeshMaterial(mesh);
+            this._highlightedMesh = null;
+        }
+    }
+    initSpecialMaterials() {
+        const selectionMaterial = new MeshPhysicalMaterial({
+            color: new Color(0xFF0000),
+            emissive: new Color(0xFF0000),
+            blending: NormalBlending,
+            flatShading: true,
+            side: DoubleSide,
+            roughness: 1,
+            metalness: 0,
+        });
+        const highlightMaterial = new MeshPhysicalMaterial({
+            color: new Color(0xFFFF00),
+            emissive: new Color(0x000000),
+            blending: NormalBlending,
+            flatShading: true,
+            side: DoubleSide,
+            roughness: 1,
+            metalness: 0,
+        });
+        const isolateMaterial = new MeshPhysicalMaterial({
+            color: new Color(0x555555),
+            emissive: new Color(0x000000),
+            blending: NormalBlending,
+            flatShading: true,
+            side: DoubleSide,
+            roughness: 1,
+            metalness: 0,
+            opacity: 0.2,
+            transparent: true,
+        });
+        this._selectionMaterial = selectionMaterial;
+        this._highlightMaterial = highlightMaterial;
+        this._isolationMaterial = isolateMaterial;
+    }
+    backupMeshMaterial(mesh) {
+        mesh[this._bakMatProp] = mesh.material;
+    }
+    refreshMeshMaterial(mesh) {
+        if (mesh[this._hlProp]) {
+            mesh.material = this._highlightMaterial;
+        }
+        else if (mesh[this._selProp]) {
+            mesh.material = this._selectionMaterial;
+        }
+        else if (mesh[this._isolProp]) {
+            mesh.material = this._isolationMaterial;
+        }
+        else if (mesh[this._colProp]) ;
+        else {
+            mesh.material = mesh[this._bakMatProp];
         }
     }
 }

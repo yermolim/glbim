@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
 	dracoDecoderPath: string;
+	highlightingEnabled: boolean;
 	constructor(item?: object);
 }
 export declare class GltfViewer {
@@ -35,8 +36,10 @@ export declare class GltfViewer {
 	private _selectionChange;
 	private _manualSelectionChange;
 	private readonly _bakMatProp;
-	private readonly _selectedProp;
-	private readonly _isolatedProp;
+	private readonly _hlProp;
+	private readonly _selProp;
+	private readonly _isolProp;
+	private readonly _colProp;
 	private _subscriptions;
 	private _options;
 	private _container;
@@ -49,7 +52,7 @@ export declare class GltfViewer {
 	private _camera;
 	private _orbitControls;
 	private _selectionMaterial;
-	private _isolateMaterial;
+	private _isolationMaterial;
 	private _highlightMaterial;
 	private _selectedMeshes;
 	private _isolatedMeshes;
@@ -78,8 +81,9 @@ export declare class GltfViewer {
 	private closeSubjects;
 	private _onCanvasPointerDown;
 	private _onCanvasPointerUp;
+	private _onCanvasMouseMove;
+	private addCanvasEventListeners;
 	private initRendererWithScene;
-	private initSpecialMaterials;
 	private render;
 	private fitCameraToObjects;
 	private initPickingScene;
@@ -108,6 +112,12 @@ export declare class GltfViewer {
 	private selectMeshes;
 	private isolateSelectedMeshes;
 	private emitSelectionChanged;
+	private highlightMeshAtPoint;
+	private highlightItem;
+	private removeHighlighting;
+	private initSpecialMaterials;
+	private backupMeshMaterial;
+	private refreshMeshMaterial;
 }
 
 export {};

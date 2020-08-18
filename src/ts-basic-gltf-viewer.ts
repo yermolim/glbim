@@ -234,7 +234,7 @@ export class GltfViewer {
       setTimeout(() => {
         this._pointerEventHelper.waitForDouble = false;
       }, 300);
-      this.selectMeshAtPoint(x, y);
+      this.selectMeshAtPoint(x, y, e.ctrlKey);
     }
 
     this._pointerEventHelper.downX = null;
@@ -592,31 +592,32 @@ export class GltfViewer {
     this._isolatedMeshes.length = 0;
   }
 
-  private selectMeshAtPoint(x: number, y: number) {    
+  private selectMeshAtPoint(x: number, y: number, keepPreviousSelection = false) {    
     const position = this.getPickingPosition(x, y);
-    const mesh = this.getItemAtPickingPosition(position);    
-    if (mesh) {
-      this.selectMeshes([mesh], true);
-    } else {
+    const mesh = this.getItemAtPickingPosition(position);
+    if (!mesh) {
       this.selectMeshes([], true);
+      return;
+    }
+
+    if (keepPreviousSelection) {
+      if (mesh[this._selProp]) {
+        this.removeFromSelection(mesh);
+      } else {        
+        this.addToSelection(mesh);
+      }
+    } else {
+      this.selectMeshes([mesh], true);
     }
   }
 
-  private addToSelection(mesh: Mesh): boolean {    
-    if (!mesh || this._selectedMeshes.includes(mesh)) {
-      return false;
-    }
-
+  private addToSelection(mesh: Mesh): boolean {   
     const meshes = [mesh, ...this._selectedMeshes];
     this.selectMeshes(meshes, true);
     return true;
   }
 
-  private removeFromSelection(mesh: Mesh): boolean {        
-    if (!mesh || !this._selectedMeshes.includes(mesh)) {
-      return false;
-    }
-
+  private removeFromSelection(mesh: Mesh): boolean {
     const meshes = this._selectedMeshes.filter(x => x !== mesh);
     this.selectMeshes(meshes, true);
     return true;
