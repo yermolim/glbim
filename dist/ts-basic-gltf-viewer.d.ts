@@ -41,6 +41,7 @@ export declare class GltfViewer {
 	private readonly _selProp;
 	private readonly _isolProp;
 	private readonly _colProp;
+	private readonly _colMatProp;
 	private _subscriptions;
 	private _options;
 	private _container;
@@ -55,9 +56,10 @@ export declare class GltfViewer {
 	private _selectionMaterial;
 	private _isolationMaterial;
 	private _highlightMaterial;
+	private _highlightedMesh;
 	private _selectedMeshes;
 	private _isolatedMeshes;
-	private _highlightedMesh;
+	private _coloredMeshes;
 	private _pickingTarget;
 	private _pickingScene;
 	private _pickingColorToMesh;
@@ -78,6 +80,10 @@ export declare class GltfViewer {
 	closeModel(modelGuid: string): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
+	colorItems(coloringInfos: {
+		color: number;
+		ids: string[];
+	}[]): void;
 	private initObservables;
 	private closeSubjects;
 	private _onCanvasPointerDown;
@@ -116,6 +122,8 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
+	private colorMeshes;
+	private removeColoring;
 	private initSpecialMaterials;
 	private backupMeshMaterial;
 	private refreshMeshMaterial;

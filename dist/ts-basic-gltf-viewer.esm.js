@@ -40,10 +40,12 @@ class GltfViewer {
         this._selProp = "selected";
         this._isolProp = "isolated";
         this._colProp = "colored";
+        this._colMatProp = "coloredMaterial";
         this._subscriptions = [];
+        this._highlightedMesh = null;
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
-        this._highlightedMesh = null;
+        this._coloredMeshes = [];
         this._pickingColorToMesh = new Map();
         this._lastPickingColor = 0;
         this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, mouseMoveTimer: null, waitForDouble: false };
@@ -160,6 +162,11 @@ class GltfViewer {
         }
     }
     ;
+    colorItems(coloringInfos) {
+        this.removeIsolation();
+        this.removeSelection();
+        this.colorMeshes(coloringInfos);
+    }
     initObservables() {
         this.initialized$ = this._initialized.asObservable();
         this.modelLoadingStateChange$ = this._modelLoadingStateChange.asObservable();
@@ -545,6 +552,39 @@ class GltfViewer {
             this._highlightedMesh = null;
         }
     }
+    colorMeshes(coloringInfos) {
+        this.removeColoring();
+        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
+            for (const info of coloringInfos) {
+                const coloredMaterial = new MeshPhysicalMaterial({
+                    color: new Color(info.color),
+                    emissive: new Color(0x000000),
+                    blending: NormalBlending,
+                    flatShading: true,
+                    side: DoubleSide,
+                    roughness: 1,
+                    metalness: 0,
+                });
+                info.ids.forEach(x => {
+                    const meshes = this._loadedMeshesById.get(x);
+                    meshes.forEach(y => {
+                        y[this._colProp] = true;
+                        y[this._colMatProp] = coloredMaterial;
+                        y.material = coloredMaterial;
+                        this._coloredMeshes.push(y);
+                    });
+                });
+            }
+        }
+        this.render();
+    }
+    removeColoring() {
+        for (const mesh of this._coloredMeshes) {
+            mesh[this._colProp] = undefined;
+            this.refreshMeshMaterial(mesh);
+        }
+        this._coloredMeshes.length = 0;
+    }
     initSpecialMaterials() {
         const selectionMaterial = new MeshPhysicalMaterial({
             color: new Color(0xFF0000),
@@ -592,7 +632,9 @@ class GltfViewer {
         else if (mesh[this._isolProp]) {
             mesh.material = this._isolationMaterial;
         }
-        else if (mesh[this._colProp]) ;
+        else if (mesh[this._colProp]) {
+            mesh.material = mesh[this._colMatProp];
+        }
         else {
             mesh.material = mesh[this._bakMatProp];
         }

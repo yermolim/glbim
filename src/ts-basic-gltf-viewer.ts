@@ -55,6 +55,7 @@ export class GltfViewer {
   private readonly _selProp = "selected";
   private readonly _isolProp = "isolated";
   private readonly _colProp = "colored";
+  private readonly _colMatProp = "coloredMaterial";
   // #endregion
   
   private _subscriptions: Subscription[] = [];
@@ -82,9 +83,10 @@ export class GltfViewer {
   // #endregion
 
   // #region selection related fieds
+  private _highlightedMesh: Mesh = null;
   private _selectedMeshes: Mesh[] = [];
   private _isolatedMeshes: Mesh[] = [];
-  private _highlightedMesh: Mesh = null;
+  private _coloredMeshes: Mesh[] = [];
 
   private _pickingTarget: WebGLRenderTarget;
   private _pickingScene: Scene;
@@ -183,6 +185,12 @@ export class GltfViewer {
       }
     }
   };
+
+  colorItems(coloringInfos: {color: number; ids: string[]}[]) {
+    this.removeIsolation();
+    this.removeSelection();
+    this.colorMeshes(coloringInfos);
+  }
   // #endregion
 
   // #region rx
@@ -711,7 +719,42 @@ export class GltfViewer {
   // #endregion
 
   // #region item coloring
+  private colorMeshes(coloringInfos: {color: number; ids: string[]}[]) {
+    this.removeColoring();
 
+    if (coloringInfos?.length) {
+      for (const info of coloringInfos) {
+        const coloredMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+          color: new Color(info.color), 
+          emissive: new Color(0x000000),
+          blending: NormalBlending,
+          flatShading: true,
+          side: DoubleSide,
+          roughness: 1,
+          metalness: 0,
+        });
+        info.ids.forEach(x => {
+          const meshes = this._loadedMeshesById.get(x);
+          meshes.forEach(y => {
+            y[this._colProp] = true;
+            y[this._colMatProp] = coloredMaterial;
+            y.material = coloredMaterial;
+            this._coloredMeshes.push(y);
+          });
+        });
+      }
+    }
+
+    this.render();
+  }
+
+  private removeColoring() {
+    for (const mesh of this._coloredMeshes) {
+      mesh[this._colProp] = undefined;
+      this.refreshMeshMaterial(mesh);
+    }
+    this._coloredMeshes.length = 0;
+  }
   // #endregion
 
   // #region materials
@@ -763,9 +806,8 @@ export class GltfViewer {
     } else if (mesh[this._isolProp]) {      
       mesh.material = this._isolationMaterial;
     } else if (mesh[this._colProp]) {
-      // implement custom coloring
-    }
-    else {
+      mesh.material = mesh[this._colMatProp];
+    } else {
       mesh.material = mesh[this._bakMatProp];
     }
   }
