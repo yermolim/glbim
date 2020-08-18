@@ -16,6 +16,7 @@ import { ResizeSensor } from "css-element-queries";
 export class GltfViewerOptions {
   dracoDecoderEnabled = true;
   dracoDecoderPath = "/assets/draco/";  
+  highlightingEnabled = true;
   
   constructor(item: object = null) {
     if (item != null) {
@@ -49,8 +50,10 @@ export class GltfViewer {
 
   // #region readonly fields
   private readonly _bakMatProp = "materialBackup";
-  private readonly _selectedProp = "selected";
-  private readonly _isolatedProp = "isolated";
+  private readonly _hlProp = "highlighted";
+  private readonly _selProp = "selected";
+  private readonly _isolProp = "isolated";
+  private readonly _colProp = "colored";
   // #endregion
   
   private _subscriptions: Subscription[] = [];
@@ -73,14 +76,14 @@ export class GltfViewer {
 
   // #region materials related fieds
   private _selectionMaterial: Material;
-  private _isolateMaterial: Material;
+  private _isolationMaterial: Material;
   private _highlightMaterial: Material;
   // #endregion
 
   // #region selection related fieds
   private _selectedMeshes: Mesh[] = [];
   private _isolatedMeshes: Mesh[] = [];
-  private _highlightedMesh: Mesh;
+  private _highlightedMesh: Mesh = null;
 
   private _pickingTarget: WebGLRenderTarget;
   private _pickingScene: Scene;
@@ -107,6 +110,7 @@ export class GltfViewer {
     if (!this._container) {
       throw new Error("Container not found!");
     }
+
     this._options = new GltfViewerOptions(options);
 
     this.init();
@@ -123,6 +127,7 @@ export class GltfViewer {
     this.initSpecialMaterials();
     this.initPickingScene();
     this.initLoader();
+    this.addCanvasEventListeners();
 
     this._initialized.next(true);
   }
@@ -235,6 +240,23 @@ export class GltfViewer {
     this._pointerEventHelper.downX = null;
     this._pointerEventHelper.downY = null;
   };
+
+  private _onCanvasMouseMove = (e: MouseEvent) => {   
+    if (e.buttons) {
+      return;
+    } 
+    const x = e.clientX;
+    const y = e.clientY;
+    this.highlightMeshAtPoint(x, y);
+  };
+
+  private addCanvasEventListeners() {
+    this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
+    this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
+    if (this._options.highlightingEnabled) {      
+      this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
+    }
+  }
   // #endregion
 
   // #region renderer base
@@ -269,42 +291,6 @@ export class GltfViewer {
     this._orbitControls = orbitControls;
 
     this.render();
-  }
-
-  private initSpecialMaterials() {
-    const selectionMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0xFF0000), 
-      emissive: new Color(0xFF0000),
-      blending: NormalBlending,
-      flatShading: true,
-      side: DoubleSide,
-      roughness: 1,
-      metalness: 0,
-    });
-    const highlightMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0xFFFF00), 
-      emissive: new Color(0x000000),
-      blending: NormalBlending,
-      flatShading: true,
-      side: DoubleSide,
-      roughness: 1,
-      metalness: 0,
-    });
-    const isolateMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0x555555), 
-      emissive: new Color(0x000000),
-      blending: NormalBlending,
-      flatShading: true,
-      side: DoubleSide,
-      roughness: 1,
-      metalness: 0,
-      opacity: 0.2,
-      transparent: true,
-    });
-
-    this._selectionMaterial = selectionMaterial;
-    this._highlightMaterial = highlightMaterial;
-    this._isolateMaterial = isolateMaterial;
   }
   
   private render() {
@@ -357,9 +343,6 @@ export class GltfViewer {
 
     this._pickingTarget = pickingTarget;
     this._pickingScene = scene;
-
-    this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
-    this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
   }
   
   private nextPickingColor(): number {
@@ -530,6 +513,7 @@ export class GltfViewer {
       if (x instanceof Mesh) {
         const id = `${modelGuid}|${x.name}`;
         x.userData.id = id;
+        this.backupMeshMaterial(x);
         meshes.push(x);
         handles.add(x.name);
         if (this._loadedMeshesById.has(id)) {
@@ -594,16 +578,16 @@ export class GltfViewer {
 
   private removeSelection() {
     for (const mesh of this._selectedMeshes) {
-      mesh.material = mesh[this._bakMatProp];
-      mesh[this._selectedProp] = undefined;
+      mesh[this._selProp] = undefined;
+      this.refreshMeshMaterial(mesh);
     }
     this._selectedMeshes.length = 0;
   }
 
   private removeIsolation() {
     for (const mesh of this._isolatedMeshes) {
-      mesh.material = mesh[this._bakMatProp];
-      mesh[this._isolatedProp] = undefined;
+      mesh[this._isolProp] = undefined;
+      this.refreshMeshMaterial(mesh);
     }
     this._isolatedMeshes.length = 0;
   }
@@ -648,11 +632,8 @@ export class GltfViewer {
     }
     
     meshes.forEach(x => {
-      if (!x[this._bakMatProp]) {
-        x[this._bakMatProp] = x.material;
-      }
-      x[this._selectedProp] = true;
-      x.material = this._selectionMaterial;
+      x[this._selProp] = true;
+      this.refreshMeshMaterial(x);
     });
 
     if (isolateSelected) {
@@ -666,12 +647,9 @@ export class GltfViewer {
   private isolateSelectedMeshes() {
     const loadedMeshes = [...this._loadedMeshesById.values()].flatMap(x => x);
     loadedMeshes.forEach(x => {
-      if (!x[this._selectedProp]) {
-        if (!x[this._bakMatProp]) {
-          x[this._bakMatProp] = x.material;
-        }
-        x[this._isolatedProp] = true;
-        x.material = this._isolateMaterial;
+      if (!x[this._selProp]) {
+        x[this._isolProp] = true;
+        this.refreshMeshMaterial(x);
         this._isolatedMeshes.push(x);
       }
     });
@@ -692,4 +670,92 @@ export class GltfViewer {
     }
   }
   // #endregion
+
+  // #region item highlighting
+  private highlightMeshAtPoint(x: number, y: number) {    
+    const position = this.getPickingPosition(x, y);
+    const mesh = this.getItemAtPickingPosition(position);    
+    this.highlightItem(mesh);
+  }
+
+  private highlightItem(mesh: Mesh) {
+    if (mesh === this._highlightedMesh) {
+      return;
+    }
+
+    this.removeHighlighting();
+    if (mesh) {
+      mesh[this._hlProp] = true;
+      this.refreshMeshMaterial(mesh);
+      this._highlightedMesh = mesh;
+    }
+    this.render();
+  }
+
+  private removeHighlighting() {
+    if (this._highlightedMesh) {
+      const mesh = this._highlightedMesh;
+      mesh[this._hlProp] = undefined;
+      this.refreshMeshMaterial(mesh);
+      this._highlightedMesh = null;
+    }
+  }
+  // #endregion
+
+  // #region materials
+  private initSpecialMaterials() {
+    const selectionMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0xFF0000), 
+      emissive: new Color(0xFF0000),
+      blending: NormalBlending,
+      flatShading: true,
+      side: DoubleSide,
+      roughness: 1,
+      metalness: 0,
+    });
+    const highlightMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0xFFFF00), 
+      emissive: new Color(0x000000),
+      blending: NormalBlending,
+      flatShading: true,
+      side: DoubleSide,
+      roughness: 1,
+      metalness: 0,
+    });
+    const isolateMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(0x555555), 
+      emissive: new Color(0x000000),
+      blending: NormalBlending,
+      flatShading: true,
+      side: DoubleSide,
+      roughness: 1,
+      metalness: 0,
+      opacity: 0.2,
+      transparent: true,
+    });
+
+    this._selectionMaterial = selectionMaterial;
+    this._highlightMaterial = highlightMaterial;
+    this._isolationMaterial = isolateMaterial;
+  }
+
+  private backupMeshMaterial(mesh: Mesh) {    
+    mesh[this._bakMatProp] = mesh.material;
+  }
+
+  private refreshMeshMaterial(mesh: Mesh) { 
+    if (mesh[this._hlProp]) {      
+      mesh.material = this._highlightMaterial;
+    } else if (mesh[this._selProp]) {
+      mesh.material = this._selectionMaterial;
+    } else if (mesh[this._isolProp]) {      
+      mesh.material = this._isolationMaterial;
+    } else if (mesh[this._colProp]) {
+      // implement custom coloring
+    }
+    else {
+      mesh.material = mesh[this._bakMatProp];
+    }
+  }
+  // #endregion  
 }
