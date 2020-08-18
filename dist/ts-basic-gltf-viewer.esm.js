@@ -19,6 +19,7 @@ class GltfViewerOptions {
         this.dracoDecoderEnabled = true;
         this.dracoDecoderPath = "/assets/draco/";
         this.highlightingEnabled = true;
+        this.highlightingLatency = 300;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -45,7 +46,7 @@ class GltfViewer {
         this._highlightedMesh = null;
         this._pickingColorToMesh = new Map();
         this._lastPickingColor = 0;
-        this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, waitForDouble: false };
+        this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, mouseMoveTimer: null, waitForDouble: false };
         this._loadingInProgress = false;
         this._loadingQueue = [];
         this._loadedModelsByGuid = new Map();
@@ -83,9 +84,13 @@ class GltfViewer {
             if (e.buttons) {
                 return;
             }
-            const x = e.clientX;
-            const y = e.clientY;
-            this.highlightMeshAtPoint(x, y);
+            clearTimeout(this._pointerEventHelper.mouseMoveTimer);
+            this._pointerEventHelper.mouseMoveTimer = null;
+            this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
+                const x = e.clientX;
+                const y = e.clientY;
+                this.highlightMeshAtPoint(x, y);
+            }, this._options.highlightingLatency);
         };
         this._container = document.getElementById(containerId);
         if (!this._container) {

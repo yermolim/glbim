@@ -17,6 +17,7 @@ export class GltfViewerOptions {
   dracoDecoderEnabled = true;
   dracoDecoderPath = "/assets/draco/";  
   highlightingEnabled = true;
+  highlightingLatency = 300;
   
   constructor(item: object = null) {
     if (item != null) {
@@ -94,8 +95,9 @@ export class GltfViewer {
     downX: number; 
     downY: number; 
     maxDiff: number; 
+    mouseMoveTimer: number;
     waitForDouble: boolean;
-  } = { downX: null, downY: null, maxDiff: 10, waitForDouble: false };
+  } = { downX: null, downY: null, maxDiff: 10, mouseMoveTimer: null, waitForDouble: false };
   // #endregion
 
   // #region model loading related fieds
@@ -245,9 +247,14 @@ export class GltfViewer {
     if (e.buttons) {
       return;
     } 
-    const x = e.clientX;
-    const y = e.clientY;
-    this.highlightMeshAtPoint(x, y);
+
+    clearTimeout(this._pointerEventHelper.mouseMoveTimer);
+    this._pointerEventHelper.mouseMoveTimer = null;
+    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
+      const x = e.clientX;
+      const y = e.clientY;
+      this.highlightMeshAtPoint(x, y);
+    }, this._options.highlightingLatency);
   };
 
   private addCanvasEventListeners() {
@@ -560,7 +567,7 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region item selection
+  // #region item selection/isolation
   private findMeshesByIds(ids: Set<string>): {found: Mesh[]; notFound: Set<string>} {
     const found: Mesh[] = [];
     const notFound = new Set<string>();
@@ -701,6 +708,10 @@ export class GltfViewer {
       this._highlightedMesh = null;
     }
   }
+  // #endregion
+
+  // #region item coloring
+
   // #endregion
 
   // #region materials

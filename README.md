@@ -1,7 +1,7 @@
 # ts-basic-gltf-viewer
 three.js-based basic gltf model viewer
 
-created for testing purposes, so not much description provided, but may still be helpful to someone
+created for personal use, so not much description provided, but may still be helpful to someone
 
 dependencies:
 - <a href="https://github.com/mrdoob/three.js">three.js<a>

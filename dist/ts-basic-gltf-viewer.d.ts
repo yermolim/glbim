@@ -6,6 +6,7 @@ export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
 	dracoDecoderPath: string;
 	highlightingEnabled: boolean;
+	highlightingLatency: number;
 	constructor(item?: object);
 }
 export declare class GltfViewer {
