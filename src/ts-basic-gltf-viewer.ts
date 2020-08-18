@@ -1,6 +1,6 @@
 import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
 
-import THREE from "three";
+import * as THREE from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
