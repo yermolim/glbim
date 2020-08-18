@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject } from 'rxjs';
-import THREE from 'three';
+import { Scene, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, MeshPhysicalMaterial, Color, NormalBlending, DoubleSide, Box3, Vector3, WebGLRenderTarget, MeshStandardMaterial, NoBlending, Mesh, DirectionalLight } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -163,19 +163,19 @@ class GltfViewer {
         this._manualSelectionChange.complete();
     }
     initRendererWithScene() {
-        const scene = new THREE.Scene();
-        const ambientLight = new THREE.AmbientLight(0x222222, 1);
-        const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+        const scene = new Scene();
+        const ambientLight = new AmbientLight(0x222222, 1);
+        const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 1);
         hemiLight.translateY(2000);
         scene.add(ambientLight);
         scene.add(hemiLight);
-        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        const renderer = new WebGLRenderer({ alpha: true, antialias: true });
         renderer.setSize(this._containerWidth, this._containerHeight, false);
         renderer.setClearColor(0x000000, 0);
-        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.outputEncoding = sRGBEncoding;
         renderer.physicallyCorrectLights = false;
-        renderer.toneMapping = THREE.NoToneMapping;
-        const camera = new THREE.PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);
+        renderer.toneMapping = NoToneMapping;
+        const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);
         const orbitControls = new OrbitControls(camera, renderer.domElement);
         orbitControls.addEventListener("change", () => this.render());
         camera.position.set(0, 1000, 1000);
@@ -189,30 +189,30 @@ class GltfViewer {
         this.render();
     }
     initSpecialMaterials() {
-        const selectionMaterial = new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(0xFF0000),
-            emissive: new THREE.Color(0xFF0000),
-            blending: THREE.NormalBlending,
+        const selectionMaterial = new MeshPhysicalMaterial({
+            color: new Color(0xFF0000),
+            emissive: new Color(0xFF0000),
+            blending: NormalBlending,
             flatShading: true,
-            side: THREE.DoubleSide,
+            side: DoubleSide,
             roughness: 1,
             metalness: 0,
         });
-        const highlightMaterial = new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(0xFFFF00),
-            emissive: new THREE.Color(0x000000),
-            blending: THREE.NormalBlending,
+        const highlightMaterial = new MeshPhysicalMaterial({
+            color: new Color(0xFFFF00),
+            emissive: new Color(0x000000),
+            blending: NormalBlending,
             flatShading: true,
-            side: THREE.DoubleSide,
+            side: DoubleSide,
             roughness: 1,
             metalness: 0,
         });
-        const isolateMaterial = new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(0x555555),
-            emissive: new THREE.Color(0x000000),
-            blending: THREE.NormalBlending,
+        const isolateMaterial = new MeshPhysicalMaterial({
+            color: new Color(0x555555),
+            emissive: new Color(0x000000),
+            blending: NormalBlending,
             flatShading: true,
-            side: THREE.DoubleSide,
+            side: DoubleSide,
             roughness: 1,
             metalness: 0,
             opacity: 0.2,
@@ -231,12 +231,12 @@ class GltfViewer {
         if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
             return;
         }
-        const box = new THREE.Box3();
+        const box = new Box3();
         for (const object of objects) {
             box.expandByObject(object);
         }
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new Vector3());
+        const center = box.getCenter(new Vector3());
         const maxSize = Math.max(size.x, size.y, size.z);
         const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
         const fitWidthDistance = fitHeightDistance / this._camera.aspect;
@@ -254,9 +254,9 @@ class GltfViewer {
         this._orbitControls.update();
     }
     initPickingScene() {
-        const pickingTarget = new THREE.WebGLRenderTarget(1, 1);
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0);
+        const pickingTarget = new WebGLRenderTarget(1, 1);
+        const scene = new Scene();
+        scene.background = new Color(0);
         this._pickingTarget = pickingTarget;
         this._pickingScene = scene;
         this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
@@ -266,17 +266,17 @@ class GltfViewer {
         return ++this._lastPickingColor;
     }
     addMeshToPickingScene(mesh) {
-        const pickingMeshMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(this.nextPickingColor()),
-            emissive: new THREE.Color(this._lastPickingColor),
-            blending: THREE.NoBlending,
+        const pickingMeshMaterial = new MeshStandardMaterial({
+            color: new Color(this.nextPickingColor()),
+            emissive: new Color(this._lastPickingColor),
+            blending: NoBlending,
             flatShading: true,
-            side: THREE.DoubleSide,
+            side: DoubleSide,
             roughness: 1,
             metalness: 0,
         });
         const colorString = this._lastPickingColor.toString(16);
-        const pickingMesh = new THREE.Mesh(mesh.geometry, pickingMeshMaterial);
+        const pickingMesh = new Mesh(mesh.geometry, pickingMeshMaterial);
         pickingMesh.userData.originalUuid = mesh.uuid;
         pickingMesh.userData.color = colorString;
         pickingMesh.position.copy(mesh.position);
@@ -301,7 +301,7 @@ class GltfViewer {
     getItemAtPickingPosition(position) {
         const pixelRatio = this._renderer.getPixelRatio();
         this._camera.setViewOffset(this._renderer.getContext().drawingBufferWidth, this._renderer.getContext().drawingBufferHeight, position.x * pixelRatio || 0, position.y * pixelRatio || 0, 1, 1);
-        const light = new THREE.DirectionalLight(0xFFFFFF, 1);
+        const light = new DirectionalLight(0xFFFFFF, 1);
         light.position.set(-1, 2, 4);
         this._camera.add(light);
         this._renderer.setRenderTarget(this._pickingTarget);
@@ -394,7 +394,7 @@ class GltfViewer {
         const meshes = [];
         const handles = new Set();
         scene.traverse(x => {
-            if (x instanceof THREE.Mesh) {
+            if (x instanceof Mesh) {
                 const id = `${modelGuid}|${x.name}`;
                 x.userData.id = id;
                 meshes.push(x);
