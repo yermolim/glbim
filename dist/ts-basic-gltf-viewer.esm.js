@@ -131,17 +131,23 @@ class GltfViewer {
             this._containerResizeSensor.detach();
         }
     }
-    openModel(modelInfo) {
-        if (modelInfo === null || modelInfo === void 0 ? void 0 : modelInfo.guid) {
-            this._loadingQueue.push(modelInfo);
-            this.loadQueuedModelsAsync();
+    openModels(modelInfos) {
+        if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
+            return;
         }
+        modelInfos.forEach(x => {
+            this._loadingQueue.push(x);
+        });
+        this.loadQueuedModelsAsync();
     }
     ;
-    closeModel(modelGuid) {
-        if (modelGuid) {
-            this.removeModelFromScene(modelGuid);
+    closeModels(modelGuids) {
+        if (!(modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length)) {
+            return;
         }
+        modelGuids.forEach(x => {
+            this.removeModelFromScene(x);
+        });
     }
     ;
     selectItems(ids) {

@@ -72,12 +72,12 @@ export declare class GltfViewer {
 	constructor(containerId: string, options: GltfViewerOptions);
 	init(): void;
 	destroy(): void;
-	openModel(modelInfo: {
+	openModels(modelInfos: {
 		url: string;
 		guid: string;
 		name: string;
-	}): void;
-	closeModel(modelGuid: string): void;
+	}[]): void;
+	closeModels(modelGuids: string[]): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
 	colorItems(coloringInfos: {

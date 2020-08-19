@@ -155,17 +155,23 @@ export class GltfViewer {
   }
 
   // #region public interaction
-  openModel(modelInfo: {url: string; guid: string; name: string}) {
-    if (modelInfo?.guid) {
-      this._loadingQueue.push(modelInfo);
-      this.loadQueuedModelsAsync();
+  openModels(modelInfos: {url: string; guid: string; name: string}[]) {
+    if (!modelInfos?.length) {
+      return;
     }
+    modelInfos.forEach(x => {
+      this._loadingQueue.push(x);
+    });
+    this.loadQueuedModelsAsync();
   };
 
-  closeModel(modelGuid: string) {
-    if (modelGuid) {
-      this.removeModelFromScene(modelGuid);
+  closeModels(modelGuids: string[]) {
+    if (!modelGuids?.length) {
+      return;
     }
+    modelGuids.forEach(x => {
+      this.removeModelFromScene(x);
+    });
   };
 
   selectItems(ids: string[]) {
