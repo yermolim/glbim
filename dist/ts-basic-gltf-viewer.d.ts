@@ -2,6 +2,16 @@
 
 import { Observable } from 'rxjs';
 
+export interface ModelBaseInfo {
+	url: string;
+	guid: string;
+	name: string;
+}
+export interface ModelLoadingInfo {
+	url: string;
+	guid: string;
+	error?: Error;
+}
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
 	dracoDecoderPath: string;
@@ -12,16 +22,9 @@ export declare class GltfViewerOptions {
 export declare class GltfViewer {
 	initialized$: Observable<boolean>;
 	modelLoadingStateChange$: Observable<boolean>;
-	modelLoadingStart$: Observable<{
-		url: string;
-		guid: string;
-	}>;
+	modelLoadingStart$: Observable<ModelLoadingInfo>;
 	modelLoadingProgress$: Observable<number>;
-	modelLoadingEnd$: Observable<{
-		url: string;
-		guid: string;
-		error: Error;
-	}>;
+	modelLoadingEnd$: Observable<ModelLoadingInfo>;
 	openedModelsChange$: Observable<Map<string, {
 		name: string;
 		handles: Set<string>;
@@ -72,11 +75,7 @@ export declare class GltfViewer {
 	constructor(containerId: string, options: GltfViewerOptions);
 	init(): void;
 	destroy(): void;
-	openModels(modelInfos: {
-		url: string;
-		guid: string;
-		name: string;
-	}[]): void;
+	openModels(modelInfos: ModelBaseInfo[]): void;
 	closeModels(modelGuids: string[]): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;

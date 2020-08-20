@@ -13,6 +13,25 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { ResizeSensor } from "css-element-queries";
 
+export interface ModelBaseInfo {
+  url: string; 
+  guid: string; 
+  name: string;
+}
+
+export interface ModelLoadingInfo {
+  url: string; 
+  guid: string; 
+  error?: Error;
+}
+
+interface ModelGeometryInfo {
+  name: string;
+  gltf: GLTF; 
+  meshes: Mesh[]; 
+  handles: Set<string>; 
+}
+
 export class GltfViewerOptions {
   dracoDecoderEnabled = true;
   dracoDecoderPath = "/assets/draco/";  
@@ -30,9 +49,9 @@ export class GltfViewer {
   // #region public observables
   initialized$: Observable<boolean>;
   modelLoadingStateChange$: Observable<boolean>;
-  modelLoadingStart$: Observable<{url: string; guid: string}>;
+  modelLoadingStart$: Observable<ModelLoadingInfo>;
   modelLoadingProgress$: Observable<number>;
-  modelLoadingEnd$: Observable<{url: string; guid: string; error: Error}>;
+  modelLoadingEnd$: Observable<ModelLoadingInfo>;
   openedModelsChange$: Observable<Map<string, {name: string; handles: Set<string>}>>;  
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
@@ -41,9 +60,9 @@ export class GltfViewer {
   // #region private rx subjects
   private _initialized = new BehaviorSubject<boolean>(false);
   private _modelLoadingStateChange = new Subject<boolean>();
-  private _modelLoadingStart = new Subject<{url: string; guid: string}>();
+  private _modelLoadingStart = new Subject<ModelLoadingInfo>();
   private _modelLoadingProgress = new Subject<number>();
-  private _modelLoadingEnd = new Subject<{url: string; guid: string; error: Error}>();
+  private _modelLoadingEnd = new Subject<ModelLoadingInfo>();
   private _openedModelsChange = new Subject<Map<string, {name: string; handles: Set<string>}>>();   
   private _selectionChange = new Subject<Set<string>>();
   private _manualSelectionChange = new Subject<Set<string>>();  
@@ -104,8 +123,8 @@ export class GltfViewer {
 
   // #region model loading related fieds
   private _loadingInProgress = false;
-  private _loadingQueue: {url: string; guid: string; name: string}[] = [];
-  private _loadedModelsByGuid = new Map<string, {gltf: GLTF; meshes: Mesh[]; handles: Set<string>; name: string}>();
+  private _loadingQueue: ModelBaseInfo[] = [];
+  private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
   private _loadedMeshesById = new Map<string, Mesh[]>();
   // #endregion
 
@@ -155,7 +174,7 @@ export class GltfViewer {
   }
 
   // #region public interaction
-  openModels(modelInfos: {url: string; guid: string; name: string}[]) {
+  openModels(modelInfos: ModelBaseInfo[]) {
     if (!modelInfos?.length) {
       return;
     }
