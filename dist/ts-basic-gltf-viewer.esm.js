@@ -354,8 +354,8 @@ class GltfViewer {
                     yield this.loadModel(url, guid, name);
                 }
             }
-            this._loadingInProgress = false;
             this._modelLoadingStateChange.next(false);
+            this._loadingInProgress = false;
         });
     }
     loadModel(url, guid, name) {

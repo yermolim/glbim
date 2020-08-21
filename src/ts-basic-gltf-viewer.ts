@@ -504,8 +504,8 @@ export class GltfViewer {
       }
     }    
 
-    this._loadingInProgress = false;
     this._modelLoadingStateChange.next(false);
+    this._loadingInProgress = false;
   }
 
   private async loadModel(url: string, guid: string, name: string) {
