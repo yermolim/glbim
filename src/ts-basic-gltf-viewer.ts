@@ -13,16 +13,22 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { ResizeSensor } from "css-element-queries";
 
-export interface ModelBaseInfo {
+export interface ModelFileInfo {
   url: string; 
   guid: string; 
   name: string;
 }
 
-export interface ModelLoadingInfo {
+export interface ModelLoadedInfo {
   url: string; 
   guid: string; 
   error?: Error;
+}
+
+export interface ModelOpenedInfo {
+  guid: string; 
+  name: string; 
+  handles: Set<string>;
 }
 
 interface ModelGeometryInfo {
@@ -49,32 +55,32 @@ export class GltfViewer {
   // #region public observables
   initialized$: Observable<boolean>;
   modelLoadingStateChange$: Observable<boolean>;
-  modelLoadingStart$: Observable<ModelLoadingInfo>;
+  modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<number>;
-  modelLoadingEnd$: Observable<ModelLoadingInfo>;
-  openedModelsChange$: Observable<Map<string, {name: string; handles: Set<string>}>>;  
+  modelLoadingEnd$: Observable<ModelLoadedInfo>;
+  openedModelsChange$: Observable<ModelOpenedInfo[]>;  
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
   // #endregion  
   
   // #region private rx subjects
   private _initialized = new BehaviorSubject<boolean>(false);
-  private _modelLoadingStateChange = new Subject<boolean>();
-  private _modelLoadingStart = new Subject<ModelLoadingInfo>();
+  private _modelLoadingStateChange = new BehaviorSubject<boolean>(false);
+  private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingProgress = new Subject<number>();
-  private _modelLoadingEnd = new Subject<ModelLoadingInfo>();
-  private _openedModelsChange = new Subject<Map<string, {name: string; handles: Set<string>}>>();   
-  private _selectionChange = new Subject<Set<string>>();
+  private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
+  private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);   
+  private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
   // #endregion
 
   // #region readonly fields
   private readonly _bakMatProp = "materialBackup";
+  private readonly _colMatProp = "materialColored";
   private readonly _hlProp = "highlighted";
   private readonly _selProp = "selected";
   private readonly _isolProp = "isolated";
   private readonly _colProp = "colored";
-  private readonly _colMatProp = "coloredMaterial";
   // #endregion
   
   private _subscriptions: Subscription[] = [];
@@ -123,7 +129,7 @@ export class GltfViewer {
 
   // #region model loading related fieds
   private _loadingInProgress = false;
-  private _loadingQueue: ModelBaseInfo[] = [];
+  private _loadingQueue: ModelFileInfo[] = [];
   private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
   private _loadedMeshesById = new Map<string, Mesh[]>();
   // #endregion
@@ -174,7 +180,7 @@ export class GltfViewer {
   }
 
   // #region public interaction
-  openModels(modelInfos: ModelBaseInfo[]) {
+  openModels(modelInfos: ModelFileInfo[]) {
     if (!modelInfos?.length) {
       return;
     }
@@ -188,6 +194,7 @@ export class GltfViewer {
     if (!modelGuids?.length) {
       return;
     }
+
     modelGuids.forEach(x => {
       this.removeModelFromScene(x);
     });
@@ -215,6 +222,14 @@ export class GltfViewer {
     this.removeIsolation();
     this.removeSelection();
     this.colorMeshes(coloringInfos);
+  }
+
+  getOpenedModels(): ModelOpenedInfo[] {
+    return this._openedModelsChange.getValue();
+  }
+
+  getSelectedItems(): Set<string> {
+    return this._selectionChange.getValue();
   }
   // #endregion
 
@@ -553,6 +568,7 @@ export class GltfViewer {
       if (x instanceof Mesh) {
         const id = `${modelGuid}|${x.name}`;
         x.userData.id = id;
+        x.userData.modelGuid = modelGuid;
         this.backupMeshMaterial(x);
         meshes.push(x);
         handles.add(x.name);
@@ -583,6 +599,11 @@ export class GltfViewer {
       this._loadedMeshesById.delete(x.userData.id);
       this.removeMeshFromPickingScene(x);
     });
+
+    this._highlightedMesh = null;
+    this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
     
     this._mainScene.remove(modelData.gltf.scene);
     this._loadedModelsByGuid.delete(modelGuid);
@@ -592,11 +613,11 @@ export class GltfViewer {
   }
 
   private emitOpenedModelsChanged() {  
-    const openedModelsMap = new Map<string, {name: string; handles: Set<string>}>();
+    const modelOpenedInfos: ModelOpenedInfo[] = [];
     for (const [ modelGuid, model ] of this._loadedModelsByGuid) {
-      openedModelsMap.set(modelGuid, { name: model.name, handles: model.handles});
+      modelOpenedInfos.push({guid: modelGuid, name: model.name, handles: model.handles});
     } 
-    this._openedModelsChange.next(openedModelsMap);
+    this._openedModelsChange.next(modelOpenedInfos);
   }
   // #endregion
 

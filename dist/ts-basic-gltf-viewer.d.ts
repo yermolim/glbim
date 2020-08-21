@@ -2,15 +2,20 @@
 
 import { Observable } from 'rxjs';
 
-export interface ModelBaseInfo {
+export interface ModelFileInfo {
 	url: string;
 	guid: string;
 	name: string;
 }
-export interface ModelLoadingInfo {
+export interface ModelLoadedInfo {
 	url: string;
 	guid: string;
 	error?: Error;
+}
+export interface ModelOpenedInfo {
+	guid: string;
+	name: string;
+	handles: Set<string>;
 }
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
@@ -22,13 +27,10 @@ export declare class GltfViewerOptions {
 export declare class GltfViewer {
 	initialized$: Observable<boolean>;
 	modelLoadingStateChange$: Observable<boolean>;
-	modelLoadingStart$: Observable<ModelLoadingInfo>;
+	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingProgress$: Observable<number>;
-	modelLoadingEnd$: Observable<ModelLoadingInfo>;
-	openedModelsChange$: Observable<Map<string, {
-		name: string;
-		handles: Set<string>;
-	}>>;
+	modelLoadingEnd$: Observable<ModelLoadedInfo>;
+	openedModelsChange$: Observable<ModelOpenedInfo[]>;
 	selectionChange$: Observable<Set<string>>;
 	manualSelectionChange$: Observable<Set<string>>;
 	private _initialized;
@@ -40,11 +42,11 @@ export declare class GltfViewer {
 	private _selectionChange;
 	private _manualSelectionChange;
 	private readonly _bakMatProp;
+	private readonly _colMatProp;
 	private readonly _hlProp;
 	private readonly _selProp;
 	private readonly _isolProp;
 	private readonly _colProp;
-	private readonly _colMatProp;
 	private _subscriptions;
 	private _options;
 	private _container;
@@ -75,7 +77,7 @@ export declare class GltfViewer {
 	constructor(containerId: string, options: GltfViewerOptions);
 	init(): void;
 	destroy(): void;
-	openModels(modelInfos: ModelBaseInfo[]): void;
+	openModels(modelInfos: ModelFileInfo[]): void;
 	closeModels(modelGuids: string[]): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
@@ -83,6 +85,8 @@ export declare class GltfViewer {
 		color: number;
 		ids: string[];
 	}[]): void;
+	getOpenedModels(): ModelOpenedInfo[];
+	getSelectedItems(): Set<string>;
 	private initObservables;
 	private closeSubjects;
 	private _onCanvasPointerDown;

@@ -28,19 +28,19 @@ class GltfViewerOptions {
 class GltfViewer {
     constructor(containerId, options) {
         this._initialized = new BehaviorSubject(false);
-        this._modelLoadingStateChange = new Subject();
+        this._modelLoadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingProgress = new Subject();
         this._modelLoadingEnd = new Subject();
-        this._openedModelsChange = new Subject();
-        this._selectionChange = new Subject();
+        this._openedModelsChange = new BehaviorSubject([]);
+        this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
         this._bakMatProp = "materialBackup";
+        this._colMatProp = "materialColored";
         this._hlProp = "highlighted";
         this._selProp = "selected";
         this._isolProp = "isolated";
         this._colProp = "colored";
-        this._colMatProp = "coloredMaterial";
         this._subscriptions = [];
         this._highlightedMesh = null;
         this._selectedMeshes = [];
@@ -172,6 +172,12 @@ class GltfViewer {
         this.removeIsolation();
         this.removeSelection();
         this.colorMeshes(coloringInfos);
+    }
+    getOpenedModels() {
+        return this._openedModelsChange.getValue();
+    }
+    getSelectedItems() {
+        return this._selectionChange.getValue();
     }
     initObservables() {
         this.initialized$ = this._initialized.asObservable();
@@ -399,6 +405,7 @@ class GltfViewer {
             if (x instanceof Mesh) {
                 const id = `${modelGuid}|${x.name}`;
                 x.userData.id = id;
+                x.userData.modelGuid = modelGuid;
                 this.backupMeshMaterial(x);
                 meshes.push(x);
                 handles.add(x.name);
@@ -426,17 +433,21 @@ class GltfViewer {
             this._loadedMeshesById.delete(x.userData.id);
             this.removeMeshFromPickingScene(x);
         });
+        this._highlightedMesh = null;
+        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+        this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
         this._mainScene.remove(modelData.gltf.scene);
         this._loadedModelsByGuid.delete(modelGuid);
         this.emitOpenedModelsChanged();
         this.render();
     }
     emitOpenedModelsChanged() {
-        const openedModelsMap = new Map();
+        const modelOpenedInfos = [];
         for (const [modelGuid, model] of this._loadedModelsByGuid) {
-            openedModelsMap.set(modelGuid, { name: model.name, handles: model.handles });
+            modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
         }
-        this._openedModelsChange.next(openedModelsMap);
+        this._openedModelsChange.next(modelOpenedInfos);
     }
     findMeshesByIds(ids) {
         const found = [];
