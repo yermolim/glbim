@@ -573,12 +573,14 @@ class GltfViewer {
                 });
                 info.ids.forEach(x => {
                     const meshes = this._loadedMeshesById.get(x);
-                    meshes.forEach(y => {
-                        y[this._colProp] = true;
-                        y[this._colMatProp] = coloredMaterial;
-                        y.material = coloredMaterial;
-                        this._coloredMeshes.push(y);
-                    });
+                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
+                        meshes.forEach(y => {
+                            y[this._colProp] = true;
+                            y[this._colMatProp] = coloredMaterial;
+                            y.material = coloredMaterial;
+                            this._coloredMeshes.push(y);
+                        });
+                    }
                 });
             }
         }
