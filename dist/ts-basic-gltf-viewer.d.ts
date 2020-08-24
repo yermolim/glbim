@@ -12,10 +12,19 @@ export interface ModelLoadedInfo {
 	guid: string;
 	error?: Error;
 }
+export interface ModelLoadingInfo {
+	url: string;
+	guid: string;
+	progress: number;
+}
 export interface ModelOpenedInfo {
 	guid: string;
 	name: string;
 	handles: Set<string>;
+}
+export interface ColoringInfo {
+	color: number;
+	ids: string[];
 }
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
@@ -28,16 +37,16 @@ export declare class GltfViewer {
 	initialized$: Observable<boolean>;
 	modelLoadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
-	modelLoadingProgress$: Observable<number>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
+	modelLoadingProgress$: Observable<ModelLoadingInfo>;
 	openedModelsChange$: Observable<ModelOpenedInfo[]>;
 	selectionChange$: Observable<Set<string>>;
 	manualSelectionChange$: Observable<Set<string>>;
 	private _initialized;
 	private _modelLoadingStateChange;
 	private _modelLoadingStart;
-	private _modelLoadingProgress;
 	private _modelLoadingEnd;
+	private _modelLoadingProgress;
 	private _openedModelsChange;
 	private _selectionChange;
 	private _manualSelectionChange;
@@ -61,6 +70,8 @@ export declare class GltfViewer {
 	private _selectionMaterial;
 	private _isolationMaterial;
 	private _highlightMaterial;
+	private _queuedColoring;
+	private _queuedSelection;
 	private _highlightedMesh;
 	private _selectedMeshes;
 	private _isolatedMeshes;
@@ -77,14 +88,11 @@ export declare class GltfViewer {
 	constructor(containerId: string, options: GltfViewerOptions);
 	init(): void;
 	destroy(): void;
-	openModels(modelInfos: ModelFileInfo[]): void;
+	openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]>;
 	closeModels(modelGuids: string[]): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
-	colorItems(coloringInfos: {
-		color: number;
-		ids: string[];
-	}[]): void;
+	colorItems(coloringInfos: ColoringInfo[]): void;
 	getOpenedModels(): ModelOpenedInfo[];
 	getSelectedItems(): Set<string>;
 	private initObservables;
@@ -113,6 +121,12 @@ export declare class GltfViewer {
 	private addModelToScene;
 	private removeModelFromScene;
 	private emitOpenedModelsChanged;
+	private runQueuedColoring;
+	private resetSelectionAndColorMeshes;
+	private colorMeshes;
+	private removeColoring;
+	private runQueuedSelection;
+	private findAndSelectMeshes;
 	private findMeshesByIds;
 	private removeSelection;
 	private removeIsolation;
@@ -125,8 +139,6 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
-	private colorMeshes;
-	private removeColoring;
 	private initSpecialMaterials;
 	private backupMeshMaterial;
 	private refreshMeshMaterial;

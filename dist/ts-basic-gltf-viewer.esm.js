@@ -1,9 +1,10 @@
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { Scene, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, DirectionalLight, MeshPhysicalMaterial, NormalBlending } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { ResizeSensor } from 'css-element-queries';
+import { first } from 'rxjs/operators';
 
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -30,8 +31,8 @@ class GltfViewer {
         this._initialized = new BehaviorSubject(false);
         this._modelLoadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
-        this._modelLoadingProgress = new Subject();
         this._modelLoadingEnd = new Subject();
+        this._modelLoadingProgress = new Subject();
         this._openedModelsChange = new BehaviorSubject([]);
         this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
@@ -42,6 +43,8 @@ class GltfViewer {
         this._isolProp = "isolated";
         this._colProp = "colored";
         this._subscriptions = [];
+        this._queuedColoring = null;
+        this._queuedSelection = null;
         this._highlightedMesh = null;
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
@@ -131,14 +134,21 @@ class GltfViewer {
             this._containerResizeSensor.detach();
         }
     }
-    openModels(modelInfos) {
-        if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
-            return;
-        }
-        modelInfos.forEach(x => {
-            this._loadingQueue.push(x);
+    openModelsAsync(modelInfos) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
+                return [];
+            }
+            const promises = [];
+            modelInfos.forEach(x => {
+                const resultSubject = new AsyncSubject();
+                this._loadingQueue.push({ fileInfo: x, subject: resultSubject });
+                promises.push(resultSubject.pipe(first()).toPromise());
+            });
+            this.loadQueuedModelsAsync();
+            const result = yield Promise.all(promises);
+            return result;
         });
-        this.loadQueuedModelsAsync();
     }
     ;
     closeModels(modelGuids) {
@@ -151,27 +161,33 @@ class GltfViewer {
     }
     ;
     selectItems(ids) {
-        if (ids === null || ids === void 0 ? void 0 : ids.length) {
-            const { found, notFound } = this.findMeshesByIds(new Set(ids));
-            if (found.length) {
-                this.selectMeshes(found, false);
-            }
+        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
+            return;
         }
+        if (this._loadingInProgress) {
+            this._queuedSelection = { ids, isolate: false };
+            return;
+        }
+        this.findAndSelectMeshes(ids, false);
     }
     ;
     isolateItems(ids) {
-        if (ids === null || ids === void 0 ? void 0 : ids.length) {
-            const { found, notFound } = this.findMeshesByIds(new Set(ids));
-            if (found.length) {
-                this.selectMeshes(found, false, true);
-            }
+        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
+            return;
         }
+        if (this._loadingInProgress) {
+            this._queuedSelection = { ids, isolate: true };
+            return;
+        }
+        this.findAndSelectMeshes(ids, true);
     }
     ;
     colorItems(coloringInfos) {
-        this.removeIsolation();
-        this.removeSelection();
-        this.colorMeshes(coloringInfos);
+        if (this._loadingInProgress) {
+            this._queuedColoring = coloringInfos;
+            return;
+        }
+        this.resetSelectionAndColorMeshes(coloringInfos);
     }
     getOpenedModels() {
         return this._openedModelsChange.getValue();
@@ -355,41 +371,47 @@ class GltfViewer {
             this._loadingInProgress = true;
             this._modelLoadingStateChange.next(true);
             while (this._loadingQueue.length > 0) {
-                const { url, guid, name } = this._loadingQueue.shift();
-                if (!this._loadedModelsByGuid.has(guid)) {
-                    yield this.loadModel(url, guid, name);
-                }
+                const { fileInfo, subject } = this._loadingQueue.shift();
+                const { url, guid, name } = fileInfo;
+                const result = !this._loadedModelsByGuid.has(guid)
+                    ? yield this.loadModel(url, guid, name)
+                    : { url, guid };
+                subject.next(result);
+                subject.complete();
             }
             this._modelLoadingStateChange.next(false);
             this._loadingInProgress = false;
+            this.runQueuedColoring();
+            this.runQueuedSelection();
         });
     }
     loadModel(url, guid, name) {
         return __awaiter(this, void 0, void 0, function* () {
             this.onModelLoadingStart(url, guid);
+            let error;
             try {
-                const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress));
+                const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
                 this.addModelToScene(model, guid, name);
-                this.onModelLoadingEnd(url, guid);
             }
-            catch (error) {
-                this.onModelLoadingEnd(url, guid, error);
+            catch (loadingError) {
+                error = loadingError;
             }
+            const result = { url, guid, error };
+            this.onModelLoadingEnd(result);
+            return result;
         });
     }
     onModelLoadingStart(url, guid) {
         this._modelLoadingStart.next({ url, guid });
     }
-    onModelLoadingProgress(progress) {
+    onModelLoadingProgress(progress, url, guid) {
         const currentProgress = Math.round(progress.loaded / progress.total * 100);
-        this._modelLoadingProgress.next(currentProgress);
+        this._modelLoadingProgress.next({ url, guid, progress: currentProgress });
     }
-    onModelLoadingEnd(url, guid, error = null) {
-        if (error) {
-            console.log(error);
-        }
-        this._modelLoadingProgress.next(0);
-        this._modelLoadingEnd.next({ url, guid, error });
+    onModelLoadingEnd(info) {
+        const { url, guid } = info;
+        this._modelLoadingProgress.next({ url, guid, progress: 0 });
+        this._modelLoadingEnd.next(info);
     }
     addModelToScene(gltf, modelGuid, modelName) {
         if (!this._mainScene) {
@@ -448,6 +470,63 @@ class GltfViewer {
             modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
         }
         this._openedModelsChange.next(modelOpenedInfos);
+    }
+    runQueuedColoring() {
+        if (this._queuedColoring) {
+            this.resetSelectionAndColorMeshes(this._queuedColoring);
+        }
+    }
+    resetSelectionAndColorMeshes(coloringInfos) {
+        this.removeIsolation();
+        this.removeSelection();
+        this.colorMeshes(coloringInfos);
+    }
+    colorMeshes(coloringInfos) {
+        this.removeColoring();
+        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
+            for (const info of coloringInfos) {
+                const coloredMaterial = new MeshPhysicalMaterial({
+                    color: new Color(info.color),
+                    emissive: new Color(0x000000),
+                    blending: NormalBlending,
+                    flatShading: true,
+                    side: DoubleSide,
+                    roughness: 1,
+                    metalness: 0,
+                });
+                info.ids.forEach(x => {
+                    const meshes = this._loadedMeshesById.get(x);
+                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
+                        meshes.forEach(y => {
+                            y[this._colProp] = true;
+                            y[this._colMatProp] = coloredMaterial;
+                            y.material = coloredMaterial;
+                            this._coloredMeshes.push(y);
+                        });
+                    }
+                });
+            }
+        }
+        this.render();
+    }
+    removeColoring() {
+        for (const mesh of this._coloredMeshes) {
+            mesh[this._colProp] = undefined;
+            this.refreshMeshMaterial(mesh);
+        }
+        this._coloredMeshes.length = 0;
+    }
+    runQueuedSelection() {
+        if (this._queuedSelection) {
+            const { ids, isolate } = this._queuedSelection;
+            this.findAndSelectMeshes(ids, isolate);
+        }
+    }
+    findAndSelectMeshes(ids, isolate) {
+        const { found } = this.findMeshesByIds(new Set(ids));
+        if (found.length) {
+            this.selectMeshes(found, false, isolate);
+        }
     }
     findMeshesByIds(ids) {
         const found = [];
@@ -568,41 +647,6 @@ class GltfViewer {
             this.refreshMeshMaterial(mesh);
             this._highlightedMesh = null;
         }
-    }
-    colorMeshes(coloringInfos) {
-        this.removeColoring();
-        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
-            for (const info of coloringInfos) {
-                const coloredMaterial = new MeshPhysicalMaterial({
-                    color: new Color(info.color),
-                    emissive: new Color(0x000000),
-                    blending: NormalBlending,
-                    flatShading: true,
-                    side: DoubleSide,
-                    roughness: 1,
-                    metalness: 0,
-                });
-                info.ids.forEach(x => {
-                    const meshes = this._loadedMeshesById.get(x);
-                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
-                        meshes.forEach(y => {
-                            y[this._colProp] = true;
-                            y[this._colMatProp] = coloredMaterial;
-                            y.material = coloredMaterial;
-                            this._coloredMeshes.push(y);
-                        });
-                    }
-                });
-            }
-        }
-        this.render();
-    }
-    removeColoring() {
-        for (const mesh of this._coloredMeshes) {
-            mesh[this._colProp] = undefined;
-            this.refreshMeshMaterial(mesh);
-        }
-        this._coloredMeshes.length = 0;
     }
     initSpecialMaterials() {
         const selectionMaterial = new MeshPhysicalMaterial({

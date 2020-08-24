@@ -1,4 +1,4 @@
-import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
+import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from "rxjs";
 
 import { WebGLRenderer, NoToneMapping, sRGBEncoding, 
   Scene, Mesh, PerspectiveCamera, 
@@ -12,7 +12,9 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { ResizeSensor } from "css-element-queries";
+import { first } from "rxjs/operators";
 
+// #region interfaces
 export interface ModelFileInfo {
   url: string; 
   guid: string; 
@@ -25,10 +27,21 @@ export interface ModelLoadedInfo {
   error?: Error;
 }
 
+export interface ModelLoadingInfo {
+  url: string; 
+  guid: string; 
+  progress: number;
+}
+
 export interface ModelOpenedInfo {
   guid: string; 
   name: string; 
   handles: Set<string>;
+}
+
+export interface ColoringInfo {
+  color: number; 
+  ids: string[];
 }
 
 interface ModelGeometryInfo {
@@ -37,6 +50,7 @@ interface ModelGeometryInfo {
   meshes: Mesh[]; 
   handles: Set<string>; 
 }
+// #endregion
 
 export class GltfViewerOptions {
   dracoDecoderEnabled = true;
@@ -56,8 +70,8 @@ export class GltfViewer {
   initialized$: Observable<boolean>;
   modelLoadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
-  modelLoadingProgress$: Observable<number>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
+  modelLoadingProgress$: Observable<ModelLoadingInfo>;
   openedModelsChange$: Observable<ModelOpenedInfo[]>;  
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
@@ -67,8 +81,8 @@ export class GltfViewer {
   private _initialized = new BehaviorSubject<boolean>(false);
   private _modelLoadingStateChange = new BehaviorSubject<boolean>(false);
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
-  private _modelLoadingProgress = new Subject<number>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
+  private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
   private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);   
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
@@ -108,6 +122,9 @@ export class GltfViewer {
   // #endregion
 
   // #region selection related fieds
+  private _queuedColoring: ColoringInfo[] = null;
+  private _queuedSelection: {ids: string[]; isolate: boolean} = null;
+
   private _highlightedMesh: Mesh = null;
   private _selectedMeshes: Mesh[] = [];
   private _isolatedMeshes: Mesh[] = [];
@@ -129,7 +146,7 @@ export class GltfViewer {
 
   // #region model loading related fieds
   private _loadingInProgress = false;
-  private _loadingQueue: ModelFileInfo[] = [];
+  private _loadingQueue: {fileInfo: ModelFileInfo; subject: AsyncSubject<ModelLoadedInfo>}[] = [];
   private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
   private _loadedMeshesById = new Map<string, Mesh[]>();
   // #endregion
@@ -180,14 +197,21 @@ export class GltfViewer {
   }
 
   // #region public interaction
-  openModels(modelInfos: ModelFileInfo[]) {
+  async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
     if (!modelInfos?.length) {
-      return;
+      return [];
     }
+
+    const promises: Promise<ModelLoadedInfo>[] = [];
     modelInfos.forEach(x => {
-      this._loadingQueue.push(x);
+      const resultSubject = new AsyncSubject<ModelLoadedInfo>();
+      this._loadingQueue.push({fileInfo: x, subject: resultSubject});
+      promises.push(resultSubject.pipe(first()).toPromise());
     });
     this.loadQueuedModelsAsync();
+
+    const result = await Promise.all(promises);
+    return result;
   };
 
   closeModels(modelGuids: string[]) {
@@ -201,27 +225,38 @@ export class GltfViewer {
   };
 
   selectItems(ids: string[]) {
-    if (ids?.length) {
-      const { found, notFound } = this.findMeshesByIds(new Set<string>(ids));
-      if (found.length) {
-        this.selectMeshes(found, false);
-      }
+    if (!ids?.length) {
+      return;
     }
+
+    if (this._loadingInProgress) {
+      this._queuedSelection = {ids, isolate: false};
+      return;
+    }
+
+    this.findAndSelectMeshes(ids, false);
   };
 
   isolateItems(ids: string[]) {
-    if (ids?.length) {
-      const { found, notFound } = this.findMeshesByIds(new Set<string>(ids));
-      if (found.length) {
-        this.selectMeshes(found, false, true);
-      }
+    if (!ids?.length) {
+      return;
     }
+
+    if (this._loadingInProgress) {
+      this._queuedSelection = {ids, isolate: true};
+      return;
+    }
+
+    this.findAndSelectMeshes(ids, true);
   };
 
-  colorItems(coloringInfos: {color: number; ids: string[]}[]) {
-    this.removeIsolation();
-    this.removeSelection();
-    this.colorMeshes(coloringInfos);
+  colorItems(coloringInfos: ColoringInfo[]) {
+    if (this._loadingInProgress) {
+      this._queuedColoring = coloringInfos;
+      return;
+    }
+
+    this.resetSelectionAndColorMeshes(coloringInfos);
   }
 
   getOpenedModels(): ModelOpenedInfo[] {
@@ -513,43 +548,50 @@ export class GltfViewer {
     this._modelLoadingStateChange.next(true);
 
     while (this._loadingQueue.length > 0) {
-      const { url, guid, name } = this._loadingQueue.shift();
-      if (!this._loadedModelsByGuid.has(guid)) {
-        await this.loadModel(url, guid, name);
-      }
+      const { fileInfo, subject } = this._loadingQueue.shift();
+      const { url, guid, name } = fileInfo;      
+      const result = !this._loadedModelsByGuid.has(guid)
+        ? await this.loadModel(url, guid, name)
+        : { url, guid };
+      subject.next(result);
+      subject.complete();
     }    
 
     this._modelLoadingStateChange.next(false);
     this._loadingInProgress = false;
+
+    this.runQueuedColoring();
+    this.runQueuedSelection();
   }
 
-  private async loadModel(url: string, guid: string, name: string) {
+  private async loadModel(url: string, guid: string, name: string): Promise<ModelLoadedInfo> {
     this.onModelLoadingStart(url, guid); 
+    let error: Error;
     try {
       const model = await this._loader.loadAsync(url,
-        (progress) => this.onModelLoadingProgress(progress));
+        (progress) => this.onModelLoadingProgress(progress, url, guid));
       this.addModelToScene(model, guid, name);
-      this.onModelLoadingEnd(url, guid);
-    } catch (error) {
-      this.onModelLoadingEnd(url, guid, error);
+    } catch (loadingError) {
+      error = loadingError;
     }
+    const result = { url, guid, error };
+    this.onModelLoadingEnd(result);
+    return result;
   }  
 
   private onModelLoadingStart(url: string, guid: string) {
     this._modelLoadingStart.next({url, guid});
   }  
 
-  private onModelLoadingProgress(progress: ProgressEvent) {   
+  private onModelLoadingProgress(progress: ProgressEvent, url: string, guid: string) {   
     const currentProgress = Math.round(progress.loaded / progress.total * 100);
-    this._modelLoadingProgress.next(currentProgress);
+    this._modelLoadingProgress.next({ url, guid, progress: currentProgress });
   }
   
-  private onModelLoadingEnd(url: string, guid: string, error: Error = null) {
-    if (error) {
-      console.log(error);
-    } 
-    this._modelLoadingProgress.next(0);
-    this._modelLoadingEnd.next({url, guid, error});
+  private onModelLoadingEnd(info: ModelLoadedInfo) {
+    const { url, guid } = info;
+    this._modelLoadingProgress.next({ url, guid, progress: 0});
+    this._modelLoadingEnd.next(info);
   }
 
   private addModelToScene(gltf: GLTF, modelGuid: string, modelName: string) {
@@ -621,7 +663,75 @@ export class GltfViewer {
   }
   // #endregion
 
+  // #region item coloring
+  private runQueuedColoring() {
+    if (this._queuedColoring) {
+      this.resetSelectionAndColorMeshes(this._queuedColoring);
+    }
+  }
+
+  private resetSelectionAndColorMeshes(coloringInfos: ColoringInfo[]) {    
+    this.removeIsolation();
+    this.removeSelection();
+
+    this.colorMeshes(coloringInfos);
+  }
+
+  private colorMeshes(coloringInfos: ColoringInfo[]) {
+    this.removeColoring();
+
+    if (coloringInfos?.length) {
+      for (const info of coloringInfos) {
+        const coloredMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+          color: new Color(info.color), 
+          emissive: new Color(0x000000),
+          blending: NormalBlending,
+          flatShading: true,
+          side: DoubleSide,
+          roughness: 1,
+          metalness: 0,
+        });
+        info.ids.forEach(x => {
+          const meshes = this._loadedMeshesById.get(x);
+          if (meshes?.length) {
+            meshes.forEach(y => {
+              y[this._colProp] = true;
+              y[this._colMatProp] = coloredMaterial;
+              y.material = coloredMaterial;
+              this._coloredMeshes.push(y);
+            });
+          }
+        });
+      }
+    }
+
+    this.render();
+  }
+
+  private removeColoring() {
+    for (const mesh of this._coloredMeshes) {
+      mesh[this._colProp] = undefined;
+      this.refreshMeshMaterial(mesh);
+    }
+    this._coloredMeshes.length = 0;
+  }
+  // #endregion
+
   // #region item selection/isolation
+  private runQueuedSelection() {    
+    if (this._queuedSelection) {
+      const { ids, isolate } = this._queuedSelection;
+      this.findAndSelectMeshes(ids, isolate);
+    }
+  }
+
+  private findAndSelectMeshes(ids: string[], isolate: boolean) {    
+    const { found } = this.findMeshesByIds(new Set<string>(ids));
+    if (found.length) {
+      this.selectMeshes(found, false, isolate);
+    }
+  }
+
   private findMeshesByIds(ids: Set<string>): {found: Mesh[]; notFound: Set<string>} {
     const found: Mesh[] = [];
     const notFound = new Set<string>();
@@ -761,47 +871,6 @@ export class GltfViewer {
       this.refreshMeshMaterial(mesh);
       this._highlightedMesh = null;
     }
-  }
-  // #endregion
-
-  // #region item coloring
-  private colorMeshes(coloringInfos: {color: number; ids: string[]}[]) {
-    this.removeColoring();
-
-    if (coloringInfos?.length) {
-      for (const info of coloringInfos) {
-        const coloredMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-          color: new Color(info.color), 
-          emissive: new Color(0x000000),
-          blending: NormalBlending,
-          flatShading: true,
-          side: DoubleSide,
-          roughness: 1,
-          metalness: 0,
-        });
-        info.ids.forEach(x => {
-          const meshes = this._loadedMeshesById.get(x);
-          if (meshes?.length) {
-            meshes.forEach(y => {
-              y[this._colProp] = true;
-              y[this._colMatProp] = coloredMaterial;
-              y.material = coloredMaterial;
-              this._coloredMeshes.push(y);
-            });
-          }
-        });
-      }
-    }
-
-    this.render();
-  }
-
-  private removeColoring() {
-    for (const mesh of this._coloredMeshes) {
-      mesh[this._colProp] = undefined;
-      this.refreshMeshMaterial(mesh);
-    }
-    this._coloredMeshes.length = 0;
   }
   // #endregion
 
