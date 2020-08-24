@@ -555,13 +555,13 @@ export class GltfViewer {
         : { url, guid };
       subject.next(result);
       subject.complete();
-    }    
+    } 
+    
+    this.runQueuedColoring();
+    this.runQueuedSelection();   
 
     this._modelLoadingStateChange.next(false);
     this._loadingInProgress = false;
-
-    this.runQueuedColoring();
-    this.runQueuedSelection();
   }
 
   private async loadModel(url: string, guid: string, name: string): Promise<ModelLoadedInfo> {

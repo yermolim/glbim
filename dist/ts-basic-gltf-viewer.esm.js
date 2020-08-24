@@ -379,10 +379,10 @@ class GltfViewer {
                 subject.next(result);
                 subject.complete();
             }
-            this._modelLoadingStateChange.next(false);
-            this._loadingInProgress = false;
             this.runQueuedColoring();
             this.runQueuedSelection();
+            this._modelLoadingStateChange.next(false);
+            this._loadingInProgress = false;
         });
     }
     loadModel(url, guid, name) {
