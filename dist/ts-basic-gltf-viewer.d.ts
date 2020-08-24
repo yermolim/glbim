@@ -31,6 +31,13 @@ export declare class GltfViewerOptions {
 	dracoDecoderPath: string;
 	highlightingEnabled: boolean;
 	highlightingLatency: number;
+	highlightColor: number;
+	highlightEmissive: number;
+	selectionColor: number;
+	selectionEmissive: number;
+	isolationColor: number;
+	isolationEmissive: number;
+	isolationOpacity: number;
 	constructor(item?: object);
 }
 export declare class GltfViewer {

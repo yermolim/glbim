@@ -21,6 +21,13 @@ class GltfViewerOptions {
         this.dracoDecoderPath = "/assets/draco/";
         this.highlightingEnabled = true;
         this.highlightingLatency = 300;
+        this.highlightColor = 0xFFFF00;
+        this.highlightEmissive = 0x000000;
+        this.selectionColor = 0xFF0000;
+        this.selectionEmissive = 0xFF0000;
+        this.isolationColor = 0x555555;
+        this.isolationEmissive = 0x000000;
+        this.isolationOpacity = 0.2;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -649,18 +656,18 @@ class GltfViewer {
         }
     }
     initSpecialMaterials() {
-        const selectionMaterial = new MeshPhysicalMaterial({
-            color: new Color(0xFF0000),
-            emissive: new Color(0xFF0000),
+        const highlightMaterial = new MeshPhysicalMaterial({
+            color: new Color(this._options.highlightColor),
+            emissive: new Color(this._options.highlightEmissive),
             blending: NormalBlending,
             flatShading: true,
             side: DoubleSide,
             roughness: 1,
             metalness: 0,
         });
-        const highlightMaterial = new MeshPhysicalMaterial({
-            color: new Color(0xFFFF00),
-            emissive: new Color(0x000000),
+        const selectionMaterial = new MeshPhysicalMaterial({
+            color: new Color(this._options.selectionColor),
+            emissive: new Color(this._options.selectionEmissive),
             blending: NormalBlending,
             flatShading: true,
             side: DoubleSide,
@@ -668,14 +675,14 @@ class GltfViewer {
             metalness: 0,
         });
         const isolateMaterial = new MeshPhysicalMaterial({
-            color: new Color(0x555555),
-            emissive: new Color(0x000000),
+            color: new Color(this._options.isolationColor),
+            emissive: new Color(this._options.isolationEmissive),
             blending: NormalBlending,
             flatShading: true,
             side: DoubleSide,
             roughness: 1,
             metalness: 0,
-            opacity: 0.2,
+            opacity: this._options.isolationOpacity,
             transparent: true,
         });
         this._selectionMaterial = selectionMaterial;

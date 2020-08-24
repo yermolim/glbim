@@ -55,8 +55,18 @@ interface ModelGeometryInfo {
 export class GltfViewerOptions {
   dracoDecoderEnabled = true;
   dracoDecoderPath = "/assets/draco/";  
+
   highlightingEnabled = true;
   highlightingLatency = 300;
+  highlightColor = 0xFFFF00;
+  highlightEmissive = 0x000000; 
+
+  selectionColor = 0xFF0000;
+  selectionEmissive = 0xFF0000; 
+    
+  isolationColor = 0x555555;
+  isolationEmissive = 0x000000;
+  isolationOpacity = 0.2;
   
   constructor(item: object = null) {
     if (item != null) {
@@ -876,18 +886,18 @@ export class GltfViewer {
 
   // #region materials
   private initSpecialMaterials() {
-    const selectionMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0xFF0000), 
-      emissive: new Color(0xFF0000),
+    const highlightMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(this._options.highlightColor), 
+      emissive: new Color(this._options.highlightEmissive),
       blending: NormalBlending,
       flatShading: true,
       side: DoubleSide,
       roughness: 1,
       metalness: 0,
     });
-    const highlightMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0xFFFF00), 
-      emissive: new Color(0x000000),
+    const selectionMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
+      color: new Color(this._options.selectionColor), 
+      emissive: new Color(this._options.selectionEmissive),
       blending: NormalBlending,
       flatShading: true,
       side: DoubleSide,
@@ -895,14 +905,14 @@ export class GltfViewer {
       metalness: 0,
     });
     const isolateMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{ 
-      color: new Color(0x555555), 
-      emissive: new Color(0x000000),
+      color: new Color(this._options.isolationColor), 
+      emissive: new Color(this._options.isolationEmissive),
       blending: NormalBlending,
       flatShading: true,
       side: DoubleSide,
       roughness: 1,
       metalness: 0,
-      opacity: 0.2,
+      opacity: this._options.isolationOpacity,
       transparent: true,
     });
 
