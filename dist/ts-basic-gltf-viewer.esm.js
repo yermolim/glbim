@@ -500,6 +500,8 @@ class GltfViewer {
                     side: DoubleSide,
                     roughness: 1,
                     metalness: 0,
+                    opacity: info.opacity,
+                    transparent: info.opacity < 1,
                 });
                 info.ids.forEach(x => {
                     const meshes = this._loadedMeshesById.get(x);

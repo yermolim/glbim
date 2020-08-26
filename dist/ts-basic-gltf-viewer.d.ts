@@ -24,6 +24,7 @@ export interface ModelOpenedInfo {
 }
 export interface ColoringInfo {
 	color: number;
+	opacity: number;
 	ids: string[];
 }
 export declare class GltfViewerOptions {
