@@ -39,6 +39,9 @@ export declare class GltfViewerOptions {
 	isolationColor: number;
 	isolationEmissive: number;
 	isolationOpacity: number;
+	usePhysicalLights: boolean;
+	lightIntensity: number;
+	useAntialiasing: boolean;
 	constructor(item?: object);
 }
 export declare class GltfViewer {

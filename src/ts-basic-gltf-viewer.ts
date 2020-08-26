@@ -68,6 +68,11 @@ export class GltfViewerOptions {
   isolationColor = 0x555555;
   isolationEmissive = 0x000000;
   isolationOpacity = 0.2;
+
+  usePhysicalLights = false;
+  lightIntensity = 1;
+
+  useAntialiasing = true;
   
   constructor(item: object = null) {
     if (item != null) {
@@ -364,17 +369,26 @@ export class GltfViewer {
   private initRendererWithScene() {
     const scene = new Scene();
 
-    const ambientLight = new AmbientLight(0x222222, 1);
-    const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 1);
+    const ambientLight = new AmbientLight(0x222222, 
+      this._options.usePhysicalLights 
+        ? this._options.lightIntensity * Math.PI 
+        : this._options.lightIntensity);
+    const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 
+      this._options.usePhysicalLights 
+        ? this._options.lightIntensity * Math.PI 
+        : this._options.lightIntensity);
     hemiLight.translateY(2000);
     scene.add(ambientLight);
     scene.add(hemiLight);
     
-    const renderer = new WebGLRenderer({alpha: true, antialias: true});
+    const renderer = new WebGLRenderer({
+      alpha: true, 
+      antialias: this._options.useAntialiasing,
+    });
     renderer.setSize(this._containerWidth, this._containerHeight, false);
     renderer.setClearColor(0x000000, 0);
     renderer.outputEncoding = sRGBEncoding;
-    renderer.physicallyCorrectLights = false;
+    renderer.physicallyCorrectLights = this._options.usePhysicalLights;
     renderer.toneMapping = NoToneMapping;
 
     const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);    
