@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { Scene, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, DirectionalLight, MeshPhysicalMaterial, NormalBlending } from 'three';
+import { Scene, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, MeshPhysicalMaterial, NormalBlending } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -28,8 +28,13 @@ class GltfViewerOptions {
         this.isolationColor = 0x555555;
         this.isolationEmissive = 0x000000;
         this.isolationOpacity = 0.2;
-        this.usePhysicalLights = false;
-        this.lightIntensity = 1;
+        this.physicalLights = false;
+        this.ambientLight = true;
+        this.ambientLightIntensity = 1;
+        this.hemiLight = true;
+        this.hemiLightIntensity = 0.4;
+        this.dirLight = true;
+        this.dirLightIntensity = 0.6;
         this.useAntialiasing = true;
         if (item != null) {
             Object.assign(this, item);
@@ -120,11 +125,15 @@ class GltfViewer {
             this.updateRendererSize();
         });
         this.initObservables();
-        this.initRendererWithScene();
+        this.initScene();
+        this.initLigths();
+        this.initRenderer();
+        this.initCameraWithControls();
         this.initSpecialMaterials();
         this.initPickingScene();
         this.initLoader();
         this.addCanvasEventListeners();
+        this.render();
         this._initialized.next(true);
     }
     destroy() {
@@ -232,17 +241,33 @@ class GltfViewer {
             this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
         }
     }
-    initRendererWithScene() {
+    initScene() {
         const scene = new Scene();
-        const ambientLight = new AmbientLight(0x222222, this._options.usePhysicalLights
-            ? this._options.lightIntensity * Math.PI
-            : this._options.lightIntensity);
-        const hemiLight = new HemisphereLight(0xffffbb, 0x080820, this._options.usePhysicalLights
-            ? this._options.lightIntensity * Math.PI
-            : this._options.lightIntensity);
-        hemiLight.translateY(2000);
-        scene.add(ambientLight);
-        scene.add(hemiLight);
+        this._mainScene = scene;
+    }
+    initLigths() {
+        if (this._options.ambientLight) {
+            const ambientLight = new AmbientLight(0x222222, this._options.physicalLights
+                ? this._options.ambientLightIntensity * Math.PI
+                : this._options.ambientLightIntensity);
+            this._mainScene.add(ambientLight);
+        }
+        if (this._options.hemiLight) {
+            const hemiLight = new HemisphereLight(0xffffbb, 0x080820, this._options.physicalLights
+                ? this._options.hemiLightIntensity * Math.PI
+                : this._options.hemiLightIntensity);
+            hemiLight.position.set(0, 2000, 0);
+            this._mainScene.add(hemiLight);
+        }
+        if (this._options.dirLight) {
+            const dirLight = new DirectionalLight(0xffffff, this._options.physicalLights
+                ? this._options.dirLightIntensity * Math.PI
+                : this._options.dirLightIntensity);
+            dirLight.position.set(-2, 10, 2);
+            this._mainScene.add(dirLight);
+        }
+    }
+    initRenderer() {
         const renderer = new WebGLRenderer({
             alpha: true,
             antialias: this._options.useAntialiasing,
@@ -250,20 +275,20 @@ class GltfViewer {
         renderer.setSize(this._containerWidth, this._containerHeight, false);
         renderer.setClearColor(0x000000, 0);
         renderer.outputEncoding = sRGBEncoding;
-        renderer.physicallyCorrectLights = this._options.usePhysicalLights;
+        renderer.physicallyCorrectLights = this._options.physicalLights;
         renderer.toneMapping = NoToneMapping;
+        this._container.append(renderer.domElement);
+        this._renderer = renderer;
+    }
+    initCameraWithControls() {
         const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);
-        const orbitControls = new OrbitControls(camera, renderer.domElement);
+        const orbitControls = new OrbitControls(camera, this._renderer.domElement);
         orbitControls.addEventListener("change", () => this.render());
         camera.position.set(0, 1000, 1000);
         camera.lookAt(0, 0, 0);
         orbitControls.update();
-        this._container.append(renderer.domElement);
-        this._renderer = renderer;
-        this._mainScene = scene;
         this._camera = camera;
         this._orbitControls = orbitControls;
-        this.render();
     }
     render() {
         if (this._renderer) {

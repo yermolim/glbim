@@ -5,7 +5,7 @@ import { WebGLRenderer, NoToneMapping, sRGBEncoding,
   AmbientLight, HemisphereLight, DirectionalLight,
   Color, Box3, Object3D, Vector3, WebGLRenderTarget,
   MeshPhysicalMaterial, Material, 
-  DoubleSide, NormalBlending, NoBlending, MeshStandardMaterial  } from "three";
+  DoubleSide, NormalBlending, NoBlending, MeshStandardMaterial } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -69,8 +69,13 @@ export class GltfViewerOptions {
   isolationEmissive = 0x000000;
   isolationOpacity = 0.2;
 
-  usePhysicalLights = false;
-  lightIntensity = 1;
+  physicalLights = false;
+  ambientLight = true;
+  ambientLightIntensity = 1;
+  hemiLight = true;
+  hemiLightIntensity = 0.4;
+  dirLight = true;
+  dirLightIntensity = 0.6;
 
   useAntialiasing = true;
   
@@ -185,11 +190,16 @@ export class GltfViewer {
     }); 
 
     this.initObservables();
-    this.initRendererWithScene();
+    this.initScene();
+    this.initLigths();    
+    this.initRenderer();
+    this.initCameraWithControls();
     this.initSpecialMaterials();
     this.initPickingScene();
     this.initLoader();
-    this.addCanvasEventListeners();
+
+    this.addCanvasEventListeners();    
+    this.render();
 
     this._initialized.next(true);
   }
@@ -365,22 +375,39 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region renderer base
-  private initRendererWithScene() {
+  // #region renderer initialization
+  private initScene() {
     const scene = new Scene();
+    this._mainScene = scene;
+  }
 
-    const ambientLight = new AmbientLight(0x222222, 
-      this._options.usePhysicalLights 
-        ? this._options.lightIntensity * Math.PI 
-        : this._options.lightIntensity);
-    const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 
-      this._options.usePhysicalLights 
-        ? this._options.lightIntensity * Math.PI 
-        : this._options.lightIntensity);
-    hemiLight.translateY(2000);
-    scene.add(ambientLight);
-    scene.add(hemiLight);
-    
+  private initLigths() {
+    if (this._options.ambientLight) {
+      const ambientLight = new AmbientLight(0x222222, 
+        this._options.physicalLights 
+          ? this._options.ambientLightIntensity * Math.PI 
+          : this._options.ambientLightIntensity);
+      this._mainScene.add(ambientLight);
+    }
+    if (this._options.hemiLight) {
+      const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 
+        this._options.physicalLights 
+          ? this._options.hemiLightIntensity * Math.PI 
+          : this._options.hemiLightIntensity);
+      hemiLight.position.set(0, 2000, 0);
+      this._mainScene.add(hemiLight);
+    }    
+    if (this._options.dirLight) {
+      const dirLight = new DirectionalLight(0xffffff,
+        this._options.physicalLights 
+          ? this._options.dirLightIntensity * Math.PI 
+          : this._options.dirLightIntensity);
+      dirLight.position.set(-2, 10, 2);
+      this._mainScene.add(dirLight);
+    }
+  }
+
+  private initRenderer() {
     const renderer = new WebGLRenderer({
       alpha: true, 
       antialias: this._options.useAntialiasing,
@@ -388,26 +415,27 @@ export class GltfViewer {
     renderer.setSize(this._containerWidth, this._containerHeight, false);
     renderer.setClearColor(0x000000, 0);
     renderer.outputEncoding = sRGBEncoding;
-    renderer.physicallyCorrectLights = this._options.usePhysicalLights;
+    renderer.physicallyCorrectLights = this._options.physicalLights;
     renderer.toneMapping = NoToneMapping;
+    this._container.append(renderer.domElement);
 
+    this._renderer = renderer;
+  }
+
+  private initCameraWithControls() {
     const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 0.01, 10000);    
-    const orbitControls = new OrbitControls(camera, renderer.domElement);
+    const orbitControls = new OrbitControls(camera, this._renderer.domElement);
     orbitControls.addEventListener("change", () => this.render());
     camera.position.set (0, 1000, 1000);
     camera.lookAt (0, 0, 0);    
     orbitControls.update();
 
-    this._container.append(renderer.domElement);
-
-    this._renderer = renderer;
-    this._mainScene = scene;
     this._camera = camera;
     this._orbitControls = orbitControls;
-
-    this.render();
   }
+  // #endregion
   
+  // #region renderer common
   private render() {
     if (this._renderer) {
       requestAnimationFrame(() => this._renderer.render(this._mainScene, this._camera));

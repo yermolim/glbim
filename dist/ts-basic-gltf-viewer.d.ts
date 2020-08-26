@@ -39,8 +39,13 @@ export declare class GltfViewerOptions {
 	isolationColor: number;
 	isolationEmissive: number;
 	isolationOpacity: number;
-	usePhysicalLights: boolean;
-	lightIntensity: number;
+	physicalLights: boolean;
+	ambientLight: boolean;
+	ambientLightIntensity: number;
+	hemiLight: boolean;
+	hemiLightIntensity: number;
+	dirLight: boolean;
+	dirLightIntensity: number;
 	useAntialiasing: boolean;
 	constructor(item?: object);
 }
@@ -112,7 +117,10 @@ export declare class GltfViewer {
 	private _onCanvasPointerUp;
 	private _onCanvasMouseMove;
 	private addCanvasEventListeners;
-	private initRendererWithScene;
+	private initScene;
+	private initLigths;
+	private initRenderer;
+	private initCameraWithControls;
 	private render;
 	private fitCameraToObjects;
 	private initPickingScene;
