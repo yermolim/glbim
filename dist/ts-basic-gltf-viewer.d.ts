@@ -79,7 +79,8 @@ export declare class GltfViewer {
 	private _containerWidth;
 	private _containerHeight;
 	private _renderer;
-	private _mainScene;
+	private _lights;
+	private _renderScene;
 	private _loader;
 	private _camera;
 	private _orbitControls;
@@ -101,6 +102,7 @@ export declare class GltfViewer {
 	private _loadingQueue;
 	private _loadedModelsByGuid;
 	private _loadedMeshesById;
+	private _loadedGroups;
 	constructor(containerId: string, options: GltfViewerOptions);
 	init(): void;
 	destroy(): void;
@@ -117,10 +119,10 @@ export declare class GltfViewer {
 	private _onCanvasPointerUp;
 	private _onCanvasMouseMove;
 	private addCanvasEventListeners;
-	private initScene;
 	private initLigths;
 	private initRenderer;
 	private initCameraWithControls;
+	private refreshRenderScene;
 	private render;
 	private fitCameraToObjects;
 	private initPickingScene;
@@ -137,8 +139,8 @@ export declare class GltfViewer {
 	private onModelLoadingStart;
 	private onModelLoadingProgress;
 	private onModelLoadingEnd;
-	private addModelToScene;
-	private removeModelFromScene;
+	private addModelToLoaded;
+	private removeModelFromLoaded;
 	private emitOpenedModelsChanged;
 	private runQueuedColoring;
 	private resetSelectionAndColorMeshes;

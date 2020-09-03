@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { Scene, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, MeshPhysicalMaterial, NormalBlending } from 'three';
+import { AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, PerspectiveCamera, Scene, Box3, Vector3, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, Mesh, MeshPhysicalMaterial, NormalBlending } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -58,6 +58,7 @@ class GltfViewer {
         this._isolProp = "isolated";
         this._colProp = "colored";
         this._subscriptions = [];
+        this._lights = [];
         this._queuedColoring = null;
         this._queuedSelection = null;
         this._highlightedMesh = null;
@@ -71,6 +72,7 @@ class GltfViewer {
         this._loadingQueue = [];
         this._loadedModelsByGuid = new Map();
         this._loadedMeshesById = new Map();
+        this._loadedGroups = new Set();
         this._onCanvasPointerDown = (e) => {
             this._pointerEventHelper.downX = e.clientX;
             this._pointerEventHelper.downY = e.clientY;
@@ -125,13 +127,12 @@ class GltfViewer {
             this.updateRendererSize();
         });
         this.initObservables();
-        this.initScene();
+        this.initPickingScene();
+        this.initSpecialMaterials();
         this.initLigths();
+        this.initLoader();
         this.initRenderer();
         this.initCameraWithControls();
-        this.initSpecialMaterials();
-        this.initPickingScene();
-        this.initLoader();
         this.addCanvasEventListeners();
         this.render();
         this._initialized.next(true);
@@ -175,7 +176,7 @@ class GltfViewer {
             return;
         }
         modelGuids.forEach(x => {
-            this.removeModelFromScene(x);
+            this.removeModelFromLoaded(x);
         });
     }
     ;
@@ -187,7 +188,7 @@ class GltfViewer {
             this._queuedSelection = { ids, isolate: false };
             return;
         }
-        this.findAndSelectMeshes(ids, false);
+        this.findAndSelectMeshes(ids, false, true);
     }
     ;
     isolateItems(ids) {
@@ -198,7 +199,7 @@ class GltfViewer {
             this._queuedSelection = { ids, isolate: true };
             return;
         }
-        this.findAndSelectMeshes(ids, true);
+        this.findAndSelectMeshes(ids, true, true);
     }
     ;
     colorItems(coloringInfos) {
@@ -241,30 +242,26 @@ class GltfViewer {
             this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
         }
     }
-    initScene() {
-        const scene = new Scene();
-        this._mainScene = scene;
-    }
     initLigths() {
         if (this._options.ambientLight) {
             const ambientLight = new AmbientLight(0x222222, this._options.physicalLights
                 ? this._options.ambientLightIntensity * Math.PI
                 : this._options.ambientLightIntensity);
-            this._mainScene.add(ambientLight);
+            this._lights.push(ambientLight);
         }
         if (this._options.hemiLight) {
             const hemiLight = new HemisphereLight(0xffffbb, 0x080820, this._options.physicalLights
                 ? this._options.hemiLightIntensity * Math.PI
                 : this._options.hemiLightIntensity);
             hemiLight.position.set(0, 2000, 0);
-            this._mainScene.add(hemiLight);
+            this._lights.push(hemiLight);
         }
         if (this._options.dirLight) {
             const dirLight = new DirectionalLight(0xffffff, this._options.physicalLights
                 ? this._options.dirLightIntensity * Math.PI
                 : this._options.dirLightIntensity);
             dirLight.position.set(-2, 10, 2);
-            this._mainScene.add(dirLight);
+            this._lights.push(dirLight);
         }
     }
     initRenderer() {
@@ -290,10 +287,24 @@ class GltfViewer {
         this._camera = camera;
         this._orbitControls = orbitControls;
     }
-    render() {
-        if (this._renderer) {
-            requestAnimationFrame(() => this._renderer.render(this._mainScene, this._camera));
+    refreshRenderScene() {
+        const scene = new Scene();
+        scene.add(...this._lights);
+        if (this._loadedGroups.size) {
+            scene.add(...this._loadedGroups);
         }
+        this._renderScene = scene;
+    }
+    render() {
+        if (!this._renderer) {
+            return;
+        }
+        if (!this._renderScene) {
+            this.refreshRenderScene();
+        }
+        requestAnimationFrame(() => {
+            this._renderer.render(this._renderScene, this._camera);
+        });
     }
     fitCameraToObjects(objects, offset = 1.2) {
         if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
@@ -421,8 +432,9 @@ class GltfViewer {
                 subject.next(result);
                 subject.complete();
             }
-            this.runQueuedColoring();
-            this.runQueuedSelection();
+            this.runQueuedColoring(false);
+            this.runQueuedSelection(false);
+            this.render();
             this._modelLoadingStateChange.next(false);
             this._loadingInProgress = false;
         });
@@ -433,7 +445,7 @@ class GltfViewer {
             let error;
             try {
                 const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
-                this.addModelToScene(model, guid, name);
+                this.addModelToLoaded(model, guid, name);
             }
             catch (loadingError) {
                 error = loadingError;
@@ -455,10 +467,7 @@ class GltfViewer {
         this._modelLoadingProgress.next({ url, guid, progress: 0 });
         this._modelLoadingEnd.next(info);
     }
-    addModelToScene(gltf, modelGuid, modelName) {
-        if (!this._mainScene) {
-            return;
-        }
+    addModelToLoaded(gltf, modelGuid, modelName) {
         const name = modelName || modelGuid;
         const scene = gltf.scene;
         scene.userData.guid = modelGuid;
@@ -471,8 +480,6 @@ class GltfViewer {
                 x.userData.id = id;
                 x.userData.modelGuid = modelGuid;
                 this.backupMeshMaterial(x);
-                meshes.push(x);
-                handles.add(x.name);
                 if (this._loadedMeshesById.has(id)) {
                     this._loadedMeshesById.get(id).push(x);
                 }
@@ -480,31 +487,32 @@ class GltfViewer {
                     this._loadedMeshesById.set(id, [x]);
                 }
                 this.addMeshToPickingScene(x);
+                meshes.push(x);
+                handles.add(x.name);
             }
         });
-        this._mainScene.add(scene);
+        this._loadedGroups.add(scene);
         this._loadedModelsByGuid.set(modelGuid, { gltf: gltf, meshes, handles, name });
         this.emitOpenedModelsChanged();
-        this.fitCameraToObjects([this._mainScene]);
-        this.render();
     }
-    removeModelFromScene(modelGuid) {
-        if (!this._mainScene || !this._loadedModelsByGuid.has(modelGuid)) {
+    removeModelFromLoaded(modelGuid) {
+        if (!this._loadedModelsByGuid.has(modelGuid)) {
             return;
         }
         const modelData = this._loadedModelsByGuid.get(modelGuid);
         modelData.meshes.forEach(x => {
+            var _a;
             this._loadedMeshesById.delete(x.userData.id);
             this.removeMeshFromPickingScene(x);
+            (_a = x.geometry) === null || _a === void 0 ? void 0 : _a.dispose();
         });
         this._highlightedMesh = null;
         this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
         this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
         this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-        this._mainScene.remove(modelData.gltf.scene);
+        this._loadedGroups.delete(modelData.gltf.scene);
         this._loadedModelsByGuid.delete(modelGuid);
         this.emitOpenedModelsChanged();
-        this.render();
     }
     emitOpenedModelsChanged() {
         const modelOpenedInfos = [];
@@ -512,18 +520,21 @@ class GltfViewer {
             modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
         }
         this._openedModelsChange.next(modelOpenedInfos);
+        this.refreshRenderScene();
+        this.fitCameraToObjects([this._renderScene]);
+        this.render();
     }
-    runQueuedColoring() {
+    runQueuedColoring(render = true) {
         if (this._queuedColoring) {
-            this.resetSelectionAndColorMeshes(this._queuedColoring);
+            this.resetSelectionAndColorMeshes(this._queuedColoring, render);
         }
     }
-    resetSelectionAndColorMeshes(coloringInfos) {
+    resetSelectionAndColorMeshes(coloringInfos, render = true) {
         this.removeIsolation();
         this.removeSelection();
-        this.colorMeshes(coloringInfos);
+        this.colorMeshes(coloringInfos, render);
     }
-    colorMeshes(coloringInfos) {
+    colorMeshes(coloringInfos, render) {
         this.removeColoring();
         if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
             for (const info of coloringInfos) {
@@ -551,7 +562,9 @@ class GltfViewer {
                 });
             }
         }
-        this.render();
+        if (render) {
+            this.render();
+        }
     }
     removeColoring() {
         for (const mesh of this._coloredMeshes) {
@@ -560,16 +573,16 @@ class GltfViewer {
         }
         this._coloredMeshes.length = 0;
     }
-    runQueuedSelection() {
+    runQueuedSelection(render) {
         if (this._queuedSelection) {
             const { ids, isolate } = this._queuedSelection;
-            this.findAndSelectMeshes(ids, isolate);
+            this.findAndSelectMeshes(ids, isolate, render);
         }
     }
-    findAndSelectMeshes(ids, isolate) {
+    findAndSelectMeshes(ids, isolate, render) {
         const { found } = this.findMeshesByIds(new Set(ids));
         if (found.length) {
-            this.selectMeshes(found, false, isolate);
+            this.selectMeshes(found, false, isolate, render);
         }
     }
     findMeshesByIds(ids) {
@@ -599,11 +612,11 @@ class GltfViewer {
         }
         this._isolatedMeshes.length = 0;
     }
-    selectMeshAtPoint(x, y, keepPreviousSelection = false) {
+    selectMeshAtPoint(x, y, keepPreviousSelection) {
         const position = this.getPickingPosition(x, y);
         const mesh = this.getItemAtPickingPosition(position);
         if (!mesh) {
-            this.selectMeshes([], true);
+            this.selectMeshes([], true, false, true);
             return;
         }
         if (keepPreviousSelection) {
@@ -615,24 +628,24 @@ class GltfViewer {
             }
         }
         else {
-            this.selectMeshes([mesh], true);
+            this.selectMeshes([mesh], true, false, true);
         }
     }
     addToSelection(mesh) {
         const meshes = [mesh, ...this._selectedMeshes];
-        this.selectMeshes(meshes, true);
+        this.selectMeshes(meshes, true, false, true);
         return true;
     }
     removeFromSelection(mesh) {
         const meshes = this._selectedMeshes.filter(x => x !== mesh);
-        this.selectMeshes(meshes, true);
+        this.selectMeshes(meshes, true, false, true);
         return true;
     }
-    selectMeshes(meshes, manual, isolateSelected = false) {
+    selectMeshes(meshes, manual, isolateSelected, render) {
         this.removeSelection();
         this.removeIsolation();
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
-            this.emitSelectionChanged(manual);
+            this.emitSelectionChanged(manual, render);
             return null;
         }
         meshes.forEach(x => {
@@ -643,7 +656,7 @@ class GltfViewer {
             this.isolateSelectedMeshes();
         }
         this._selectedMeshes = meshes;
-        this.emitSelectionChanged(manual);
+        this.emitSelectionChanged(manual, render);
     }
     isolateSelectedMeshes() {
         const loadedMeshes = [...this._loadedMeshesById.values()].flatMap(x => x);
@@ -655,11 +668,13 @@ class GltfViewer {
             }
         });
     }
-    emitSelectionChanged(manual) {
+    emitSelectionChanged(manual, render) {
         if (!manual) {
             this.fitCameraToObjects(this._selectedMeshes);
         }
-        this.render();
+        if (render) {
+            this.render();
+        }
         const ids = new Set();
         this._selectedMeshes.forEach(x => ids.add(x.userData.id));
         this._selectionChange.next(ids);
