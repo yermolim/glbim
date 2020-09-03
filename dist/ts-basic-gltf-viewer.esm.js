@@ -521,7 +521,9 @@ class GltfViewer {
         }
         this._openedModelsChange.next(modelOpenedInfos);
         this.refreshRenderScene();
-        this.fitCameraToObjects([this._renderScene]);
+        if (modelOpenedInfos === null || modelOpenedInfos === void 0 ? void 0 : modelOpenedInfos.length) {
+            this.fitCameraToObjects([this._renderScene]);
+        }
         this.render();
     }
     runQueuedColoring(render = true) {

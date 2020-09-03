@@ -725,7 +725,9 @@ export class GltfViewer {
     this._openedModelsChange.next(modelOpenedInfos);
 
     this.refreshRenderScene();
-    this.fitCameraToObjects([this._renderScene]);
+    if (modelOpenedInfos?.length) {
+      this.fitCameraToObjects([this._renderScene]);
+    }
     this.render();
   }
   // #endregion
