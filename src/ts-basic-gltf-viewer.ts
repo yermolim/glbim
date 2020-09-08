@@ -157,7 +157,7 @@ export class GltfViewerOptions {
 export class GltfViewer {
   // #region public observables
   initialized$: Observable<boolean>;
-  modelLoadingStateChange$: Observable<boolean>;
+  loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
@@ -168,7 +168,7 @@ export class GltfViewer {
   
   // #region private rx subjects
   private _initialized = new BehaviorSubject<boolean>(false);
-  private _modelLoadingStateChange = new BehaviorSubject<boolean>(false);
+  private _loadingStateChange = new BehaviorSubject<boolean>(false);
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
   private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
@@ -246,7 +246,7 @@ export class GltfViewer {
 
   // #region loaded models related fieds
   private _loadingInProgress = false;
-  private _loadingQueue: {fileInfo: ModelFileInfo; subject: AsyncSubject<ModelLoadedInfo>}[] = [];
+  private _loadingQueue: (() => Promise<void>)[] = [];
 
   private _loadedModels = new Set<ModelGeometryInfo>();
   private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
@@ -321,19 +321,31 @@ export class GltfViewer {
     const promises: Promise<ModelLoadedInfo>[] = [];
     modelInfos.forEach(x => {
       const resultSubject = new AsyncSubject<ModelLoadedInfo>();
-      this._loadingQueue.push({fileInfo: x, subject: resultSubject});
+      this._loadingQueue.push(async () => {        
+        const { url, guid, name } = x;      
+        const result = !this._loadedModelsByGuid.has(guid)
+          ? await this.loadModel(url, guid, name)
+          : { url, guid };
+        resultSubject.next(result);
+        resultSubject.complete();
+      });
       promises.push(resultSubject.pipe(first()).toPromise());
     });
-    this.loadQueuedModelsAsync();
+    this.processLoadingQueueAsync();
 
-    const result = await Promise.all(promises);
-    return result;
+    const overallResult = await Promise.all(promises);
+    return overallResult;
   };
 
   closeModels(modelGuids: string[]) {
-    if (modelGuids?.length) {
-      this.removeLoadedModels(modelGuids);
+    if (!modelGuids?.length) {
+      return;
     }
+
+    modelGuids.forEach(x => {
+      this._loadingQueue.push(async () => this.removeModelFromLoaded(x));
+    });    
+    this.processLoadingQueueAsync();
   };
 
   selectItems(ids: string[]) {
@@ -383,7 +395,7 @@ export class GltfViewer {
   // #region rx
   private initObservables() {
     this.initialized$ = this._initialized.asObservable();
-    this.modelLoadingStateChange$ = this._modelLoadingStateChange.asObservable();
+    this.loadingStateChange$ = this._loadingStateChange.asObservable();
     this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
     this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
     this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
@@ -394,7 +406,7 @@ export class GltfViewer {
 
   private closeSubjects() {
     this._initialized.complete();
-    this._modelLoadingStateChange.complete();
+    this._loadingStateChange.complete();
     this._modelLoadingStart.complete();
     this._modelLoadingProgress.complete();
     this._modelLoadingEnd.complete();
@@ -790,40 +802,28 @@ export class GltfViewer {
     }
 
     this._loader = loader;
-    this.loadQueuedModelsAsync();
+    this.processLoadingQueueAsync();
   }
 
-  private async loadQueuedModelsAsync() {
+  private async processLoadingQueueAsync() {
     if (!this._loader || this._loadingInProgress) {
       return;
     }  
 
     this._loadingInProgress = true;  
-    this._modelLoadingStateChange.next(true);
+    this._loadingStateChange.next(true);
 
     while (this._loadingQueue.length > 0) {
-      const { fileInfo, subject } = this._loadingQueue.shift();
-      const { url, guid, name } = fileInfo;      
-      const result = !this._loadedModelsByGuid.has(guid)
-        ? await this.loadModel(url, guid, name)
-        : { url, guid };
-      subject.next(result);
-      subject.complete();
+      const action = this._loadingQueue.shift();
+      await action();
     } 
     
     this.runQueuedColoring(false);
     this.runQueuedSelection(false);
     this.updateRenderScene();
 
-    this._modelLoadingStateChange.next(false);
+    this._loadingStateChange.next(false);
     this._loadingInProgress = false;
-  }
-
-  private removeLoadedModels(modelGuids: string[]) {
-    modelGuids.forEach(x => {
-      this.removeModelFromLoaded(x);
-    });
-    this.updateRenderScene();
   }
 
   private async loadModel(url: string, guid: string, name: string): Promise<ModelLoadedInfo> {

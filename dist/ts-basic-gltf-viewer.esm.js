@@ -90,7 +90,7 @@ class GltfViewerOptions {
 class GltfViewer {
     constructor(containerId, options) {
         this._initialized = new BehaviorSubject(false);
-        this._modelLoadingStateChange = new BehaviorSubject(false);
+        this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
         this._modelLoadingProgress = new Subject();
@@ -213,19 +213,30 @@ class GltfViewer {
             const promises = [];
             modelInfos.forEach(x => {
                 const resultSubject = new AsyncSubject();
-                this._loadingQueue.push({ fileInfo: x, subject: resultSubject });
+                this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () {
+                    const { url, guid, name } = x;
+                    const result = !this._loadedModelsByGuid.has(guid)
+                        ? yield this.loadModel(url, guid, name)
+                        : { url, guid };
+                    resultSubject.next(result);
+                    resultSubject.complete();
+                }));
                 promises.push(resultSubject.pipe(first()).toPromise());
             });
-            this.loadQueuedModelsAsync();
-            const result = yield Promise.all(promises);
-            return result;
+            this.processLoadingQueueAsync();
+            const overallResult = yield Promise.all(promises);
+            return overallResult;
         });
     }
     ;
     closeModels(modelGuids) {
-        if (modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length) {
-            this.removeLoadedModels(modelGuids);
+        if (!(modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length)) {
+            return;
         }
+        modelGuids.forEach(x => {
+            this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () { return this.removeModelFromLoaded(x); }));
+        });
+        this.processLoadingQueueAsync();
     }
     ;
     selectItems(ids) {
@@ -265,7 +276,7 @@ class GltfViewer {
     }
     initObservables() {
         this.initialized$ = this._initialized.asObservable();
-        this.modelLoadingStateChange$ = this._modelLoadingStateChange.asObservable();
+        this.loadingStateChange$ = this._loadingStateChange.asObservable();
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
         this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
         this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
@@ -275,7 +286,7 @@ class GltfViewer {
     }
     closeSubjects() {
         this._initialized.complete();
-        this._modelLoadingStateChange.complete();
+        this._loadingStateChange.complete();
         this._modelLoadingStart.complete();
         this._modelLoadingProgress.complete();
         this._modelLoadingEnd.complete();
@@ -550,36 +561,25 @@ class GltfViewer {
             loader.setDRACOLoader(dracoLoader);
         }
         this._loader = loader;
-        this.loadQueuedModelsAsync();
+        this.processLoadingQueueAsync();
     }
-    loadQueuedModelsAsync() {
+    processLoadingQueueAsync() {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this._loader || this._loadingInProgress) {
                 return;
             }
             this._loadingInProgress = true;
-            this._modelLoadingStateChange.next(true);
+            this._loadingStateChange.next(true);
             while (this._loadingQueue.length > 0) {
-                const { fileInfo, subject } = this._loadingQueue.shift();
-                const { url, guid, name } = fileInfo;
-                const result = !this._loadedModelsByGuid.has(guid)
-                    ? yield this.loadModel(url, guid, name)
-                    : { url, guid };
-                subject.next(result);
-                subject.complete();
+                const action = this._loadingQueue.shift();
+                yield action();
             }
             this.runQueuedColoring(false);
             this.runQueuedSelection(false);
             this.updateRenderScene();
-            this._modelLoadingStateChange.next(false);
+            this._loadingStateChange.next(false);
             this._loadingInProgress = false;
         });
-    }
-    removeLoadedModels(modelGuids) {
-        modelGuids.forEach(x => {
-            this.removeModelFromLoaded(x);
-        });
-        this.updateRenderScene();
     }
     loadModel(url, guid, name) {
         return __awaiter(this, void 0, void 0, function* () {

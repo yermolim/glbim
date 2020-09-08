@@ -48,7 +48,7 @@ export declare class GltfViewerOptions {
 }
 export declare class GltfViewer {
 	initialized$: Observable<boolean>;
-	modelLoadingStateChange$: Observable<boolean>;
+	loadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
 	modelLoadingProgress$: Observable<ModelLoadingInfo>;
@@ -56,7 +56,7 @@ export declare class GltfViewer {
 	selectionChange$: Observable<Set<string>>;
 	manualSelectionChange$: Observable<Set<string>>;
 	private _initialized;
-	private _modelLoadingStateChange;
+	private _loadingStateChange;
 	private _modelLoadingStart;
 	private _modelLoadingEnd;
 	private _modelLoadingProgress;
@@ -144,8 +144,7 @@ export declare class GltfViewer {
 	private updateContainerDimensions;
 	private updateRendererSize;
 	private initLoader;
-	private loadQueuedModelsAsync;
-	private removeLoadedModels;
+	private processLoadingQueueAsync;
 	private loadModel;
 	private onModelLoadingStart;
 	private onModelLoadingProgress;
