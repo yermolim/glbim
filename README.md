@@ -2,22 +2,16 @@
 three.js-based basic gltf model viewer
 
 features:
-- gltf/glb (with draco compression) models support
-- most of three.js settings are default
+- multiple gltf/glb (with optional draco compression) models support
 - view only (model editing is out of this package's scope)
-- transparent renderer background (so outer container background used)
-- renderer canvas auto resize
-- multiple models support
-- mouse and touch support (pointer events used)
-- highlighting model meshes on hover
-- selection of model meshes from code by mesh ids (combination of model uuid and mesh 'name' field used as id)
-- single (tap/click) and multiple (ctrl + click) manual selection of model meshes (GPU picking used)
-- isolation of selected meshes (double tap/click)
-- auto centering camera on selected meshes
+- renderer with auto canvas resize and transparent background (so outer container background used)
+- performance optimization by merging all meshes into single mesh with vertex colors (alpha supported) to reduce frame time by minimizing render calls
 - assigning different colors to groups of model meshes
+- selection of model meshes from code by mesh ids (a combination of internal model UUID and mesh 'name' field used as id) with auto centering camera on selection
+- mouse and touch support (pointer events used): OrbitControls navigation; single (tap/click) and multiple (ctrl + click) manual selection of model meshes (fast GPU picking used); isolation of selected meshes (double-tap/click); highlighting model meshes on hover
 - notification of changes in opened models and mesh selection using rxjs subjects
 
-created for personal use in specific project (target models are static, without textures and without the need to take into account their internal structure), so use cases may be limited and not much description provided, but maybe some parts of the code will still be helpful to someone. 
+created for personal use in specific project (target models are static without the need to take into account their internal structure; all meshes use indexed BufferGeometry and MeshStandardMaterial without textures), so use cases may be limited and not much description provided, but maybe some parts of the code will still be helpful to someone. 
 if I find time for this, or if there are any requests, I will complete the description.
 
 dependencies:
