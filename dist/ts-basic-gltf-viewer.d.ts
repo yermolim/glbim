@@ -98,8 +98,8 @@ export declare class GltfViewer {
 	private _coloredMeshes;
 	private _pickingTarget;
 	private _pickingScene;
-	private _pickingMeshByColor;
 	private _pickingMeshById;
+	private _meshByPickingColor;
 	private _lastPickingColor;
 	private _pointerEventHelper;
 	private _loadingInProgress;

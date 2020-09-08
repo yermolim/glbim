@@ -129,7 +129,7 @@ export class GltfViewerOptions {
   dracoDecoderPath = "/assets/draco/";  
 
   highlightingEnabled = true;
-  highlightingLatency = 60;
+  highlightingLatency = 40;
   highlightColor = 0xFFFF00;
 
   selectionColor = 0xFF0000;
@@ -231,8 +231,8 @@ export class GltfViewer {
 
   private _pickingTarget: WebGLRenderTarget;
   private _pickingScene: Scene;
-  private _pickingMeshByColor = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>>();
   private _pickingMeshById = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>>();
+  private _meshByPickingColor = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>>();
   private _lastPickingColor = 0;
 
   private _pointerEventHelper: {
@@ -305,7 +305,7 @@ export class GltfViewer {
       x.geometry.dispose();
       x.material.dispose();
     });
-    [...this._pickingMeshByColor.values()].forEach(x => {
+    [...this._meshByPickingColor.values()].forEach(x => {
       x.geometry.dispose();
       x.material.dispose();
     });
@@ -712,16 +712,16 @@ export class GltfViewer {
     pickingMesh.scale.copy(mesh.scale);
 
     this._pickingScene.add(pickingMesh);
-    this._pickingMeshByColor.set(colorString, mesh);
-    this._pickingMeshById.set(mesh.uuid, mesh);
+    this._pickingMeshById.set(mesh.uuid, pickingMesh);
+    this._meshByPickingColor.set(colorString, mesh);
   }
 
   private removeMeshFromPickingScene(mesh: Mesh) {
     const pickingMesh = this._pickingMeshById.get(mesh.uuid);
     if (pickingMesh) {
       this._pickingScene.remove(pickingMesh);
-      this._pickingMeshByColor.delete(pickingMesh.userData.color);
       this._pickingMeshById.delete(mesh.uuid);
+      this._meshByPickingColor.delete(pickingMesh.userData.color);
     }
   }
 
@@ -755,7 +755,7 @@ export class GltfViewer {
     this._renderer.readRenderTargetPixels(this._pickingTarget, 0, 0, 1, 1, pixelBuffer); 
     // eslint-disable-next-line no-bitwise
     const id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]);
-    const mesh = this._pickingMeshByColor.get(id.toString(16));
+    const mesh = this._meshByPickingColor.get(id.toString(16));
 
     return mesh;
   }

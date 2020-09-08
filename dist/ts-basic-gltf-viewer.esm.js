@@ -69,7 +69,7 @@ class GltfViewerOptions {
         this.dracoDecoderEnabled = true;
         this.dracoDecoderPath = "/assets/draco/";
         this.highlightingEnabled = true;
-        this.highlightingLatency = 60;
+        this.highlightingLatency = 40;
         this.highlightColor = 0xFFFF00;
         this.selectionColor = 0xFF0000;
         this.isolationColor = 0x555555;
@@ -109,8 +109,8 @@ class GltfViewer {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._coloredMeshes = [];
-        this._pickingMeshByColor = new Map();
         this._pickingMeshById = new Map();
+        this._meshByPickingColor = new Map();
         this._lastPickingColor = 0;
         this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, mouseMoveTimer: null, waitForDouble: false };
         this._loadingInProgress = false;
@@ -199,7 +199,7 @@ class GltfViewer {
             x.geometry.dispose();
             x.material.dispose();
         });
-        [...this._pickingMeshByColor.values()].forEach(x => {
+        [...this._meshByPickingColor.values()].forEach(x => {
             x.geometry.dispose();
             x.material.dispose();
         });
@@ -494,15 +494,15 @@ class GltfViewer {
         pickingMesh.rotation.copy(mesh.rotation);
         pickingMesh.scale.copy(mesh.scale);
         this._pickingScene.add(pickingMesh);
-        this._pickingMeshByColor.set(colorString, mesh);
-        this._pickingMeshById.set(mesh.uuid, mesh);
+        this._pickingMeshById.set(mesh.uuid, pickingMesh);
+        this._meshByPickingColor.set(colorString, mesh);
     }
     removeMeshFromPickingScene(mesh) {
         const pickingMesh = this._pickingMeshById.get(mesh.uuid);
         if (pickingMesh) {
             this._pickingScene.remove(pickingMesh);
-            this._pickingMeshByColor.delete(pickingMesh.userData.color);
             this._pickingMeshById.delete(mesh.uuid);
+            this._meshByPickingColor.delete(pickingMesh.userData.color);
         }
     }
     getPickingPosition(clientX, clientY) {
@@ -525,7 +525,7 @@ class GltfViewer {
         const pixelBuffer = new Uint8Array(4);
         this._renderer.readRenderTargetPixels(this._pickingTarget, 0, 0, 1, 1, pixelBuffer);
         const id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]);
-        const mesh = this._pickingMeshByColor.get(id.toString(16));
+        const mesh = this._meshByPickingColor.get(id.toString(16));
         return mesh;
     }
     updateContainerDimensions() {
