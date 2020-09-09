@@ -53,6 +53,7 @@ interface ModelGeometryInfo {
 }
 // #endregion
 
+// #region helper classes
 class RgbRmoColor {
   private static readonly prop = "rgbrmo";
   private static readonly customProp = "rgbrmoC";
@@ -153,6 +154,7 @@ export class GltfViewerOptions {
     }
   }
 }
+// #endregion
 
 export class GltfViewer {
   // #region public observables
@@ -205,12 +207,11 @@ export class GltfViewer {
   // #region render scene
   private _renderScene: Scene;
   private _globalGeometry: BufferGeometry;
-  private _globalGeometryPosition: Float32BufferAttribute;
-  private _globalGeometryColor: Float32BufferAttribute;
-  private _globalGeometryRmo: Float32BufferAttribute;
-  private _globalGeometryIndex: Uint32BufferAttribute;
-  private _globalGeometryIndicesByMesh: Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>;
-  private _globalGeometryIndicesNeedSort: boolean;
+  private _glGeomColor: Float32BufferAttribute;
+  private _glGeomRmo: Float32BufferAttribute;
+  private _glGeomIndex: Uint32BufferAttribute;
+  private _glGeomIndicesByMesh: Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>;
+  private _glGeomIndicesNeedSort: boolean;
   // #endregion
 
   // #region materials related fieds
@@ -269,11 +270,6 @@ export class GltfViewer {
   }
 
   init() {
-    this._containerResizeSensor = new ResizeSensor(this._container, () => {
-      this.updateContainerDimensions();
-      this.updateRendererSize();
-    }); 
-
     this.initObservables(); 
     this.initPickingScene();
     this.initMaterials(); 
@@ -281,6 +277,12 @@ export class GltfViewer {
     this.initLoader(); 
     this.initRenderer();
     this.initCameraWithControls();
+    
+    this._containerResizeSensor = new ResizeSensor(this._container, () => {
+      const { width, height } = this._container.getBoundingClientRect();
+      this.resizeCamera(width, height);
+      this.resizeRenderer(width, height);
+    }); 
 
     this.addCanvasEventListeners();
     this.render();
@@ -337,16 +339,34 @@ export class GltfViewer {
     return overallResult;
   };
 
-  closeModels(modelGuids: string[]) {
+  async closeModelsAsync(modelGuids: string[]): Promise<void> {
     if (!modelGuids?.length) {
       return;
     }
 
-    modelGuids.forEach(x => {
-      this._loadingQueue.push(async () => this.removeModelFromLoaded(x));
+    const promises: Promise<boolean>[] = [];
+    modelGuids.forEach(x => {      
+      const resultSubject = new AsyncSubject<boolean>();
+      this._loadingQueue.push(async () => {
+        this.removeModelFromLoaded(x);
+        resultSubject.next(true);
+        resultSubject.complete();
+      });
+      promises.push(resultSubject.pipe(first()).toPromise());
     });    
     this.processLoadingQueueAsync();
+    
+    await Promise.all(promises);
   };
+
+  colorItems(coloringInfos: ColoringInfo[]) {
+    if (this._loadingInProgress) {
+      this._queuedColoring = coloringInfos;
+      return;
+    }
+
+    this.resetSelectionAndColorMeshes(coloringInfos);
+  }
 
   selectItems(ids: string[]) {
     if (!ids?.length) {
@@ -373,15 +393,6 @@ export class GltfViewer {
 
     this.findAndSelectMeshes(ids, true, true);
   };
-
-  colorItems(coloringInfos: ColoringInfo[]) {
-    if (this._loadingInProgress) {
-      this._queuedColoring = coloringInfos;
-      return;
-    }
-
-    this.resetSelectionAndColorMeshes(coloringInfos);
-  }
 
   getOpenedModels(): ModelOpenedInfo[] {
     return this._openedModelsChange.getValue();
@@ -473,7 +484,62 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region renderer initialization
+  // #region camera
+  private initCameraWithControls() {
+    const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 1, 10000);    
+    const orbitControls = new OrbitControls(camera, this._renderer.domElement);
+    orbitControls.addEventListener("change", () => this.render());
+    camera.position.set (0, 1000, 1000);
+    camera.lookAt (0, 0, 0);    
+    orbitControls.update();
+
+    this._camera = camera;
+    this._orbitControls = orbitControls;
+  }
+    
+  private resizeCamera(width: number, height: number) {
+    if (this._camera) {
+      this._camera.aspect = width / height;
+      this._camera.updateProjectionMatrix();
+    }
+  }
+  
+  private fitCameraToObjects(objects: Object3D[], offset = 1.2 ) { 
+    if (!objects?.length) {
+      return;
+    }
+    
+    const box = new Box3();    
+    for (const object of objects) {
+      box.expandByObject(object);
+    }      
+    
+    const size = box.getSize(new Vector3());
+    const center = box.getCenter(new Vector3());
+    
+    const maxSize = Math.max(size.x, size.y, size.z);
+    const fitHeightDistance = maxSize / (2 * Math.atan( Math.PI * this._camera.fov / 360 ));
+    const fitWidthDistance = fitHeightDistance / this._camera.aspect;
+    const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
+    
+    const direction = this._orbitControls.target.clone()
+      .sub(this._camera.position)
+      .normalize()
+      .multiplyScalar(distance);
+
+    this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
+    this._orbitControls.target.copy(center);
+    
+    this._camera.near = Math.min(distance / 100, 1);
+    this._camera.far = Math.max(distance * 100, 10000);
+    this._camera.updateProjectionMatrix();
+    this._camera.position.copy(this._orbitControls.target).sub(direction);
+
+    this._orbitControls.update();
+  }  
+  // #endregion
+
+  // #region renderer
   private initLigths() {
     if (this._options.ambientLight) {
       const ambientLight = new AmbientLight(0x222222, 
@@ -514,37 +580,30 @@ export class GltfViewer {
 
     this._renderer = renderer;
   }
-
-  private initCameraWithControls() {
-    const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 1, 10000);    
-    const orbitControls = new OrbitControls(camera, this._renderer.domElement);
-    orbitControls.addEventListener("change", () => this.render());
-    camera.position.set (0, 1000, 1000);
-    camera.lookAt (0, 0, 0);    
-    orbitControls.update();
-
-    this._camera = camera;
-    this._orbitControls = orbitControls;
-  }
-  // #endregion
   
-  // #region renderer common
-  private updateRenderScene() { 
-    this.rebuildRenderScene();
+  private resizeRenderer(width: number, height: number) {
+    if (this._renderer) {
+      this._renderer.setSize(width, height, false);
+      this.render();      
+    }
+  }
+
+  private async updateRenderSceneAsync(): Promise<void> { 
+    await this.rebuildRenderSceneAsync();
     if (this._loadedMeshesArray.length) {
       this.fitCameraToObjects([this._renderScene]);
     }
-    this._globalGeometryIndicesNeedSort = true;
+    this._glGeomIndicesNeedSort = true;
     this.render();
   }
 
-  private rebuildRenderScene() {
+  private async rebuildRenderSceneAsync(): Promise<void> {
     this._renderScene = null;
 
     const scene = new Scene();
     scene.add(...this._lights); 
     
-    this.rebuildGlobalGeometry();
+    await this.rebuildGlobalGeometryAsync();
     if (this._globalGeometry) {      
       const globalMesh = new Mesh(this._globalGeometry, this._globalMaterial);
       scene.add(globalMesh);
@@ -553,12 +612,11 @@ export class GltfViewer {
     this._renderScene = scene;
   }
 
-  private rebuildGlobalGeometry() {    
-    this._globalGeometryIndicesByMesh = null;
-    this._globalGeometryIndex = null;
-    this._globalGeometryColor = null;
-    this._globalGeometryRmo = null;
-    this._globalGeometryPosition = null;
+  private async rebuildGlobalGeometryAsync(): Promise<void> {    
+    this._glGeomIndicesByMesh = null;
+    this._glGeomIndex = null;
+    this._glGeomColor = null;
+    this._glGeomRmo = null;
     this._globalGeometry?.dispose();
     this._globalGeometry = null;
 
@@ -581,32 +639,43 @@ export class GltfViewer {
     const colorBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
     const rmoBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
     const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-
-    const indicesByMesh = new Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>();
+    const indicesByMesh = new Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>();    
     
     let positionsOffset = 0; 
     let indicesOffset = 0;
-    this._loadedMeshesArray.forEach(x => {
-      const geometry = <BufferGeometry>x.geometry
-        .clone()
-        .applyMatrix4(x.matrix);        
-      const positions = geometry.getAttribute("position").array;
-      const indices = geometry.getIndex().array;
-      const meshIndices = new Uint32Array(indices.length);
-      indicesByMesh.set(x, meshIndices);
-      for (let i = 0; i < indices.length; i++) {
-        const index = indices[i] + positionsOffset;
-        indexBuffer.setX(indicesOffset++, index);
-        meshIndices[i] = index;
-      }
-      for (let i = 0; i < positions.length;) {   
-        const rgbrmo = RgbRmoColor.getFromMesh(x);
-        colorBuffer.setXYZ(positionsOffset, rgbrmo.r, rgbrmo.g, rgbrmo.b);
-        rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
-        positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
-      }
-      geometry.dispose();
-    });
+    // splitting into chunks to UI remain responsible
+    const chunkSize = 1000;
+    const processChunk = (meshes: Mesh<BufferGeometry, MeshStandardMaterial>[]) => {    
+      meshes.forEach(x => {
+        const geometry = <BufferGeometry>x.geometry
+          .clone()
+          .applyMatrix4(x.matrix);        
+        const positions = geometry.getAttribute("position").array;
+        const indices = geometry.getIndex().array;
+        const meshIndices = new Uint32Array(indices.length);
+        indicesByMesh.set(x, meshIndices);
+        for (let i = 0; i < indices.length; i++) {
+          const index = indices[i] + positionsOffset;
+          indexBuffer.setX(indicesOffset++, index);
+          meshIndices[i] = index;
+        }
+        for (let i = 0; i < positions.length;) {   
+          const rgbrmo = RgbRmoColor.getFromMesh(x);
+          colorBuffer.setXYZ(positionsOffset, rgbrmo.r, rgbrmo.g, rgbrmo.b);
+          rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
+          positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
+        }
+        geometry.dispose();
+      });
+    };
+    for (let i = 0; i < this._loadedMeshesArray.length; i += chunkSize) {
+      await new Promise((resolve) => { 
+        setTimeout(() => {
+          processChunk(this._loadedMeshesArray.slice(i, i + chunkSize));
+          resolve();
+        }, 0);
+      });
+    }
 
     const globalGeometry = new BufferGeometry();
     globalGeometry.setIndex(indexBuffer);   
@@ -615,15 +684,14 @@ export class GltfViewer {
     globalGeometry.setAttribute("position", positionBuffer); 
     
     this._globalGeometry = globalGeometry;
-    this._globalGeometryIndex = indexBuffer;
-    this._globalGeometryColor = colorBuffer;
-    this._globalGeometryRmo = rmoBuffer;
-    this._globalGeometryPosition = positionBuffer;
-    this._globalGeometryIndicesByMesh = indicesByMesh;
+    this._glGeomIndex = indexBuffer;
+    this._glGeomColor = colorBuffer;
+    this._glGeomRmo = rmoBuffer;
+    this._glGeomIndicesByMesh = indicesByMesh;
   } 
 
-  private sortGlobalGeometryIndicesByOpacity() {
-    if (!this._globalGeometry || !this._globalGeometryIndicesByMesh) {
+  private sortGlGeomIndicesByOpacity() {
+    if (!this._globalGeometry || !this._glGeomIndicesByMesh) {
       return;
     }
 
@@ -631,11 +699,11 @@ export class GltfViewer {
     this._loadedMeshesArray.sort((a, b) => 
       RgbRmoColor.getFromMesh(b).opacity - RgbRmoColor.getFromMesh(a).opacity);
     this._loadedMeshesArray.forEach(mesh => {
-      this._globalGeometryIndicesByMesh.get(mesh).forEach(value => {
-        this._globalGeometryIndex.setX(currentIndex++, value);
+      this._glGeomIndicesByMesh.get(mesh).forEach(value => {
+        this._glGeomIndex.setX(currentIndex++, value);
       });
     });
-    this._globalGeometryIndex.needsUpdate = true;
+    this._glGeomIndex.needsUpdate = true;
   }
 
   private render() {
@@ -643,48 +711,14 @@ export class GltfViewer {
       return;
     }
 
-    if (this._globalGeometryIndicesNeedSort) {
-      this.sortGlobalGeometryIndicesByOpacity();
-      this._globalGeometryIndicesNeedSort = false;
+    if (this._glGeomIndicesNeedSort) {
+      this.sortGlGeomIndicesByOpacity();
+      this._glGeomIndicesNeedSort = false;
     }
 
     requestAnimationFrame(() => { 
       this._renderer.render(this._renderScene, this._camera);
     });
-  }
-  
-  private fitCameraToObjects(objects: Object3D[], offset = 1.2 ) { 
-    if (!objects?.length) {
-      return;
-    }
-    
-    const box = new Box3();    
-    for (const object of objects) {
-      box.expandByObject(object);
-    }      
-    
-    const size = box.getSize(new Vector3());
-    const center = box.getCenter(new Vector3());
-    
-    const maxSize = Math.max(size.x, size.y, size.z);
-    const fitHeightDistance = maxSize / (2 * Math.atan( Math.PI * this._camera.fov / 360 ));
-    const fitWidthDistance = fitHeightDistance / this._camera.aspect;
-    const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
-    
-    const direction = this._orbitControls.target.clone()
-      .sub(this._camera.position)
-      .normalize()
-      .multiplyScalar(distance);
-
-    this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
-    this._orbitControls.target.copy(center);
-    
-    this._camera.near = Math.min(distance / 100, 1);
-    this._camera.far = Math.max(distance * 100, 10000);
-    this._camera.updateProjectionMatrix();
-    this._camera.position.copy(this._orbitControls.target).sub(direction);
-
-    this._orbitControls.update();
   }
   // #endregion
 
@@ -773,23 +807,6 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region update size
-  private updateContainerDimensions() {
-    const rect = this._container.getBoundingClientRect();
-    this._containerWidth = rect.width;
-    this._containerHeight = rect.height;
-  }
-
-  private updateRendererSize() {
-    if (this._renderer) {
-      this._camera.aspect = this._containerWidth / this._containerHeight;
-      this._camera.updateProjectionMatrix();
-      this._renderer.setSize(this._containerWidth, this._containerHeight, false);
-      this.render();      
-    }
-  }
-  // #endregion
-
   // #region loading models
   private initLoader() {
     const loader = new GLTFLoader();
@@ -805,7 +822,7 @@ export class GltfViewer {
     this.processLoadingQueueAsync();
   }
 
-  private async processLoadingQueueAsync() {
+  private async processLoadingQueueAsync(): Promise<void> {
     if (!this._loader || this._loadingInProgress) {
       return;
     }  
@@ -820,7 +837,7 @@ export class GltfViewer {
     
     this.runQueuedColoring(false);
     this.runQueuedSelection(false);
-    this.updateRenderScene();
+    await this.updateRenderSceneAsync();
 
     this._loadingStateChange.next(false);
     this._loadingInProgress = false;
@@ -1225,15 +1242,15 @@ export class GltfViewer {
     }
 
     const rgbrmo = RgbRmoColor.getFromMesh(mesh);
-    this._globalGeometryIndicesByMesh.get(mesh).forEach(i => {
-      this._globalGeometryColor.setXYZ(i, rgbrmo.r, rgbrmo.g, rgbrmo.b);
-      this._globalGeometryRmo.setXYZ(i, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
+    this._glGeomIndicesByMesh.get(mesh).forEach(i => {
+      this._glGeomColor.setXYZ(i, rgbrmo.r, rgbrmo.g, rgbrmo.b);
+      this._glGeomRmo.setXYZ(i, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
     });
-    this._globalGeometryColor.needsUpdate = true;
-    this._globalGeometryRmo.needsUpdate = true;
+    this._glGeomColor.needsUpdate = true;
+    this._glGeomRmo.needsUpdate = true;
 
     if (rgbrmo.opacity !== initialRgbrmo.opacity) {
-      this._globalGeometryIndicesNeedSort = true;
+      this._glGeomIndicesNeedSort = true;
     }
   }
   // #endregion  
