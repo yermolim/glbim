@@ -82,7 +82,7 @@ class GltfViewerOptions {
         this.dirLight = true;
         this.dirLightIntensity = 0.6;
         this.useAntialiasing = true;
-        this.meshRenderType = "per_mesh";
+        this.meshRenderType = "per_model";
         if (item != null) {
             Object.assign(this, item);
         }
@@ -622,26 +622,19 @@ class GltfViewer {
         };
     }
     render() {
-        if (!this._renderer) {
-            return;
-        }
-        const a = performance.now();
         if (this._sourceMeshesNeedColorUpdate.size) {
             this.updateRenderGeometriesColors();
             this._sourceMeshesNeedColorUpdate.clear();
         }
-        console.log(`COLOR_CHANGE: ${performance.now() - a} ms`);
-        const b = performance.now();
         if (this._renderGeometryIndicesNeedSort.size) {
             this.sortRenderGeometriesIndicesByOpacity();
             this._renderGeometryIndicesNeedSort.clear();
         }
-        console.log(`OPACITY_SORT: ${performance.now() - b} ms`);
         requestAnimationFrame(() => {
-            const c = performance.now();
-            this._renderer.render(this._renderScene, this._camera);
-            console.log("RENDER_CALLS: " + this._renderer.info.render.calls);
-            console.log(`RENDER_TIME: ${performance.now() - c} ms`);
+            var _a;
+            if (this._renderScene && this._camera) {
+                (_a = this._renderer) === null || _a === void 0 ? void 0 : _a.render(this._renderScene, this._camera);
+            }
         });
     }
     initPickingScene() {

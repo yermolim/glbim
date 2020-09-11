@@ -168,7 +168,7 @@ export class GltfViewerOptions {
 
   useAntialiasing = true;
 
-  meshRenderType: MeshRenderType = "per_mesh";
+  meshRenderType: MeshRenderType = "per_model";
   
   constructor(item: object = null) {
     if (item != null) {
@@ -655,7 +655,7 @@ export class GltfViewer {
         });
         break;
       case "per_mesh":
-        meshArrays = this._loadedMeshesArray.map(x => [x]);
+        meshArrays = this._loadedMeshesArray.map(x => [x]); // TODO: develop separate logic
         break;
       default:
         meshArrays = [];
@@ -861,29 +861,20 @@ export class GltfViewer {
   }
 
   private render() {
-    if (!this._renderer) {
-      return;
-    }
-
-    const a = performance.now();
     if (this._sourceMeshesNeedColorUpdate.size) {
       this.updateRenderGeometriesColors();
       this._sourceMeshesNeedColorUpdate.clear();
     }
-    console.log(`COLOR_CHANGE: ${performance.now() - a} ms`);
 
-    const b = performance.now();
     if (this._renderGeometryIndicesNeedSort.size) {
       this.sortRenderGeometriesIndicesByOpacity();
       this._renderGeometryIndicesNeedSort.clear();
     }    
-    console.log(`OPACITY_SORT: ${performance.now() - b} ms`);
 
     requestAnimationFrame(() => { 
-      const c = performance.now();
-      this._renderer.render(this._renderScene, this._camera);
-      console.log("RENDER_CALLS: " + this._renderer.info.render.calls);
-      console.log(`RENDER_TIME: ${performance.now() - c} ms`);
+      if (this._renderScene && this._camera) {
+        this._renderer?.render(this._renderScene, this._camera);
+      }
     });
   }
   // #endregion
