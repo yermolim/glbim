@@ -5,7 +5,7 @@ features:
 - multiple gltf/glb (with optional draco compression) models support
 - view only (model editing is out of this package's scope)
 - renderer with auto canvas resize and transparent background (so outer container background used)
-- performance optimization by merging all meshes into single mesh with vertex colors (alpha supported) to reduce frame time by minimizing render calls
+- performance optimization by merging all scene meshes into single mesh (or one mesh per loaded model optionally) with vertex colors (alpha supported) to reduce frame time by minimizing render calls
 - assigning different colors to groups of model meshes
 - selection of model meshes from code by mesh ids (a combination of internal model UUID and mesh 'name' field used as id) with auto centering camera on selection
 - mouse and touch support (pointer events used): OrbitControls navigation; single (tap/click) and multiple (ctrl + click) manual selection of model meshes (fast GPU picking used); isolation of selected meshes (double-tap/click); highlighting model meshes on hover

@@ -82,6 +82,7 @@ class GltfViewerOptions {
         this.dirLight = true;
         this.dirLightIntensity = 0.6;
         this.useAntialiasing = true;
+        this.meshRenderType = "per_mesh";
         if (item != null) {
             Object.assign(this, item);
         }
@@ -103,6 +104,11 @@ class GltfViewer {
         this._colProp = "colored";
         this._subscriptions = [];
         this._lights = [];
+        this._renderGeometries = [];
+        this._renderGeometryIndexBySourceMesh = new Map();
+        this._renderSourceMeshesByGeometryIndex = new Map();
+        this._renderGeometryIndicesNeedSort = new Set();
+        this._sourceMeshesNeedColorUpdate = new Set();
         this._queuedColoring = null;
         this._queuedSelection = null;
         this._highlightedMesh = null;
@@ -187,15 +193,17 @@ class GltfViewer {
         this._initialized.next(true);
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
         (_a = this._containerResizeSensor) === null || _a === void 0 ? void 0 : _a.detach();
         (_b = this._renderer) === null || _b === void 0 ? void 0 : _b.dispose();
         (_c = this._orbitControls) === null || _c === void 0 ? void 0 : _c.dispose();
         (_e = (_d = this._loader) === null || _d === void 0 ? void 0 : _d.dracoLoader) === null || _e === void 0 ? void 0 : _e.dispose();
-        (_f = this._globalGeometry) === null || _f === void 0 ? void 0 : _f.dispose();
-        (_g = this._globalMaterial) === null || _g === void 0 ? void 0 : _g.dispose();
+        this._renderGeometries.forEach(x => x.geometry.dispose());
+        this._renderGeometries = null;
+        this._renderScene = null;
+        (_f = this._renderMaterial) === null || _f === void 0 ? void 0 : _f.dispose();
         this._loadedMeshes.forEach(x => {
             x.geometry.dispose();
             x.material.dispose();
@@ -204,7 +212,7 @@ class GltfViewer {
             x.geometry.dispose();
             x.material.dispose();
         });
-        (_h = this._pickingTarget) === null || _h === void 0 ? void 0 : _h.dispose();
+        (_g = this._pickingTarget) === null || _g === void 0 ? void 0 : _g.dispose();
     }
     openModelsAsync(modelInfos) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -397,42 +405,76 @@ class GltfViewer {
     }
     updateRenderSceneAsync() {
         return __awaiter(this, void 0, void 0, function* () {
-            yield this.rebuildRenderSceneAsync();
+            yield this.rebuildRenderSceneAsync(this._options.meshRenderType);
             if (this._loadedMeshesArray.length) {
                 this.fitCameraToObjects([this._renderScene]);
             }
-            this._glGeomIndicesNeedSort = true;
             this.render();
         });
     }
-    rebuildRenderSceneAsync() {
+    rebuildRenderSceneAsync(meshRenderType) {
         return __awaiter(this, void 0, void 0, function* () {
             this._renderScene = null;
             const scene = new Scene();
             scene.add(...this._lights);
-            yield this.rebuildGlobalGeometryAsync();
-            if (this._globalGeometry) {
-                const globalMesh = new Mesh(this._globalGeometry, this._globalMaterial);
-                scene.add(globalMesh);
+            this._renderGeometries.forEach(x => x.geometry.dispose());
+            this._renderGeometries.length = 0;
+            this._renderGeometryIndexBySourceMesh.clear();
+            this._renderSourceMeshesByGeometryIndex.clear();
+            this._renderGeometryIndicesNeedSort.clear();
+            let meshArrays;
+            switch (meshRenderType) {
+                case "single":
+                    meshArrays = [this._loadedMeshesArray];
+                    break;
+                case "one_per_model":
+                    meshArrays = this._loadedModelsArray.map(x => x.meshes).filter(x => x.length);
+                    break;
+                case "per_model":
+                    meshArrays = [];
+                    const chunkSize = 1000;
+                    this._loadedModelsArray.map(x => x.meshes).filter(x => x.length).forEach(x => {
+                        if (x.length <= chunkSize) {
+                            meshArrays.push(x);
+                        }
+                        else {
+                            for (let i = 0; i < x.length; i += chunkSize) {
+                                const chunk = x.slice(i, i + chunkSize);
+                                meshArrays.push(chunk);
+                            }
+                        }
+                    });
+                    break;
+                case "per_mesh":
+                    meshArrays = this._loadedMeshesArray.map(x => [x]);
+                    break;
+                default:
+                    meshArrays = [];
             }
+            for (const meshes of meshArrays) {
+                if (meshes.length) {
+                    const geometry = yield this.buildRenderGeometryAsync(meshes);
+                    this._renderGeometries.push(geometry);
+                    const i = this._renderGeometries.length - 1;
+                    this._renderSourceMeshesByGeometryIndex.set(i, meshes);
+                    this._renderGeometryIndicesNeedSort.add(i);
+                    meshes.forEach(x => {
+                        this._renderGeometryIndexBySourceMesh.set(x, i);
+                    });
+                }
+            }
+            this._renderGeometries.forEach(x => {
+                const mesh = new Mesh(x.geometry, this._renderMaterial);
+                scene.add(mesh);
+            });
             this._renderScene = scene;
         });
     }
-    rebuildGlobalGeometryAsync() {
-        var _a, _b;
+    buildRenderGeometryAsync(meshes) {
         return __awaiter(this, void 0, void 0, function* () {
-            this._glGeomIndicesByMesh = null;
-            this._glGeomIndex = null;
-            this._glGeomColor = null;
-            this._glGeomRmo = null;
-            (_a = this._globalGeometry) === null || _a === void 0 ? void 0 : _a.dispose();
-            this._globalGeometry = null;
-            if (!((_b = this._loadedMeshesArray) === null || _b === void 0 ? void 0 : _b.length)) {
-                return;
-            }
             let positionsLen = 0;
             let indicesLen = 0;
-            this._loadedMeshesArray.forEach(x => {
+            meshes.forEach(x => {
                 positionsLen += x.geometry.getAttribute("position").count * 3;
                 indicesLen += x.geometry.getIndex().count;
             });
@@ -443,19 +485,19 @@ class GltfViewer {
             const colorBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
             const rmoBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
             const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-            const indicesByMesh = new Map();
+            const indicesBySourceMesh = new Map();
             let positionsOffset = 0;
             let indicesOffset = 0;
-            const chunkSize = 1000;
-            const processChunk = (meshes) => {
-                meshes.forEach(x => {
+            const chunkSize = 100;
+            const processChunk = (chunk) => {
+                chunk.forEach(x => {
                     const geometry = x.geometry
                         .clone()
                         .applyMatrix4(x.matrix);
                     const positions = geometry.getAttribute("position").array;
                     const indices = geometry.getIndex().array;
                     const meshIndices = new Uint32Array(indices.length);
-                    indicesByMesh.set(x, meshIndices);
+                    indicesBySourceMesh.set(x, meshIndices);
                     for (let i = 0; i < indices.length; i++) {
                         const index = indices[i] + positionsOffset;
                         indexBuffer.setX(indicesOffset++, index);
@@ -470,49 +512,136 @@ class GltfViewer {
                     geometry.dispose();
                 });
             };
-            for (let i = 0; i < this._loadedMeshesArray.length; i += chunkSize) {
+            for (let i = 0; i < meshes.length; i += chunkSize) {
                 yield new Promise((resolve) => {
                     setTimeout(() => {
-                        processChunk(this._loadedMeshesArray.slice(i, i + chunkSize));
+                        processChunk(meshes.slice(i, i + chunkSize));
                         resolve();
                     }, 0);
                 });
             }
-            const globalGeometry = new BufferGeometry();
-            globalGeometry.setIndex(indexBuffer);
-            globalGeometry.setAttribute("color", colorBuffer);
-            globalGeometry.setAttribute("rmo", rmoBuffer);
-            globalGeometry.setAttribute("position", positionBuffer);
-            this._globalGeometry = globalGeometry;
-            this._glGeomIndex = indexBuffer;
-            this._glGeomColor = colorBuffer;
-            this._glGeomRmo = rmoBuffer;
-            this._glGeomIndicesByMesh = indicesByMesh;
+            const renderGeometry = new BufferGeometry();
+            renderGeometry.setIndex(indexBuffer);
+            renderGeometry.setAttribute("color", colorBuffer);
+            renderGeometry.setAttribute("rmo", rmoBuffer);
+            renderGeometry.setAttribute("position", positionBuffer);
+            return {
+                geometry: renderGeometry,
+                positions: positionBuffer,
+                colors: colorBuffer,
+                rmos: rmoBuffer,
+                indices: indexBuffer,
+                indicesBySourceMesh,
+            };
         });
     }
-    sortGlGeomIndicesByOpacity() {
-        if (!this._globalGeometry || !this._glGeomIndicesByMesh) {
-            return;
-        }
-        let currentIndex = 0;
-        this._loadedMeshesArray.sort((a, b) => RgbRmoColor.getFromMesh(b).opacity - RgbRmoColor.getFromMesh(a).opacity);
-        this._loadedMeshesArray.forEach(mesh => {
-            this._glGeomIndicesByMesh.get(mesh).forEach(value => {
-                this._glGeomIndex.setX(currentIndex++, value);
+    sortRenderGeometriesIndicesByOpacity() {
+        this._renderGeometryIndicesNeedSort.forEach(i => {
+            const meshes = this._renderSourceMeshesByGeometryIndex.get(i);
+            const opaqueMeshes = [];
+            const transparentMeshes = [];
+            meshes.forEach(x => {
+                if (RgbRmoColor.getFromMesh(x).opacity === 1) {
+                    opaqueMeshes.push(x);
+                }
+                else {
+                    transparentMeshes.push(x);
+                }
             });
+            const { indices, indicesBySourceMesh } = this._renderGeometries[i];
+            let currentIndex = 0;
+            opaqueMeshes.forEach(mesh => {
+                indicesBySourceMesh.get(mesh).forEach(value => {
+                    indices.setX(currentIndex++, value);
+                });
+            });
+            transparentMeshes.forEach(mesh => {
+                indicesBySourceMesh.get(mesh).forEach(value => {
+                    indices.setX(currentIndex++, value);
+                });
+            });
+            indices.needsUpdate = true;
         });
-        this._glGeomIndex.needsUpdate = true;
+    }
+    updateRenderGeometriesColors() {
+        const meshesByRgIndex = new Map();
+        this._sourceMeshesNeedColorUpdate.forEach(mesh => {
+            const rgIndex = this._renderGeometryIndexBySourceMesh.get(mesh);
+            if (meshesByRgIndex.has(rgIndex)) {
+                meshesByRgIndex.get(rgIndex).push(mesh);
+            }
+            else {
+                meshesByRgIndex.set(rgIndex, [mesh]);
+            }
+        });
+        meshesByRgIndex.forEach((v, k) => {
+            this.updateRenderGeometryColors(k, v);
+        });
+    }
+    updateRenderGeometryColors(rgIndex, meshes) {
+        const { colors, rmos, indicesBySourceMesh } = this._renderGeometries[rgIndex];
+        let anyMeshOpacityChanged = false;
+        meshes.forEach(mesh => {
+            const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh);
+            indicesBySourceMesh.get(mesh).forEach(i => {
+                colors.setXYZ(i, rgbRmo.r, rgbRmo.g, rgbRmo.b);
+                rmos.setXYZ(i, rgbRmo.roughness, rgbRmo.metalness, rgbRmo.opacity);
+            });
+            if (!anyMeshOpacityChanged && opacityChanged) {
+                anyMeshOpacityChanged = true;
+            }
+        });
+        colors.needsUpdate = true;
+        rmos.needsUpdate = true;
+        if (anyMeshOpacityChanged) {
+            this._renderGeometryIndicesNeedSort.add(rgIndex);
+        }
+    }
+    refreshMeshColors(mesh) {
+        if (!mesh[this._isolProp]) {
+            RgbRmoColor.deleteFromMesh(mesh);
+        }
+        const initialRgbRmo = RgbRmoColor.getFromMesh(mesh);
+        let newRgbRmo;
+        if (mesh[this._hlProp]) {
+            newRgbRmo = new RgbRmoColor(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+        }
+        else if (mesh[this._selProp]) {
+            newRgbRmo = new RgbRmoColor(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+        }
+        else if (mesh[this._isolProp]) {
+            newRgbRmo = this._isolationColor;
+        }
+        else {
+            newRgbRmo = initialRgbRmo;
+        }
+        RgbRmoColor.setToMesh(mesh, newRgbRmo);
+        return {
+            rgbRmo: newRgbRmo,
+            opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
+        };
     }
     render() {
         if (!this._renderer) {
             return;
         }
-        if (this._glGeomIndicesNeedSort) {
-            this.sortGlGeomIndicesByOpacity();
-            this._glGeomIndicesNeedSort = false;
+        const a = performance.now();
+        if (this._sourceMeshesNeedColorUpdate.size) {
+            this.updateRenderGeometriesColors();
+            this._sourceMeshesNeedColorUpdate.clear();
         }
+        console.log(`COLOR_CHANGE: ${performance.now() - a} ms`);
+        const b = performance.now();
+        if (this._renderGeometryIndicesNeedSort.size) {
+            this.sortRenderGeometriesIndicesByOpacity();
+            this._renderGeometryIndicesNeedSort.clear();
+        }
+        console.log(`OPACITY_SORT: ${performance.now() - b} ms`);
         requestAnimationFrame(() => {
+            const c = performance.now();
             this._renderer.render(this._renderScene, this._camera);
+            console.log("RENDER_CALLS: " + this._renderer.info.render.calls);
+            console.log(`RENDER_TIME: ${performance.now() - c} ms`);
         });
     }
     initPickingScene() {
@@ -660,7 +789,7 @@ class GltfViewer {
                 handles.add(x.name);
             }
         });
-        const modelInfo = { gltf: gltf, meshes, handles, name };
+        const modelInfo = { name, meshes, handles };
         this._loadedModels.add(modelInfo);
         this._loadedModelsByGuid.set(modelGuid, modelInfo);
         this.updateModelsDataArrays();
@@ -688,8 +817,8 @@ class GltfViewer {
         this.emitOpenedModelsChanged();
     }
     updateModelsDataArrays() {
-        this._loadedModelsArray = [...this._loadedModels];
         this._loadedMeshesArray = [...this._loadedMeshes];
+        this._loadedModelsArray = [...this._loadedModels];
     }
     emitOpenedModelsChanged() {
         const modelOpenedInfos = [];
@@ -720,7 +849,7 @@ class GltfViewer {
                         meshes.forEach(y => {
                             y[this._colProp] = true;
                             RgbRmoColor.setCustomToMesh(y, customColor);
-                            this.refreshMeshRgbRmo(y);
+                            this._sourceMeshesNeedColorUpdate.add(y);
                             this._coloredMeshes.push(y);
                         });
                     }
@@ -735,7 +864,7 @@ class GltfViewer {
         for (const mesh of this._coloredMeshes) {
             mesh[this._colProp] = undefined;
             RgbRmoColor.deleteFromMesh(mesh, true);
-            this.refreshMeshRgbRmo(mesh);
+            this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._coloredMeshes.length = 0;
     }
@@ -767,14 +896,14 @@ class GltfViewer {
     removeSelection() {
         for (const mesh of this._selectedMeshes) {
             mesh[this._selProp] = undefined;
-            this.refreshMeshRgbRmo(mesh);
+            this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._selectedMeshes.length = 0;
     }
     removeIsolation() {
         for (const mesh of this._isolatedMeshes) {
             mesh[this._isolProp] = undefined;
-            this.refreshMeshRgbRmo(mesh);
+            this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._isolatedMeshes.length = 0;
     }
@@ -816,7 +945,7 @@ class GltfViewer {
         }
         meshes.forEach(x => {
             x[this._selProp] = true;
-            this.refreshMeshRgbRmo(x);
+            this._sourceMeshesNeedColorUpdate.add(x);
         });
         if (isolateSelected) {
             this.isolateSelectedMeshes();
@@ -828,7 +957,7 @@ class GltfViewer {
         this._loadedMeshesArray.forEach(x => {
             if (!x[this._selProp]) {
                 x[this._isolProp] = true;
-                this.refreshMeshRgbRmo(x);
+                this._sourceMeshesNeedColorUpdate.add(x);
                 this._isolatedMeshes.push(x);
             }
         });
@@ -859,7 +988,7 @@ class GltfViewer {
         this.removeHighlighting();
         if (mesh) {
             mesh[this._hlProp] = true;
-            this.refreshMeshRgbRmo(mesh);
+            this._sourceMeshesNeedColorUpdate.add(mesh);
             this._highlightedMesh = mesh;
         }
         this.render();
@@ -868,7 +997,7 @@ class GltfViewer {
         if (this._highlightedMesh) {
             const mesh = this._highlightedMesh;
             mesh[this._hlProp] = undefined;
-            this.refreshMeshRgbRmo(mesh);
+            this._sourceMeshesNeedColorUpdate.add(mesh);
             this._highlightedMesh = null;
         }
     }
@@ -877,20 +1006,20 @@ class GltfViewer {
         const isolationRgbRmoColor = new RgbRmoColor(isolationColor.r, isolationColor.g, isolationColor.b, 1, 0, this._options.isolationOpacity);
         const selectionColor = new Color(this._options.selectionColor);
         const highlightColor = new Color(this._options.highlightColor);
-        this._globalMaterial = this.buildGlobalMaterial(true);
+        this._renderMaterial = this.buildRenderMaterial(true);
         this._isolationColor = isolationRgbRmoColor;
         this._selectionColor = selectionColor;
         this._highlightColor = highlightColor;
     }
-    buildGlobalMaterial(transparent) {
-        const globalMaterial = new MeshPhysicalMaterial({
+    buildRenderMaterial(transparent) {
+        const renderMaterial = new MeshPhysicalMaterial({
             vertexColors: true,
             flatShading: true,
             blending: NormalBlending,
             side: DoubleSide,
             transparent,
         });
-        globalMaterial.onBeforeCompile = shader => {
+        renderMaterial.onBeforeCompile = shader => {
             shader.vertexShader =
                 `
         attribute vec3 rmo;        
@@ -909,35 +1038,7 @@ class GltfViewer {
             shader.fragmentShader = shader.fragmentShader.replace("uniform float metalness;", "varying float metalness;");
             shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");
         };
-        return globalMaterial;
-    }
-    refreshMeshRgbRmo(mesh) {
-        if (!mesh) {
-            return;
-        }
-        if (!mesh[this._isolProp]) {
-            RgbRmoColor.deleteFromMesh(mesh);
-        }
-        const initialRgbrmo = RgbRmoColor.getFromMesh(mesh);
-        if (mesh[this._hlProp]) {
-            RgbRmoColor.setToMesh(mesh, new RgbRmoColor(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, initialRgbrmo.roughness, initialRgbrmo.metalness, initialRgbrmo.opacity));
-        }
-        else if (mesh[this._selProp]) {
-            RgbRmoColor.setToMesh(mesh, new RgbRmoColor(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, initialRgbrmo.roughness, initialRgbrmo.metalness, initialRgbrmo.opacity));
-        }
-        else if (mesh[this._isolProp]) {
-            RgbRmoColor.setToMesh(mesh, this._isolationColor);
-        }
-        const rgbrmo = RgbRmoColor.getFromMesh(mesh);
-        this._glGeomIndicesByMesh.get(mesh).forEach(i => {
-            this._glGeomColor.setXYZ(i, rgbrmo.r, rgbrmo.g, rgbrmo.b);
-            this._glGeomRmo.setXYZ(i, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
-        });
-        this._glGeomColor.needsUpdate = true;
-        this._glGeomRmo.needsUpdate = true;
-        if (rgbrmo.opacity !== initialRgbrmo.opacity) {
-            this._glGeomIndicesNeedSort = true;
-        }
+        return renderMaterial;
     }
 }
 

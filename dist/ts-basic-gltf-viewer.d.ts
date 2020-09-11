@@ -27,6 +27,7 @@ export interface ColoringInfo {
 	opacity: number;
 	ids: string[];
 }
+export declare type MeshRenderType = "single" | "one_per_model" | "per_model" | "per_mesh";
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
 	dracoDecoderPath: string;
@@ -44,6 +45,7 @@ export declare class GltfViewerOptions {
 	dirLight: boolean;
 	dirLightIntensity: number;
 	useAntialiasing: boolean;
+	meshRenderType: MeshRenderType;
 	constructor(item?: object);
 }
 export declare class GltfViewer {
@@ -78,14 +80,13 @@ export declare class GltfViewer {
 	private _loader;
 	private _camera;
 	private _orbitControls;
+	private _renderMaterial;
 	private _renderScene;
-	private _globalGeometry;
-	private _glGeomColor;
-	private _glGeomRmo;
-	private _glGeomIndex;
-	private _glGeomIndicesByMesh;
-	private _glGeomIndicesNeedSort;
-	private _globalMaterial;
+	private _renderGeometries;
+	private _renderGeometryIndexBySourceMesh;
+	private _renderSourceMeshesByGeometryIndex;
+	private _renderGeometryIndicesNeedSort;
+	private _sourceMeshesNeedColorUpdate;
 	private _isolationColor;
 	private _selectionColor;
 	private _highlightColor;
@@ -133,8 +134,11 @@ export declare class GltfViewer {
 	private resizeRenderer;
 	private updateRenderSceneAsync;
 	private rebuildRenderSceneAsync;
-	private rebuildGlobalGeometryAsync;
-	private sortGlGeomIndicesByOpacity;
+	private buildRenderGeometryAsync;
+	private sortRenderGeometriesIndicesByOpacity;
+	private updateRenderGeometriesColors;
+	private updateRenderGeometryColors;
+	private refreshMeshColors;
 	private render;
 	private initPickingScene;
 	private nextPickingColor;
@@ -171,8 +175,7 @@ export declare class GltfViewer {
 	private highlightItem;
 	private removeHighlighting;
 	private initMaterials;
-	private buildGlobalMaterial;
-	private refreshMeshRgbRmo;
+	private buildRenderMaterial;
 }
 
 export {};

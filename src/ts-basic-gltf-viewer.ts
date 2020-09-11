@@ -12,7 +12,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { ResizeSensor } from "css-element-queries";
-import { first } from "rxjs/operators";
+import { first, throwIfEmpty } from "rxjs/operators";
 
 // #region interfaces
 export interface ModelFileInfo {
@@ -47,10 +47,30 @@ export interface ColoringInfo {
 
 interface ModelGeometryInfo {
   name: string;
-  gltf: GLTF; 
-  meshes: Mesh<BufferGeometry, MeshStandardMaterial>[]; 
+  meshes: MeshBgSm[]; 
   handles: Set<string>; 
 }
+
+interface RenderGeometry {  
+  geometry: BufferGeometry;
+  positions: Float32BufferAttribute;
+  colors: Float32BufferAttribute;
+  rmos: Float32BufferAttribute;
+  indices: Uint32BufferAttribute;
+  indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
+}
+
+interface MeshRenderInfo {
+  renderGeometry: RenderGeometry;
+  indices: Uint32Array;
+}
+
+// #endregion
+
+// #region types
+export type MeshRenderType = "single" | "one_per_model" | "per_model" | "per_mesh";
+
+type MeshBgSm = Mesh<BufferGeometry, MeshStandardMaterial>;
 // #endregion
 
 // #region helper classes
@@ -86,7 +106,7 @@ class RgbRmoColor {
       material.opacity);
   }
 
-  static deleteFromMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>,
+  static deleteFromMesh(mesh: MeshBgSm,
     deleteCustom = false, deleteDefault = false) {
 
     mesh[RgbRmoColor.prop] = null;
@@ -98,16 +118,16 @@ class RgbRmoColor {
     }
   }
 
-  static getDefaultFromMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>): RgbRmoColor {
+  static getDefaultFromMesh(mesh: MeshBgSm): RgbRmoColor {
     if (!mesh[RgbRmoColor.defaultProp]) {      
       mesh[RgbRmoColor.defaultProp] = RgbRmoColor.createFromMaterial(mesh.material);
     }
     return mesh[RgbRmoColor.defaultProp];
   }
-  static getCustomFromMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>): RgbRmoColor {
+  static getCustomFromMesh(mesh: MeshBgSm): RgbRmoColor {
     return mesh[RgbRmoColor.customProp];
   }
-  static getFromMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>): RgbRmoColor {
+  static getFromMesh(mesh: MeshBgSm): RgbRmoColor {
     if (mesh[RgbRmoColor.prop]) {
       return mesh[RgbRmoColor.prop];
     }
@@ -117,10 +137,10 @@ class RgbRmoColor {
     return RgbRmoColor.getDefaultFromMesh(mesh);
   }
 
-  static setCustomToMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>, rgbRmo: RgbRmoColor) {
+  static setCustomToMesh(mesh: MeshBgSm, rgbRmo: RgbRmoColor) {
     mesh[RgbRmoColor.customProp] = rgbRmo;
   }
-  static setToMesh(mesh: Mesh<BufferGeometry, MeshStandardMaterial>, rgbRmo: RgbRmoColor) {
+  static setToMesh(mesh: MeshBgSm, rgbRmo: RgbRmoColor) {
     mesh[RgbRmoColor.prop] = rgbRmo;
   }
 }
@@ -147,6 +167,8 @@ export class GltfViewerOptions {
   dirLightIntensity = 0.6;
 
   useAntialiasing = true;
+
+  meshRenderType: MeshRenderType = "per_mesh";
   
   constructor(item: object = null) {
     if (item != null) {
@@ -205,17 +227,16 @@ export class GltfViewer {
   // #endregion
 
   // #region render scene
+  private _renderMaterial: MeshStandardMaterial;
   private _renderScene: Scene;
-  private _globalGeometry: BufferGeometry;
-  private _glGeomColor: Float32BufferAttribute;
-  private _glGeomRmo: Float32BufferAttribute;
-  private _glGeomIndex: Uint32BufferAttribute;
-  private _glGeomIndicesByMesh: Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>;
-  private _glGeomIndicesNeedSort: boolean;
+  private _renderGeometries: RenderGeometry[] = [];
+  private _renderGeometryIndexBySourceMesh = new Map<MeshBgSm, number>();
+  private _renderSourceMeshesByGeometryIndex = new Map<number, MeshBgSm[]>();
+  private _renderGeometryIndicesNeedSort = new Set<number>();
+  private _sourceMeshesNeedColorUpdate = new Set<MeshBgSm>();
   // #endregion
 
-  // #region materials related fieds
-  private _globalMaterial: MeshStandardMaterial;
+  // #region colors
   private _isolationColor: RgbRmoColor;
   private _selectionColor: Color;
   private _highlightColor: Color;
@@ -225,15 +246,15 @@ export class GltfViewer {
   private _queuedColoring: ColoringInfo[] = null;
   private _queuedSelection: {ids: string[]; isolate: boolean} = null;
 
-  private _highlightedMesh: Mesh<BufferGeometry, MeshStandardMaterial> = null;
-  private _selectedMeshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
-  private _isolatedMeshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
-  private _coloredMeshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
+  private _highlightedMesh: MeshBgSm = null;
+  private _selectedMeshes: MeshBgSm[] = [];
+  private _isolatedMeshes: MeshBgSm[] = [];
+  private _coloredMeshes: MeshBgSm[] = [];
 
   private _pickingTarget: WebGLRenderTarget;
   private _pickingScene: Scene;
-  private _pickingMeshById = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>>();
-  private _meshByPickingColor = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>>();
+  private _pickingMeshById = new Map<string, MeshBgSm>();
+  private _meshByPickingColor = new Map<string, MeshBgSm>();
   private _lastPickingColor = 0;
 
   private _pointerEventHelper: {
@@ -253,9 +274,9 @@ export class GltfViewer {
   private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
   private _loadedModelsArray: ModelGeometryInfo[] = [];
 
-  private _loadedMeshes = new Set<Mesh<BufferGeometry, MeshStandardMaterial>>();
-  private _loadedMeshesById = new Map<string, Mesh<BufferGeometry, MeshStandardMaterial>[]>();
-  private _loadedMeshesArray: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
+  private _loadedMeshes = new Set<MeshBgSm>();
+  private _loadedMeshesById = new Map<string, MeshBgSm[]>();
+  private _loadedMeshesArray: MeshBgSm[] = [];
   // #endregion
 
   constructor(containerId: string, options: GltfViewerOptions) { 
@@ -300,8 +321,10 @@ export class GltfViewer {
     this._orbitControls?.dispose();
     this._loader?.dracoLoader?.dispose();
     
-    this._globalGeometry?.dispose();
-    this._globalMaterial?.dispose();
+    this._renderGeometries.forEach(x => x.geometry.dispose());
+    this._renderGeometries = null;
+    this._renderScene = null;
+    this._renderMaterial?.dispose();
 
     this._loadedMeshes.forEach(x => {
       x.geometry.dispose();
@@ -589,44 +612,82 @@ export class GltfViewer {
   }
 
   private async updateRenderSceneAsync(): Promise<void> { 
-    await this.rebuildRenderSceneAsync();
+    await this.rebuildRenderSceneAsync(this._options.meshRenderType);
     if (this._loadedMeshesArray.length) {
       this.fitCameraToObjects([this._renderScene]);
     }
-    this._glGeomIndicesNeedSort = true;
     this.render();
   }
 
-  private async rebuildRenderSceneAsync(): Promise<void> {
+  private async rebuildRenderSceneAsync(meshRenderType: MeshRenderType): Promise<void> {
     this._renderScene = null;
 
     const scene = new Scene();
-    scene.add(...this._lights); 
+    scene.add(...this._lights);     
+
+    this._renderGeometries.forEach(x => x.geometry.dispose());
+    this._renderGeometries.length = 0;
+    this._renderGeometryIndexBySourceMesh.clear();   
+    this._renderSourceMeshesByGeometryIndex.clear();   
+    this._renderGeometryIndicesNeedSort.clear();  
     
-    await this.rebuildGlobalGeometryAsync();
-    if (this._globalGeometry) {      
-      const globalMesh = new Mesh(this._globalGeometry, this._globalMaterial);
-      scene.add(globalMesh);
+    let meshArrays: MeshBgSm[][];
+
+    switch (meshRenderType) {
+      case "single":
+        meshArrays = [this._loadedMeshesArray];
+        break;
+      case "one_per_model":
+        meshArrays = this._loadedModelsArray.map(x => x.meshes).filter(x => x.length);
+        break;
+      case "per_model":
+        meshArrays = [];  
+        const chunkSize = 1000;
+        this._loadedModelsArray.map(x => x.meshes).filter(x => x.length).forEach(x => {
+          if (x.length <= chunkSize) {
+            meshArrays.push(x);
+          } else {
+            for (let i = 0; i < x.length; i += chunkSize) {
+              const chunk = x.slice(i, i + chunkSize);
+              meshArrays.push(chunk);
+            }
+          }
+        });
+        break;
+      case "per_mesh":
+        meshArrays = this._loadedMeshesArray.map(x => [x]);
+        break;
+      default:
+        meshArrays = [];
     }
+
+
+    for (const meshes of meshArrays) {
+      if (meshes.length) {
+        const geometry = await this.buildRenderGeometryAsync(meshes);
+        this._renderGeometries.push(geometry);
+        const i = this._renderGeometries.length - 1;
+        this._renderSourceMeshesByGeometryIndex.set(i, meshes);
+        this._renderGeometryIndicesNeedSort.add(i);
+        meshes.forEach(x => {
+          this._renderGeometryIndexBySourceMesh.set(x, i);
+        });
+      }
+    }
+
+    this._renderGeometries.forEach(x => {    
+      const mesh = new Mesh(x.geometry, this._renderMaterial);
+      scene.add(mesh);
+    });
 
     this._renderScene = scene;
+
   }
 
-  private async rebuildGlobalGeometryAsync(): Promise<void> {    
-    this._glGeomIndicesByMesh = null;
-    this._glGeomIndex = null;
-    this._glGeomColor = null;
-    this._glGeomRmo = null;
-    this._globalGeometry?.dispose();
-    this._globalGeometry = null;
-
-    if (!this._loadedMeshesArray?.length) {
-      return;
-    }
-
+  private async buildRenderGeometryAsync(meshes: MeshBgSm[]): Promise<RenderGeometry> {
     let positionsLen = 0;
     let indicesLen = 0;
-    this._loadedMeshesArray.forEach(x => {
+    meshes.forEach(x => {
       positionsLen += x.geometry.getAttribute("position").count * 3;
       indicesLen += x.geometry.getIndex().count;;      
     });
@@ -639,21 +700,21 @@ export class GltfViewer {
     const colorBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
     const rmoBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
     const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-    const indicesByMesh = new Map<Mesh<BufferGeometry, MeshStandardMaterial>, Uint32Array>();    
+    const indicesBySourceMesh = new Map<MeshBgSm, Uint32Array>();    
     
     let positionsOffset = 0; 
     let indicesOffset = 0;
     // splitting into chunks to UI remain responsible
-    const chunkSize = 1000;
-    const processChunk = (meshes: Mesh<BufferGeometry, MeshStandardMaterial>[]) => {    
-      meshes.forEach(x => {
+    const chunkSize = 100;
+    const processChunk = (chunk: MeshBgSm[]) => {    
+      chunk.forEach(x => {
         const geometry = <BufferGeometry>x.geometry
           .clone()
           .applyMatrix4(x.matrix);        
         const positions = geometry.getAttribute("position").array;
         const indices = geometry.getIndex().array;
         const meshIndices = new Uint32Array(indices.length);
-        indicesByMesh.set(x, meshIndices);
+        indicesBySourceMesh.set(x, meshIndices);
         for (let i = 0; i < indices.length; i++) {
           const index = indices[i] + positionsOffset;
           indexBuffer.setX(indicesOffset++, index);
@@ -668,42 +729,135 @@ export class GltfViewer {
         geometry.dispose();
       });
     };
-    for (let i = 0; i < this._loadedMeshesArray.length; i += chunkSize) {
+    for (let i = 0; i < meshes.length; i += chunkSize) {
       await new Promise((resolve) => { 
         setTimeout(() => {
-          processChunk(this._loadedMeshesArray.slice(i, i + chunkSize));
+          processChunk(meshes.slice(i, i + chunkSize));
           resolve();
         }, 0);
       });
     }
 
-    const globalGeometry = new BufferGeometry();
-    globalGeometry.setIndex(indexBuffer);   
-    globalGeometry.setAttribute("color", colorBuffer);      
-    globalGeometry.setAttribute("rmo", rmoBuffer); 
-    globalGeometry.setAttribute("position", positionBuffer); 
+    const renderGeometry = new BufferGeometry();
+    renderGeometry.setIndex(indexBuffer);   
+    renderGeometry.setAttribute("color", colorBuffer);      
+    renderGeometry.setAttribute("rmo", rmoBuffer); 
+    renderGeometry.setAttribute("position", positionBuffer); 
     
-    this._globalGeometry = globalGeometry;
-    this._glGeomIndex = indexBuffer;
-    this._glGeomColor = colorBuffer;
-    this._glGeomRmo = rmoBuffer;
-    this._glGeomIndicesByMesh = indicesByMesh;
+    return {
+      geometry: renderGeometry,
+      positions: positionBuffer,
+      colors: colorBuffer,
+      rmos: rmoBuffer,
+      indices: indexBuffer,
+      indicesBySourceMesh,
+    };
   } 
 
-  private sortGlGeomIndicesByOpacity() {
-    if (!this._globalGeometry || !this._glGeomIndicesByMesh) {
-      return;
+  private sortRenderGeometriesIndicesByOpacity() {
+    this._renderGeometryIndicesNeedSort.forEach(i => {
+      const meshes = this._renderSourceMeshesByGeometryIndex.get(i);
+
+      const opaqueMeshes: MeshBgSm[] = [];
+      const transparentMeshes: MeshBgSm[] = [];
+      meshes.forEach(x => {
+        if (RgbRmoColor.getFromMesh(x).opacity === 1) {
+          opaqueMeshes.push(x);
+        } else {
+          transparentMeshes.push(x);
+        }
+      });
+
+      const { indices, indicesBySourceMesh } = this._renderGeometries[i];
+      let currentIndex = 0;
+      opaqueMeshes.forEach(mesh => {
+        indicesBySourceMesh.get(mesh).forEach(value => {
+          indices.setX(currentIndex++, value);
+        });
+      });
+      transparentMeshes.forEach(mesh => {
+        indicesBySourceMesh.get(mesh).forEach(value => {
+          indices.setX(currentIndex++, value);
+        });
+      });
+      indices.needsUpdate = true;
+    });
+  }  
+
+  private updateRenderGeometriesColors() {
+    const meshesByRgIndex = new Map<number, MeshBgSm[]>();
+    this._sourceMeshesNeedColorUpdate.forEach(mesh => {
+      const rgIndex = this._renderGeometryIndexBySourceMesh.get(mesh);
+      if (meshesByRgIndex.has(rgIndex)) {
+        meshesByRgIndex.get(rgIndex).push(mesh);
+      } else {
+        meshesByRgIndex.set(rgIndex, [mesh]);
+      }
+    });
+
+    meshesByRgIndex.forEach((v, k) => {
+      this.updateRenderGeometryColors(k, v);
+    });
+  }
+
+  private updateRenderGeometryColors(rgIndex: number, meshes: MeshBgSm[]) {
+    const { colors, rmos, indicesBySourceMesh } = this._renderGeometries[rgIndex];
+    let anyMeshOpacityChanged = false;
+    meshes.forEach(mesh => {
+      const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh); 
+      indicesBySourceMesh.get(mesh).forEach(i => {
+        colors.setXYZ(i, rgbRmo.r, rgbRmo.g, rgbRmo.b);
+        rmos.setXYZ(i, rgbRmo.roughness, rgbRmo.metalness, rgbRmo.opacity);
+      });
+      if (!anyMeshOpacityChanged && opacityChanged) {
+        anyMeshOpacityChanged = true;
+      }
+    });
+    colors.needsUpdate = true;
+    rmos.needsUpdate = true;  
+    if (anyMeshOpacityChanged) {
+      this._renderGeometryIndicesNeedSort.add(rgIndex);
+    }  
+  }
+
+  private refreshMeshColors(mesh: MeshBgSm): {rgbRmo: RgbRmoColor; opacityChanged: boolean} { 
+    if (!mesh[this._isolProp]) {
+      RgbRmoColor.deleteFromMesh(mesh);
     }
 
-    let currentIndex = 0;
-    this._loadedMeshesArray.sort((a, b) => 
-      RgbRmoColor.getFromMesh(b).opacity - RgbRmoColor.getFromMesh(a).opacity);
-    this._loadedMeshesArray.forEach(mesh => {
-      this._glGeomIndicesByMesh.get(mesh).forEach(value => {
-        this._glGeomIndex.setX(currentIndex++, value);
-      });
-    });
-    this._glGeomIndex.needsUpdate = true;
+    const initialRgbRmo = RgbRmoColor.getFromMesh(mesh);  
+
+    let newRgbRmo: RgbRmoColor;
+    if (mesh[this._hlProp]) {  
+      newRgbRmo = new RgbRmoColor(        
+        this._highlightColor.r,
+        this._highlightColor.g,
+        this._highlightColor.b,
+        initialRgbRmo.roughness,
+        initialRgbRmo.metalness,
+        initialRgbRmo.opacity,  
+      );
+    } else if (mesh[this._selProp]) {  
+      newRgbRmo = new RgbRmoColor(        
+        this._selectionColor.r,
+        this._selectionColor.g,
+        this._selectionColor.b,
+        initialRgbRmo.roughness,
+        initialRgbRmo.metalness,
+        initialRgbRmo.opacity,  
+      );
+    } else if (mesh[this._isolProp]) { 
+      newRgbRmo = this._isolationColor;
+    } else {
+      newRgbRmo = initialRgbRmo;
+    }
+
+    RgbRmoColor.setToMesh(mesh, newRgbRmo);
+
+    return {
+      rgbRmo: newRgbRmo,
+      opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
+    };
   }
 
   private render() {
@@ -711,13 +865,25 @@ export class GltfViewer {
       return;
     }
 
-    if (this._glGeomIndicesNeedSort) {
-      this.sortGlGeomIndicesByOpacity();
-      this._glGeomIndicesNeedSort = false;
+    const a = performance.now();
+    if (this._sourceMeshesNeedColorUpdate.size) {
+      this.updateRenderGeometriesColors();
+      this._sourceMeshesNeedColorUpdate.clear();
     }
+    console.log(`COLOR_CHANGE: ${performance.now() - a} ms`);
+
+    const b = performance.now();
+    if (this._renderGeometryIndicesNeedSort.size) {
+      this.sortRenderGeometriesIndicesByOpacity();
+      this._renderGeometryIndicesNeedSort.clear();
+    }    
+    console.log(`OPACITY_SORT: ${performance.now() - b} ms`);
 
     requestAnimationFrame(() => { 
+      const c = performance.now();
       this._renderer.render(this._renderScene, this._camera);
+      console.log("RENDER_CALLS: " + this._renderer.info.render.calls);
+      console.log(`RENDER_TIME: ${performance.now() - c} ms`);
     });
   }
   // #endregion
@@ -737,7 +903,7 @@ export class GltfViewer {
     return ++this._lastPickingColor;
   } 
 
-  private addMeshToPickingScene(mesh: Mesh<BufferGeometry, MeshStandardMaterial>) {
+  private addMeshToPickingScene(mesh: MeshBgSm) {
     const pickingMeshMaterial = new MeshStandardMaterial({ 
       color: new Color(this.nextPickingColor()), 
       emissive: new Color(this._lastPickingColor),
@@ -778,7 +944,7 @@ export class GltfViewer {
     return {x, y};
   }
 
-  private getItemAtPickingPosition(position: {x: number; y: number}): Mesh<BufferGeometry, MeshStandardMaterial> {
+  private getItemAtPickingPosition(position: {x: number; y: number}): MeshBgSm {
     const pixelRatio = this._renderer.getPixelRatio();
     this._camera.setViewOffset(
       this._renderer.getContext().drawingBufferWidth,
@@ -879,7 +1045,7 @@ export class GltfViewer {
     scene.userData.guid = modelGuid;
     scene.name = name;
 
-    const meshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
+    const meshes: MeshBgSm[] = [];
     const handles = new Set<string>();
     scene.traverse(x => {
       if (x instanceof Mesh
@@ -902,8 +1068,8 @@ export class GltfViewer {
         handles.add(x.name);
       }
     });
-
-    const modelInfo = {gltf: gltf, meshes, handles, name};
+    
+    const modelInfo = {name, meshes, handles};
     this._loadedModels.add(modelInfo);
     this._loadedModelsByGuid.set(modelGuid, modelInfo);
 
@@ -937,8 +1103,8 @@ export class GltfViewer {
   }
 
   private updateModelsDataArrays() {
-    this._loadedModelsArray = [...this._loadedModels];
     this._loadedMeshesArray = [...this._loadedMeshes];
+    this._loadedModelsArray = [...this._loadedModels];
   }
 
   private emitOpenedModelsChanged() {  
@@ -977,7 +1143,7 @@ export class GltfViewer {
             meshes.forEach(y => {
               y[this._colProp] = true;
               RgbRmoColor.setCustomToMesh(y, customColor);
-              this.refreshMeshRgbRmo(y);
+              this._sourceMeshesNeedColorUpdate.add(y);
               this._coloredMeshes.push(y);
             });
           }
@@ -994,7 +1160,7 @@ export class GltfViewer {
     for (const mesh of this._coloredMeshes) {
       mesh[this._colProp] = undefined;
       RgbRmoColor.deleteFromMesh(mesh, true);
-      this.refreshMeshRgbRmo(mesh);
+      this._sourceMeshesNeedColorUpdate.add(mesh);
     }
     this._coloredMeshes.length = 0;
   }
@@ -1015,8 +1181,8 @@ export class GltfViewer {
     }
   }
 
-  private findMeshesByIds(ids: Set<string>): {found: Mesh<BufferGeometry, MeshStandardMaterial>[]; notFound: Set<string>} {
-    const found: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
+  private findMeshesByIds(ids: Set<string>): {found: MeshBgSm[]; notFound: Set<string>} {
+    const found: MeshBgSm[] = [];
     const notFound = new Set<string>();
 
     ids.forEach(x => {
@@ -1033,7 +1199,7 @@ export class GltfViewer {
   private removeSelection() {
     for (const mesh of this._selectedMeshes) {
       mesh[this._selProp] = undefined;
-      this.refreshMeshRgbRmo(mesh);
+      this._sourceMeshesNeedColorUpdate.add(mesh);
     }
     this._selectedMeshes.length = 0;
   }
@@ -1041,7 +1207,7 @@ export class GltfViewer {
   private removeIsolation() {
     for (const mesh of this._isolatedMeshes) {
       mesh[this._isolProp] = undefined;
-      this.refreshMeshRgbRmo(mesh);
+      this._sourceMeshesNeedColorUpdate.add(mesh);
     }
     this._isolatedMeshes.length = 0;
   }
@@ -1065,7 +1231,7 @@ export class GltfViewer {
     }
   }
 
-  private addToSelection(mesh: Mesh<BufferGeometry, MeshStandardMaterial>): boolean {   
+  private addToSelection(mesh: MeshBgSm): boolean {   
     const meshes = [mesh, ...this._selectedMeshes];
     this.selectMeshes(meshes, true, false, true);
     return true;
@@ -1077,7 +1243,7 @@ export class GltfViewer {
     return true;
   }
  
-  private selectMeshes(meshes: Mesh<BufferGeometry, MeshStandardMaterial>[], 
+  private selectMeshes(meshes: MeshBgSm[], 
     manual: boolean, isolateSelected: boolean, render: boolean) { 
       
     this.removeSelection();
@@ -1090,7 +1256,7 @@ export class GltfViewer {
     
     meshes.forEach(x => {
       x[this._selProp] = true;
-      this.refreshMeshRgbRmo(x);
+      this._sourceMeshesNeedColorUpdate.add(x);
     });
 
     if (isolateSelected) {
@@ -1105,7 +1271,7 @@ export class GltfViewer {
     this._loadedMeshesArray.forEach(x => {
       if (!x[this._selProp]) {
         x[this._isolProp] = true;
-        this.refreshMeshRgbRmo(x);
+        this._sourceMeshesNeedColorUpdate.add(x);
         this._isolatedMeshes.push(x);
       }
     });
@@ -1136,7 +1302,7 @@ export class GltfViewer {
     this.highlightItem(mesh);
   }
 
-  private highlightItem(mesh: Mesh<BufferGeometry, MeshStandardMaterial>) {
+  private highlightItem(mesh: MeshBgSm) {
     if (mesh === this._highlightedMesh) {
       return;
     }
@@ -1144,7 +1310,7 @@ export class GltfViewer {
     this.removeHighlighting();
     if (mesh) {
       mesh[this._hlProp] = true;
-      this.refreshMeshRgbRmo(mesh);
+      this._sourceMeshesNeedColorUpdate.add(mesh);
       this._highlightedMesh = mesh;
     }
     this.render();
@@ -1154,7 +1320,7 @@ export class GltfViewer {
     if (this._highlightedMesh) {
       const mesh = this._highlightedMesh;
       mesh[this._hlProp] = undefined;
-      this.refreshMeshRgbRmo(mesh);
+      this._sourceMeshesNeedColorUpdate.add(mesh);
       this._highlightedMesh = null;
     }
   }
@@ -1170,21 +1336,21 @@ export class GltfViewer {
     const selectionColor = new Color(this._options.selectionColor);
     const highlightColor = new Color(this._options.highlightColor);
 
-    this._globalMaterial = this.buildGlobalMaterial(true);
+    this._renderMaterial = this.buildRenderMaterial(true);
     this._isolationColor = isolationRgbRmoColor;
     this._selectionColor = selectionColor;
     this._highlightColor = highlightColor;
   }
 
-  private buildGlobalMaterial(transparent: boolean): MeshStandardMaterial {    
-    const globalMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{
+  private buildRenderMaterial(transparent: boolean): MeshStandardMaterial {    
+    const renderMaterial = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{
       vertexColors: true,
       flatShading: true,
       blending: NormalBlending,
       side: DoubleSide,
       transparent,
     });
-    globalMaterial.onBeforeCompile = shader => {
+    renderMaterial.onBeforeCompile = shader => {
       shader.vertexShader = 
         `
         attribute vec3 rmo;        
@@ -1205,53 +1371,7 @@ export class GltfViewer {
       shader.fragmentShader = shader.fragmentShader.replace("uniform float metalness;", "varying float metalness;");
       shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");  
     };
-    return globalMaterial;
-  }
-
-  private refreshMeshRgbRmo(mesh: Mesh<BufferGeometry, MeshStandardMaterial>) { 
-    if (!mesh) {
-      return;
-    }
-
-    if (!mesh[this._isolProp]) {
-      RgbRmoColor.deleteFromMesh(mesh);
-    }
-
-    const initialRgbrmo = RgbRmoColor.getFromMesh(mesh);
-
-    if (mesh[this._hlProp]) {  
-      RgbRmoColor.setToMesh(mesh, new RgbRmoColor(        
-        this._highlightColor.r,
-        this._highlightColor.g,
-        this._highlightColor.b,
-        initialRgbrmo.roughness,
-        initialRgbrmo.metalness,
-        initialRgbrmo.opacity,  
-      ));
-    } else if (mesh[this._selProp]) {  
-      RgbRmoColor.setToMesh(mesh, new RgbRmoColor(        
-        this._selectionColor.r,
-        this._selectionColor.g,
-        this._selectionColor.b,
-        initialRgbrmo.roughness,
-        initialRgbrmo.metalness,
-        initialRgbrmo.opacity,  
-      ));
-    } else if (mesh[this._isolProp]) { 
-      RgbRmoColor.setToMesh(mesh, this._isolationColor);
-    }
-
-    const rgbrmo = RgbRmoColor.getFromMesh(mesh);
-    this._glGeomIndicesByMesh.get(mesh).forEach(i => {
-      this._glGeomColor.setXYZ(i, rgbrmo.r, rgbrmo.g, rgbrmo.b);
-      this._glGeomRmo.setXYZ(i, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
-    });
-    this._glGeomColor.needsUpdate = true;
-    this._glGeomRmo.needsUpdate = true;
-
-    if (rgbrmo.opacity !== initialRgbrmo.opacity) {
-      this._glGeomIndicesNeedSort = true;
-    }
+    return renderMaterial;
   }
   // #endregion  
 }
