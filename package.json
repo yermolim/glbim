@@ -7,7 +7,7 @@
   "scripts": {
     "buildts": "tsc",
     "buildru": "rollup -c",
-    "build": "tsc && rollup -c && dts-bundle-generator -o dist/ts-basic-gltf-viewer.d.ts src/ts-basic-gltf-viewer.ts",
+    "build": "tsc && rollup -c && dts-bundle-generator -o dist/ts-basic-gltf-viewer.d.ts src/gltf-viewer.ts",
     "start": "npm run build && copyfiles -f ./dist/ts-basic-gltf-viewer.umd.min.js ./demo  && lite-server -c ls-config.json",
     "mpublish": "npm version minor && npm publish",
     "ppublish": "npm version patch && npm publish"
