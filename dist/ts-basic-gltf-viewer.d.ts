@@ -27,12 +27,11 @@ export interface ColoringInfo {
 	opacity: number;
 	ids: string[];
 }
-export declare type MeshRenderType = "single" | "one_per_model" | "per_model" | "per_mesh";
+export declare type MeshMergeType = "scene" | "model_uncapped" | "model_capped" | null;
 export declare class GltfViewerOptions {
 	dracoDecoderEnabled: boolean;
 	dracoDecoderPath: string;
 	highlightingEnabled: boolean;
-	highlightingLatency: number;
 	highlightColor: number;
 	selectionColor: number;
 	isolationColor: number;
@@ -45,11 +44,10 @@ export declare class GltfViewerOptions {
 	dirLight: boolean;
 	dirLightIntensity: number;
 	useAntialiasing: boolean;
-	meshRenderType: MeshRenderType;
+	meshMergeType: MeshMergeType;
 	constructor(item?: object);
 }
 export declare class GltfViewer {
-	initialized$: Observable<boolean>;
 	loadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
@@ -57,7 +55,6 @@ export declare class GltfViewer {
 	openedModelsChange$: Observable<ModelOpenedInfo[]>;
 	selectionChange$: Observable<Set<string>>;
 	manualSelectionChange$: Observable<Set<string>>;
-	private _initialized;
 	private _loadingStateChange;
 	private _modelLoadingStart;
 	private _modelLoadingEnd;
@@ -65,43 +62,30 @@ export declare class GltfViewer {
 	private _openedModelsChange;
 	private _selectionChange;
 	private _manualSelectionChange;
-	private readonly _hlProp;
-	private readonly _selProp;
-	private readonly _isolProp;
-	private readonly _colProp;
 	private _subscriptions;
-	private _options;
 	private _container;
 	private _containerResizeSensor;
-	private _containerWidth;
-	private _containerHeight;
 	private _renderer;
 	private _lights;
 	private _loader;
-	private _camera;
-	private _orbitControls;
-	private _renderMaterial;
+	private _colorRgbRmoUtils;
+	private _cameraControls;
+	private _renderMeshMergeType;
 	private _renderScene;
 	private _renderGeometries;
 	private _renderGeometryIndexBySourceMesh;
-	private _renderSourceMeshesByGeometryIndex;
-	private _renderGeometryIndicesNeedSort;
+	private _sourceMeshesByRenderGeometryIndex;
 	private _sourceMeshesNeedColorUpdate;
-	private _isolationColor;
-	private _selectionColor;
-	private _highlightColor;
+	private _renderGeometryIndicesNeedSort;
+	private _renderMeshBySourceMesh;
+	private _pointerEventHelper;
+	private _pickingScene;
 	private _queuedColoring;
 	private _queuedSelection;
 	private _highlightedMesh;
 	private _selectedMeshes;
 	private _isolatedMeshes;
 	private _coloredMeshes;
-	private _pickingTarget;
-	private _pickingScene;
-	private _pickingMeshById;
-	private _meshByPickingColor;
-	private _lastPickingColor;
-	private _pointerEventHelper;
 	private _loadingInProgress;
 	private _loadingQueue;
 	private _loadedModels;
@@ -111,7 +95,7 @@ export declare class GltfViewer {
 	private _loadedMeshesById;
 	private _loadedMeshesArray;
 	constructor(containerId: string, options: GltfViewerOptions);
-	init(): void;
+	init(options: GltfViewerOptions): void;
 	destroy(): void;
 	openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]>;
 	closeModelsAsync(modelGuids: string[]): Promise<void>;
@@ -126,26 +110,17 @@ export declare class GltfViewer {
 	private _onCanvasPointerUp;
 	private _onCanvasMouseMove;
 	private addCanvasEventListeners;
-	private initCameraWithControls;
-	private resizeCamera;
-	private fitCameraToObjects;
-	private initLigths;
+	private initLights;
 	private initRenderer;
 	private resizeRenderer;
 	private updateRenderSceneAsync;
-	private rebuildRenderSceneAsync;
+	private groupModelMeshesByMergeType;
 	private buildRenderGeometryAsync;
+	private updateMeshRenderMaterials;
 	private sortRenderGeometriesIndicesByOpacity;
 	private updateRenderGeometriesColors;
 	private updateRenderGeometryColors;
-	private refreshMeshColors;
 	private render;
-	private initPickingScene;
-	private nextPickingColor;
-	private addMeshToPickingScene;
-	private removeMeshFromPickingScene;
-	private getPickingPosition;
-	private getItemAtPickingPosition;
 	private initLoader;
 	private processLoadingQueueAsync;
 	private loadModel;
@@ -160,6 +135,7 @@ export declare class GltfViewer {
 	private resetSelectionAndColorMeshes;
 	private colorMeshes;
 	private removeColoring;
+	private getMeshAt;
 	private runQueuedSelection;
 	private findAndSelectMeshes;
 	private findMeshesByIds;
@@ -174,8 +150,6 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
-	private initMaterials;
-	private buildRenderMaterial;
 }
 
 export {};

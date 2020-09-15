@@ -1,21 +1,24 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, Scene, Mesh, Uint32BufferAttribute, Float32BufferAttribute, BufferGeometry, WebGLRenderTarget, Color, MeshStandardMaterial, NoBlending, DoubleSide, MeshPhysicalMaterial, NormalBlending } from 'three';
+import { first } from 'rxjs/operators';
+import { Color, MeshPhysicalMaterial, NormalBlending, DoubleSide, WebGLRenderTarget, Scene, DirectionalLight, Mesh, MeshStandardMaterial, NoBlending, PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, WebGLRenderer, sRGBEncoding, NoToneMapping, Uint32BufferAttribute, Float32BufferAttribute, BufferGeometry } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { ResizeSensor } from 'css-element-queries';
-import { first } from 'rxjs/operators';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-class RgbRmoColor {
+class PointerEventHelper {
+    static get default() {
+        return {
+            downX: null,
+            downY: null,
+            maxDiff: 10,
+            mouseMoveTimer: null,
+            waitForDouble: false
+        };
+    }
+}
+
+class ColorRgbRmo {
     constructor(r, g, b, roughness, metalness, opacity) {
         this.r = r;
         this.g = g;
@@ -25,51 +28,291 @@ class RgbRmoColor {
         this.opacity = opacity;
     }
     static createFromMaterial(material) {
-        return new RgbRmoColor(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
+        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
     }
     static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
-        mesh[RgbRmoColor.prop] = null;
+        mesh[ColorRgbRmo.prop] = null;
         if (deleteCustom) {
-            mesh[RgbRmoColor.customProp] = null;
+            mesh[ColorRgbRmo.customProp] = null;
         }
         if (deleteDefault) {
-            mesh[RgbRmoColor.defaultProp] = null;
+            mesh[ColorRgbRmo.defaultProp] = null;
         }
     }
     static getDefaultFromMesh(mesh) {
-        if (!mesh[RgbRmoColor.defaultProp]) {
-            mesh[RgbRmoColor.defaultProp] = RgbRmoColor.createFromMaterial(mesh.material);
+        if (!mesh[ColorRgbRmo.defaultProp]) {
+            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
         }
-        return mesh[RgbRmoColor.defaultProp];
+        return mesh[ColorRgbRmo.defaultProp];
     }
     static getCustomFromMesh(mesh) {
-        return mesh[RgbRmoColor.customProp];
+        return mesh[ColorRgbRmo.customProp];
     }
     static getFromMesh(mesh) {
-        if (mesh[RgbRmoColor.prop]) {
-            return mesh[RgbRmoColor.prop];
+        if (mesh[ColorRgbRmo.prop]) {
+            return mesh[ColorRgbRmo.prop];
         }
-        if (mesh[RgbRmoColor.customProp]) {
-            return mesh[RgbRmoColor.customProp];
+        if (mesh[ColorRgbRmo.customProp]) {
+            return mesh[ColorRgbRmo.customProp];
         }
-        return RgbRmoColor.getDefaultFromMesh(mesh);
+        return ColorRgbRmo.getDefaultFromMesh(mesh);
     }
     static setCustomToMesh(mesh, rgbRmo) {
-        mesh[RgbRmoColor.customProp] = rgbRmo;
+        mesh[ColorRgbRmo.customProp] = rgbRmo;
     }
     static setToMesh(mesh, rgbRmo) {
-        mesh[RgbRmoColor.prop] = rgbRmo;
+        mesh[ColorRgbRmo.prop] = rgbRmo;
+    }
+    toString() {
+        return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
     }
 }
-RgbRmoColor.prop = "rgbrmo";
-RgbRmoColor.customProp = "rgbrmoC";
-RgbRmoColor.defaultProp = "rgbrmoD";
+ColorRgbRmo.prop = "rgbrmo";
+ColorRgbRmo.customProp = "rgbrmoC";
+ColorRgbRmo.defaultProp = "rgbrmoD";
+class ColorRgbRmoUtils {
+    constructor(options) {
+        this._materials = new Map();
+        const { isolationColor, isolationOpacity, selectionColor, highlightColor } = options;
+        this._isolationColor = this.buildIsolationColor(isolationColor, isolationOpacity);
+        this._selectionColor = new Color(selectionColor);
+        this._highlightColor = new Color(highlightColor);
+        this.globalMaterial = this.buildGlobalMaterial();
+    }
+    destroy() {
+        this._materials.forEach(v => v.dispose());
+        this._materials = null;
+        this.globalMaterial.dispose();
+        this.globalMaterial = null;
+    }
+    refreshMeshColors(mesh) {
+        if (!mesh.userData.isolated) {
+            ColorRgbRmo.deleteFromMesh(mesh);
+        }
+        const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);
+        let newRgbRmo;
+        if (mesh.userData.highlighted) {
+            newRgbRmo = new ColorRgbRmo(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+        }
+        else if (mesh.userData.selected) {
+            newRgbRmo = new ColorRgbRmo(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+        }
+        else if (mesh.userData.isolated) {
+            newRgbRmo = this._isolationColor;
+        }
+        else {
+            newRgbRmo = initialRgbRmo;
+        }
+        ColorRgbRmo.setToMesh(mesh, newRgbRmo);
+        return {
+            rgbRmo: newRgbRmo,
+            opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
+        };
+    }
+    getMaterial(rgbRmo) {
+        const key = rgbRmo.toString();
+        if (this._materials.has(key)) {
+            return this._materials.get(key);
+        }
+        const material = this.buildMaterial(rgbRmo);
+        this._materials.set(key, material);
+        return material;
+    }
+    buildIsolationColor(hex, opacity) {
+        const isolationColor = new Color(hex);
+        const isolationColorRgbRmo = new ColorRgbRmo(isolationColor.r, isolationColor.g, isolationColor.b, 1, 0, opacity);
+        return isolationColorRgbRmo;
+    }
+    buildGlobalMaterial() {
+        const material = new MeshPhysicalMaterial({
+            vertexColors: true,
+            flatShading: true,
+            blending: NormalBlending,
+            side: DoubleSide,
+            transparent: true,
+        });
+        material.onBeforeCompile = shader => {
+            shader.vertexShader =
+                `
+        attribute vec3 rmo;        
+        varying float roughness;
+        varying float metalness;
+        varying float opacity;
+        `
+                    + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace("void main() {", `
+        void main() {
+          roughness = rmo.x;
+          metalness = rmo.y;
+          opacity = rmo.z;
+        `);
+            shader.fragmentShader = shader.fragmentShader.replace("uniform float roughness;", "varying float roughness;");
+            shader.fragmentShader = shader.fragmentShader.replace("uniform float metalness;", "varying float metalness;");
+            shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");
+        };
+        return material;
+    }
+    buildMaterial(rgbRmo) {
+        const material = new MeshPhysicalMaterial({
+            blending: NormalBlending,
+            side: DoubleSide,
+            flatShading: true,
+            color: new Color(rgbRmo.r, rgbRmo.g, rgbRmo.b),
+            transparent: rgbRmo.opacity !== 1,
+            roughness: rgbRmo.roughness,
+            metalness: rgbRmo.metalness,
+            opacity: rgbRmo.opacity,
+        });
+        return material;
+    }
+}
+
+class PickingScene {
+    constructor() {
+        this._lastPickingColor = 0;
+        this._materials = [];
+        this._releasedMaterials = [];
+        this._pickingMeshById = new Map();
+        this._sourceMeshByPickingColor = new Map();
+        const target = new WebGLRenderTarget(1, 1);
+        const scene = new Scene();
+        scene.background = new Color(0);
+        const cameraLight = new DirectionalLight(0xFFFFFF, 1);
+        cameraLight.position.set(-1, 2, 4);
+        this._scene = scene;
+        this._target = target;
+        this._cameraLight = cameraLight;
+    }
+    destroy() {
+        this._materials.forEach(x => x.dispose());
+        this._materials = null;
+        this._target.dispose();
+        this._target = null;
+    }
+    add(sourceMesh) {
+        const pickingMeshMaterial = this.getMaterial();
+        const colorString = pickingMeshMaterial.color.getHex().toString(16);
+        const pickingMesh = new Mesh(sourceMesh.geometry, pickingMeshMaterial);
+        pickingMesh.userData.originalUuid = sourceMesh.uuid;
+        pickingMesh.userData.color = colorString;
+        pickingMesh.position.copy(sourceMesh.position);
+        pickingMesh.rotation.copy(sourceMesh.rotation);
+        pickingMesh.scale.copy(sourceMesh.scale);
+        this._scene.add(pickingMesh);
+        this._pickingMeshById.set(sourceMesh.uuid, pickingMesh);
+        this._sourceMeshByPickingColor.set(colorString, sourceMesh);
+    }
+    remove(sourceMesh) {
+        const pickingMesh = this._pickingMeshById.get(sourceMesh.uuid);
+        if (pickingMesh) {
+            this._scene.remove(pickingMesh);
+            this._pickingMeshById.delete(sourceMesh.uuid);
+            this._sourceMeshByPickingColor.delete(pickingMesh.userData.color);
+            this.releaseMaterial(pickingMesh.material);
+        }
+    }
+    getMeshAt(camera, renderer, clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = (clientX - rect.left) * renderer.domElement.width / rect.width;
+        const y = (clientY - rect.top) * renderer.domElement.height / rect.height;
+        const pixelRatio = renderer.getPixelRatio();
+        camera.setViewOffset(renderer.getContext().drawingBufferWidth, renderer.getContext().drawingBufferHeight, x * pixelRatio || 0, y * pixelRatio || 0, 1, 1);
+        camera.add(this._cameraLight);
+        renderer.setRenderTarget(this._target);
+        renderer.render(this._scene, camera);
+        renderer.setRenderTarget(null);
+        camera.clearViewOffset();
+        camera.remove(this._cameraLight);
+        const pixelBuffer = new Uint8Array(4);
+        renderer.readRenderTargetPixels(this._target, 0, 0, 1, 1, pixelBuffer);
+        const hex = ((pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2])).toString(16);
+        const mesh = this._sourceMeshByPickingColor.get(hex);
+        return mesh;
+    }
+    nextPickingColor() {
+        if (this._lastPickingColor === 16777215) {
+            this._lastPickingColor = 0;
+        }
+        return ++this._lastPickingColor;
+    }
+    getMaterial() {
+        if (this._releasedMaterials.length) {
+            return this._releasedMaterials.pop();
+        }
+        const color = new Color(this.nextPickingColor());
+        const material = new MeshStandardMaterial({
+            color: color,
+            emissive: color,
+            flatShading: true,
+            blending: NoBlending,
+            side: DoubleSide,
+            roughness: 1,
+            metalness: 0,
+        });
+        this._materials.push(material);
+        return material;
+    }
+    releaseMaterial(material) {
+        this._releasedMaterials.push(material);
+    }
+}
+
+class CameraControls {
+    constructor(rendererCanvas, changeCallback) {
+        const camera = new PerspectiveCamera(75, 1, 1, 10000);
+        const orbitControls = new OrbitControls(camera, rendererCanvas);
+        orbitControls.addEventListener("change", changeCallback);
+        camera.position.set(0, 1000, 1000);
+        camera.lookAt(0, 0, 0);
+        orbitControls.update();
+        this._camera = camera;
+        this._orbitControls = orbitControls;
+    }
+    get camera() {
+        return this._camera;
+    }
+    destroy() {
+        this._orbitControls.dispose();
+    }
+    resize(width, height) {
+        if (this._camera) {
+            this._camera.aspect = width / height;
+            this._camera.updateProjectionMatrix();
+        }
+    }
+    focusCameraOnObjects(objects, offset = 1.2) {
+        if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
+            return;
+        }
+        const box = new Box3();
+        for (const object of objects) {
+            box.expandByObject(object);
+        }
+        const size = box.getSize(new Vector3());
+        const center = box.getCenter(new Vector3());
+        const maxSize = Math.max(size.x, size.y, size.z);
+        const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
+        const fitWidthDistance = fitHeightDistance / this._camera.aspect;
+        const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
+        const direction = this._orbitControls.target.clone()
+            .sub(this._camera.position)
+            .normalize()
+            .multiplyScalar(distance);
+        this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
+        this._orbitControls.target.copy(center);
+        this._camera.near = Math.min(distance / 100, 1);
+        this._camera.far = Math.max(distance * 100, 10000);
+        this._camera.updateProjectionMatrix();
+        this._camera.position.copy(this._orbitControls.target).sub(direction);
+        this._orbitControls.update();
+    }
+}
+
 class GltfViewerOptions {
     constructor(item = null) {
         this.dracoDecoderEnabled = true;
         this.dracoDecoderPath = "/assets/draco/";
         this.highlightingEnabled = true;
-        this.highlightingLatency = 40;
         this.highlightColor = 0xFFFF00;
         this.selectionColor = 0xFF0000;
         this.isolationColor = 0x555555;
@@ -82,15 +325,24 @@ class GltfViewerOptions {
         this.dirLight = true;
         this.dirLightIntensity = 0.6;
         this.useAntialiasing = true;
-        this.meshRenderType = "per_model";
+        this.meshMergeType = null;
         if (item != null) {
             Object.assign(this, item);
         }
     }
 }
+
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 class GltfViewer {
     constructor(containerId, options) {
-        this._initialized = new BehaviorSubject(false);
         this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
@@ -98,27 +350,21 @@ class GltfViewer {
         this._openedModelsChange = new BehaviorSubject([]);
         this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
-        this._hlProp = "highlighted";
-        this._selProp = "selected";
-        this._isolProp = "isolated";
-        this._colProp = "colored";
         this._subscriptions = [];
         this._lights = [];
         this._renderGeometries = [];
         this._renderGeometryIndexBySourceMesh = new Map();
-        this._renderSourceMeshesByGeometryIndex = new Map();
-        this._renderGeometryIndicesNeedSort = new Set();
+        this._sourceMeshesByRenderGeometryIndex = new Map();
         this._sourceMeshesNeedColorUpdate = new Set();
+        this._renderGeometryIndicesNeedSort = new Set();
+        this._renderMeshBySourceMesh = new Map();
+        this._pointerEventHelper = PointerEventHelper.default;
         this._queuedColoring = null;
         this._queuedSelection = null;
         this._highlightedMesh = null;
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._coloredMeshes = [];
-        this._pickingMeshById = new Map();
-        this._meshByPickingColor = new Map();
-        this._lastPickingColor = 0;
-        this._pointerEventHelper = { downX: null, downY: null, maxDiff: 10, mouseMoveTimer: null, waitForDouble: false };
         this._loadingInProgress = false;
         this._loadingQueue = [];
         this._loadedModels = new Set();
@@ -140,10 +386,7 @@ class GltfViewer {
                 return;
             }
             if (this._pointerEventHelper.waitForDouble) {
-                if (this._selectedMeshes.length) {
-                    this.isolateSelectedMeshes();
-                    this.fitCameraToObjects(this._selectedMeshes);
-                }
+                this.isolateSelectedMeshes();
                 this._pointerEventHelper.waitForDouble = false;
             }
             else {
@@ -166,53 +409,52 @@ class GltfViewer {
                 const x = e.clientX;
                 const y = e.clientY;
                 this.highlightMeshAtPoint(x, y);
-            }, this._options.highlightingLatency);
+            }, 30);
         };
         this._container = document.getElementById(containerId);
         if (!this._container) {
             throw new Error("Container not found!");
         }
-        this._options = new GltfViewerOptions(options);
-        this.init();
+        this.init(new GltfViewerOptions(options));
     }
-    init() {
+    init(options) {
         this.initObservables();
-        this.initPickingScene();
-        this.initMaterials();
-        this.initLigths();
-        this.initLoader();
-        this.initRenderer();
-        this.initCameraWithControls();
+        this._pickingScene = new PickingScene();
+        this._colorRgbRmoUtils = new ColorRgbRmoUtils(options);
+        this.initLights(options);
+        this.initLoader(options);
+        this.initRenderer(options);
+        this._cameraControls = new CameraControls(this._renderer.domElement, () => this.render());
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
             const { width, height } = this._container.getBoundingClientRect();
-            this.resizeCamera(width, height);
+            this._cameraControls.resize(width, height);
             this.resizeRenderer(width, height);
         });
-        this.addCanvasEventListeners();
+        this.addCanvasEventListeners(options);
         this.render();
-        this._initialized.next(true);
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
         (_a = this._containerResizeSensor) === null || _a === void 0 ? void 0 : _a.detach();
-        (_b = this._renderer) === null || _b === void 0 ? void 0 : _b.dispose();
-        (_c = this._orbitControls) === null || _c === void 0 ? void 0 : _c.dispose();
-        (_e = (_d = this._loader) === null || _d === void 0 ? void 0 : _d.dracoLoader) === null || _e === void 0 ? void 0 : _e.dispose();
-        this._renderGeometries.forEach(x => x.geometry.dispose());
+        this._containerResizeSensor = null;
+        (_b = this._cameraControls) === null || _b === void 0 ? void 0 : _b.destroy();
+        this._cameraControls = null;
+        (_c = this._pickingScene) === null || _c === void 0 ? void 0 : _c.destroy();
+        this._pickingScene = null;
+        (_d = this._colorRgbRmoUtils) === null || _d === void 0 ? void 0 : _d.destroy();
+        this._colorRgbRmoUtils = null;
+        (_e = this._loadedMeshes) === null || _e === void 0 ? void 0 : _e.forEach(x => {
+            x.geometry.dispose();
+            x.material.dispose();
+        });
+        this._loadedMeshes = null;
+        (_f = this._renderGeometries) === null || _f === void 0 ? void 0 : _f.forEach(x => x.geometry.dispose());
         this._renderGeometries = null;
         this._renderScene = null;
-        (_f = this._renderMaterial) === null || _f === void 0 ? void 0 : _f.dispose();
-        this._loadedMeshes.forEach(x => {
-            x.geometry.dispose();
-            x.material.dispose();
-        });
-        [...this._meshByPickingColor.values()].forEach(x => {
-            x.geometry.dispose();
-            x.material.dispose();
-        });
-        (_g = this._pickingTarget) === null || _g === void 0 ? void 0 : _g.dispose();
+        (_g = this._renderer) === null || _g === void 0 ? void 0 : _g.dispose();
+        (_j = (_h = this._loader) === null || _h === void 0 ? void 0 : _h.dracoLoader) === null || _j === void 0 ? void 0 : _j.dispose();
     }
     openModelsAsync(modelInfos) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -273,7 +515,7 @@ class GltfViewer {
             this._queuedSelection = { ids, isolate: false };
             return;
         }
-        this.findAndSelectMeshes(ids, false, true);
+        this.findAndSelectMeshes(ids, false);
     }
     ;
     isolateItems(ids) {
@@ -284,7 +526,7 @@ class GltfViewer {
             this._queuedSelection = { ids, isolate: true };
             return;
         }
-        this.findAndSelectMeshes(ids, true, true);
+        this.findAndSelectMeshes(ids, true);
     }
     ;
     getOpenedModels() {
@@ -294,7 +536,6 @@ class GltfViewer {
         return this._selectionChange.getValue();
     }
     initObservables() {
-        this.initialized$ = this._initialized.asObservable();
         this.loadingStateChange$ = this._loadingStateChange.asObservable();
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
         this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
@@ -304,7 +545,6 @@ class GltfViewer {
         this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
     }
     closeSubjects() {
-        this._initialized.complete();
         this._loadingStateChange.complete();
         this._modelLoadingStart.complete();
         this._modelLoadingProgress.complete();
@@ -313,89 +553,49 @@ class GltfViewer {
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
     }
-    addCanvasEventListeners() {
+    addCanvasEventListeners(options) {
+        const { highlightingEnabled } = options;
         this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
         this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
-        if (this._options.highlightingEnabled) {
+        if (highlightingEnabled) {
             this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
         }
     }
-    initCameraWithControls() {
-        const camera = new PerspectiveCamera(75, this._containerWidth / this._containerHeight, 1, 10000);
-        const orbitControls = new OrbitControls(camera, this._renderer.domElement);
-        orbitControls.addEventListener("change", () => this.render());
-        camera.position.set(0, 1000, 1000);
-        camera.lookAt(0, 0, 0);
-        orbitControls.update();
-        this._camera = camera;
-        this._orbitControls = orbitControls;
-    }
-    resizeCamera(width, height) {
-        if (this._camera) {
-            this._camera.aspect = width / height;
-            this._camera.updateProjectionMatrix();
-        }
-    }
-    fitCameraToObjects(objects, offset = 1.2) {
-        if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
-            return;
-        }
-        const box = new Box3();
-        for (const object of objects) {
-            box.expandByObject(object);
-        }
-        const size = box.getSize(new Vector3());
-        const center = box.getCenter(new Vector3());
-        const maxSize = Math.max(size.x, size.y, size.z);
-        const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
-        const fitWidthDistance = fitHeightDistance / this._camera.aspect;
-        const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
-        const direction = this._orbitControls.target.clone()
-            .sub(this._camera.position)
-            .normalize()
-            .multiplyScalar(distance);
-        this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
-        this._orbitControls.target.copy(center);
-        this._camera.near = Math.min(distance / 100, 1);
-        this._camera.far = Math.max(distance * 100, 10000);
-        this._camera.updateProjectionMatrix();
-        this._camera.position.copy(this._orbitControls.target).sub(direction);
-        this._orbitControls.update();
-    }
-    initLigths() {
-        if (this._options.ambientLight) {
-            const ambientLight = new AmbientLight(0x222222, this._options.physicalLights
-                ? this._options.ambientLightIntensity * Math.PI
-                : this._options.ambientLightIntensity);
+    initLights(options) {
+        if (options.ambientLight) {
+            const ambientLight = new AmbientLight(0x222222, options.physicalLights
+                ? options.ambientLightIntensity * Math.PI
+                : options.ambientLightIntensity);
             this._lights.push(ambientLight);
         }
-        if (this._options.hemiLight) {
-            const hemiLight = new HemisphereLight(0xffffbb, 0x080820, this._options.physicalLights
-                ? this._options.hemiLightIntensity * Math.PI
-                : this._options.hemiLightIntensity);
+        if (options.hemiLight) {
+            const hemiLight = new HemisphereLight(0xffffbb, 0x080820, options.physicalLights
+                ? options.hemiLightIntensity * Math.PI
+                : options.hemiLightIntensity);
             hemiLight.position.set(0, 2000, 0);
             this._lights.push(hemiLight);
         }
-        if (this._options.dirLight) {
-            const dirLight = new DirectionalLight(0xffffff, this._options.physicalLights
-                ? this._options.dirLightIntensity * Math.PI
-                : this._options.dirLightIntensity);
+        if (options.dirLight) {
+            const dirLight = new DirectionalLight(0xffffff, options.physicalLights
+                ? options.dirLightIntensity * Math.PI
+                : options.dirLightIntensity);
             dirLight.position.set(-2, 10, 2);
             this._lights.push(dirLight);
         }
     }
-    initRenderer() {
+    initRenderer(options) {
+        const { useAntialiasing, physicalLights, meshMergeType } = options;
         const renderer = new WebGLRenderer({
             alpha: true,
-            antialias: this._options.useAntialiasing,
+            antialias: useAntialiasing,
         });
-        renderer.setSize(this._containerWidth, this._containerHeight, false);
         renderer.setClearColor(0x000000, 0);
         renderer.outputEncoding = sRGBEncoding;
-        renderer.physicallyCorrectLights = this._options.physicalLights;
+        renderer.physicallyCorrectLights = physicalLights;
         renderer.toneMapping = NoToneMapping;
         this._container.append(renderer.domElement);
         this._renderer = renderer;
+        this._renderMeshMergeType = meshMergeType;
     }
     resizeRenderer(width, height) {
         if (this._renderer) {
@@ -405,69 +605,77 @@ class GltfViewer {
     }
     updateRenderSceneAsync() {
         return __awaiter(this, void 0, void 0, function* () {
-            yield this.rebuildRenderSceneAsync(this._options.meshRenderType);
-            if (this._loadedMeshesArray.length) {
-                this.fitCameraToObjects([this._renderScene]);
-            }
-            this.render();
-        });
-    }
-    rebuildRenderSceneAsync(meshRenderType) {
-        return __awaiter(this, void 0, void 0, function* () {
             this._renderScene = null;
             const scene = new Scene();
             scene.add(...this._lights);
             this._renderGeometries.forEach(x => x.geometry.dispose());
             this._renderGeometries.length = 0;
             this._renderGeometryIndexBySourceMesh.clear();
-            this._renderSourceMeshesByGeometryIndex.clear();
+            this._sourceMeshesByRenderGeometryIndex.clear();
+            this._renderMeshBySourceMesh.clear();
             this._renderGeometryIndicesNeedSort.clear();
-            let meshArrays;
-            switch (meshRenderType) {
-                case "single":
-                    meshArrays = [this._loadedMeshesArray];
+            if (this._renderMeshMergeType) {
+                const grouppedMeshes = yield this.groupModelMeshesByMergeType(this._loadedMeshesArray, this._loadedModelsArray, this._renderMeshMergeType);
+                for (const meshes of grouppedMeshes) {
+                    if (meshes.length) {
+                        const geometry = yield this.buildRenderGeometryAsync(meshes);
+                        this._renderGeometries.push(geometry);
+                        const i = this._renderGeometries.length - 1;
+                        this._sourceMeshesByRenderGeometryIndex.set(i, meshes);
+                        this._renderGeometryIndicesNeedSort.add(i);
+                        meshes.forEach(x => {
+                            this._renderGeometryIndexBySourceMesh.set(x, i);
+                        });
+                    }
+                }
+                this._renderGeometries.forEach(x => {
+                    const mesh = new Mesh(x.geometry, this._colorRgbRmoUtils.globalMaterial);
+                    scene.add(mesh);
+                });
+            }
+            else {
+                this._loadedMeshesArray.forEach(sourceMesh => {
+                    const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
+                    const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+                    const renderMesh = new Mesh(sourceMesh.geometry, material);
+                    renderMesh.applyMatrix4(sourceMesh.matrix);
+                    this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
+                    scene.add(renderMesh);
+                });
+            }
+            this._renderScene = scene;
+            this.render(this._loadedMeshesArray.length ? [this._renderScene] : null);
+        });
+    }
+    groupModelMeshesByMergeType(meshes, models, meshMergeType) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let grouppedMeshes;
+            switch (meshMergeType) {
+                case "scene":
+                    grouppedMeshes = [meshes];
                     break;
-                case "one_per_model":
-                    meshArrays = this._loadedModelsArray.map(x => x.meshes).filter(x => x.length);
+                case "model_uncapped":
+                    grouppedMeshes = models.map(x => x.meshes).filter(x => x.length);
                     break;
-                case "per_model":
-                    meshArrays = [];
+                case "model_capped":
+                    grouppedMeshes = [];
                     const chunkSize = 1000;
-                    this._loadedModelsArray.map(x => x.meshes).filter(x => x.length).forEach(x => {
+                    models.map(x => x.meshes).filter(x => x.length).forEach(x => {
                         if (x.length <= chunkSize) {
-                            meshArrays.push(x);
+                            grouppedMeshes.push(x);
                         }
                         else {
                             for (let i = 0; i < x.length; i += chunkSize) {
                                 const chunk = x.slice(i, i + chunkSize);
-                                meshArrays.push(chunk);
+                                grouppedMeshes.push(chunk);
                             }
                         }
                     });
                     break;
-                case "per_mesh":
-                    meshArrays = this._loadedMeshesArray.map(x => [x]);
-                    break;
                 default:
-                    meshArrays = [];
+                    grouppedMeshes = [];
             }
-            for (const meshes of meshArrays) {
-                if (meshes.length) {
-                    const geometry = yield this.buildRenderGeometryAsync(meshes);
-                    this._renderGeometries.push(geometry);
-                    const i = this._renderGeometries.length - 1;
-                    this._renderSourceMeshesByGeometryIndex.set(i, meshes);
-                    this._renderGeometryIndicesNeedSort.add(i);
-                    meshes.forEach(x => {
-                        this._renderGeometryIndexBySourceMesh.set(x, i);
-                    });
-                }
-            }
-            this._renderGeometries.forEach(x => {
-                const mesh = new Mesh(x.geometry, this._renderMaterial);
-                scene.add(mesh);
-            });
-            this._renderScene = scene;
+            return grouppedMeshes;
         });
     }
     buildRenderGeometryAsync(meshes) {
@@ -504,7 +712,7 @@ class GltfViewer {
                         meshIndices[i] = index;
                     }
                     for (let i = 0; i < positions.length;) {
-                        const rgbrmo = RgbRmoColor.getFromMesh(x);
+                        const rgbrmo = ColorRgbRmo.getFromMesh(x);
                         colorBuffer.setXYZ(positionsOffset, rgbrmo.r, rgbrmo.g, rgbrmo.b);
                         rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
                         positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
@@ -535,13 +743,21 @@ class GltfViewer {
             };
         });
     }
+    updateMeshRenderMaterials() {
+        this._sourceMeshesNeedColorUpdate.forEach(sourceMesh => {
+            const { rgbRmo } = this._colorRgbRmoUtils.refreshMeshColors(sourceMesh);
+            const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+            const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
+            renderMesh.material = material;
+        });
+    }
     sortRenderGeometriesIndicesByOpacity() {
         this._renderGeometryIndicesNeedSort.forEach(i => {
-            const meshes = this._renderSourceMeshesByGeometryIndex.get(i);
+            const meshes = this._sourceMeshesByRenderGeometryIndex.get(i);
             const opaqueMeshes = [];
             const transparentMeshes = [];
             meshes.forEach(x => {
-                if (RgbRmoColor.getFromMesh(x).opacity === 1) {
+                if (ColorRgbRmo.getFromMesh(x).opacity === 1) {
                     opaqueMeshes.push(x);
                 }
                 else {
@@ -582,7 +798,8 @@ class GltfViewer {
         const { colors, rmos, indicesBySourceMesh } = this._renderGeometries[rgIndex];
         let anyMeshOpacityChanged = false;
         meshes.forEach(mesh => {
-            const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh);
+            const { rgbRmo, opacityChanged } = this._colorRgbRmoUtils
+                .refreshMeshColors(mesh);
             indicesBySourceMesh.get(mesh).forEach(i => {
                 colors.setXYZ(i, rgbRmo.r, rgbRmo.g, rgbRmo.b);
                 rmos.setXYZ(i, rgbRmo.roughness, rgbRmo.metalness, rgbRmo.opacity);
@@ -597,33 +814,20 @@ class GltfViewer {
             this._renderGeometryIndicesNeedSort.add(rgIndex);
         }
     }
-    refreshMeshColors(mesh) {
-        if (!mesh[this._isolProp]) {
-            RgbRmoColor.deleteFromMesh(mesh);
+    render(focusObjects = null) {
+        if (!this._renderScene) {
+            return;
         }
-        const initialRgbRmo = RgbRmoColor.getFromMesh(mesh);
-        let newRgbRmo;
-        if (mesh[this._hlProp]) {
-            newRgbRmo = new RgbRmoColor(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+        if (focusObjects === null || focusObjects === void 0 ? void 0 : focusObjects.length) {
+            this._cameraControls.focusCameraOnObjects(focusObjects);
         }
-        else if (mesh[this._selProp]) {
-            newRgbRmo = new RgbRmoColor(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
-        }
-        else if (mesh[this._isolProp]) {
-            newRgbRmo = this._isolationColor;
-        }
-        else {
-            newRgbRmo = initialRgbRmo;
-        }
-        RgbRmoColor.setToMesh(mesh, newRgbRmo);
-        return {
-            rgbRmo: newRgbRmo,
-            opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
-        };
-    }
-    render() {
         if (this._sourceMeshesNeedColorUpdate.size) {
-            this.updateRenderGeometriesColors();
+            if (this._renderMeshMergeType) {
+                this.updateRenderGeometriesColors();
+            }
+            else {
+                this.updateMeshRenderMaterials();
+            }
             this._sourceMeshesNeedColorUpdate.clear();
         }
         if (this._renderGeometryIndicesNeedSort.size) {
@@ -631,79 +835,15 @@ class GltfViewer {
             this._renderGeometryIndicesNeedSort.clear();
         }
         requestAnimationFrame(() => {
-            var _a;
-            if (this._renderScene && this._camera) {
-                (_a = this._renderer) === null || _a === void 0 ? void 0 : _a.render(this._renderScene, this._camera);
-            }
+            this._renderer.render(this._renderScene, this._cameraControls.camera);
         });
     }
-    initPickingScene() {
-        const pickingTarget = new WebGLRenderTarget(1, 1);
-        const scene = new Scene();
-        scene.background = new Color(0);
-        this._pickingTarget = pickingTarget;
-        this._pickingScene = scene;
-    }
-    nextPickingColor() {
-        return ++this._lastPickingColor;
-    }
-    addMeshToPickingScene(mesh) {
-        const pickingMeshMaterial = new MeshStandardMaterial({
-            color: new Color(this.nextPickingColor()),
-            emissive: new Color(this._lastPickingColor),
-            blending: NoBlending,
-            flatShading: true,
-            side: DoubleSide,
-            roughness: 1,
-            metalness: 0,
-        });
-        const colorString = this._lastPickingColor.toString(16);
-        const pickingMesh = new Mesh(mesh.geometry, pickingMeshMaterial);
-        pickingMesh.userData.originalUuid = mesh.uuid;
-        pickingMesh.userData.color = colorString;
-        pickingMesh.position.copy(mesh.position);
-        pickingMesh.rotation.copy(mesh.rotation);
-        pickingMesh.scale.copy(mesh.scale);
-        this._pickingScene.add(pickingMesh);
-        this._pickingMeshById.set(mesh.uuid, pickingMesh);
-        this._meshByPickingColor.set(colorString, mesh);
-    }
-    removeMeshFromPickingScene(mesh) {
-        const pickingMesh = this._pickingMeshById.get(mesh.uuid);
-        if (pickingMesh) {
-            this._pickingScene.remove(pickingMesh);
-            this._pickingMeshById.delete(mesh.uuid);
-            this._meshByPickingColor.delete(pickingMesh.userData.color);
-        }
-    }
-    getPickingPosition(clientX, clientY) {
-        const rect = this._renderer.domElement.getBoundingClientRect();
-        const x = (clientX - rect.left) * this._renderer.domElement.width / rect.width;
-        const y = (clientY - rect.top) * this._renderer.domElement.height / rect.height;
-        return { x, y };
-    }
-    getItemAtPickingPosition(position) {
-        const pixelRatio = this._renderer.getPixelRatio();
-        this._camera.setViewOffset(this._renderer.getContext().drawingBufferWidth, this._renderer.getContext().drawingBufferHeight, position.x * pixelRatio || 0, position.y * pixelRatio || 0, 1, 1);
-        const light = new DirectionalLight(0xFFFFFF, 1);
-        light.position.set(-1, 2, 4);
-        this._camera.add(light);
-        this._renderer.setRenderTarget(this._pickingTarget);
-        this._renderer.render(this._pickingScene, this._camera);
-        this._renderer.setRenderTarget(null);
-        this._camera.clearViewOffset();
-        this._camera.remove(light);
-        const pixelBuffer = new Uint8Array(4);
-        this._renderer.readRenderTargetPixels(this._pickingTarget, 0, 0, 1, 1, pixelBuffer);
-        const id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]);
-        const mesh = this._meshByPickingColor.get(id.toString(16));
-        return mesh;
-    }
-    initLoader() {
+    initLoader(options) {
+        const { dracoDecoderEnabled, dracoDecoderPath } = options;
         const loader = new GLTFLoader();
-        if (this._options.dracoDecoderEnabled) {
+        if (dracoDecoderEnabled) {
             const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath(this._options.dracoDecoderPath);
+            dracoLoader.setDecoderPath(dracoDecoderPath);
             dracoLoader.preload();
             loader.setDRACOLoader(dracoLoader);
         }
@@ -712,7 +852,7 @@ class GltfViewer {
     }
     processLoadingQueueAsync() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this._loader || this._loadingInProgress) {
+            if (!this._renderer || !this._loader || this._loadingInProgress) {
                 return;
             }
             this._loadingInProgress = true;
@@ -721,8 +861,8 @@ class GltfViewer {
                 const action = this._loadingQueue.shift();
                 yield action();
             }
-            this.runQueuedColoring(false);
-            this.runQueuedSelection(false);
+            this.runQueuedColoring();
+            this.runQueuedSelection();
             yield this.updateRenderSceneAsync();
             this._loadingStateChange.next(false);
             this._loadingInProgress = false;
@@ -770,7 +910,7 @@ class GltfViewer {
                 const id = `${modelGuid}|${x.name}`;
                 x.userData.id = id;
                 x.userData.modelGuid = modelGuid;
-                this.addMeshToPickingScene(x);
+                this._pickingScene.add(x);
                 this._loadedMeshes.add(x);
                 if (this._loadedMeshesById.has(id)) {
                     this._loadedMeshesById.get(id).push(x);
@@ -797,7 +937,7 @@ class GltfViewer {
             var _a;
             this._loadedMeshes.delete(x);
             this._loadedMeshesById.delete(x.userData.id);
-            this.removeMeshFromPickingScene(x);
+            this._pickingScene.remove(x);
             (_a = x.geometry) === null || _a === void 0 ? void 0 : _a.dispose();
         });
         this._highlightedMesh = null;
@@ -820,57 +960,60 @@ class GltfViewer {
         }
         this._openedModelsChange.next(modelOpenedInfos);
     }
-    runQueuedColoring(render = true) {
+    runQueuedColoring() {
         if (this._queuedColoring) {
-            this.resetSelectionAndColorMeshes(this._queuedColoring, render);
+            this.resetSelectionAndColorMeshes(this._queuedColoring);
         }
     }
-    resetSelectionAndColorMeshes(coloringInfos, render = true) {
+    resetSelectionAndColorMeshes(coloringInfos) {
         this.removeIsolation();
         this.removeSelection();
-        this.colorMeshes(coloringInfos, render);
+        this.colorMeshes(coloringInfos);
     }
-    colorMeshes(coloringInfos, render) {
+    colorMeshes(coloringInfos) {
         this.removeColoring();
         if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
             for (const info of coloringInfos) {
                 const color = new Color(info.color);
-                const customColor = new RgbRmoColor(color.r, color.g, color.b, 1, 0, info.opacity);
+                const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
                 info.ids.forEach(x => {
                     const meshes = this._loadedMeshesById.get(x);
                     if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
-                        meshes.forEach(y => {
-                            y[this._colProp] = true;
-                            RgbRmoColor.setCustomToMesh(y, customColor);
-                            this._sourceMeshesNeedColorUpdate.add(y);
-                            this._coloredMeshes.push(y);
+                        meshes.forEach(mesh => {
+                            mesh.userData.colored = true;
+                            ColorRgbRmo.setCustomToMesh(mesh, customColor);
+                            this._sourceMeshesNeedColorUpdate.add(mesh);
+                            this._coloredMeshes.push(mesh);
                         });
                     }
                 });
             }
         }
-        if (render) {
-            this.render();
-        }
+        this.render();
     }
     removeColoring() {
         for (const mesh of this._coloredMeshes) {
-            mesh[this._colProp] = undefined;
-            RgbRmoColor.deleteFromMesh(mesh, true);
+            mesh.userData.colored = undefined;
+            ColorRgbRmo.deleteFromMesh(mesh, true);
             this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._coloredMeshes.length = 0;
     }
-    runQueuedSelection(render) {
+    getMeshAt(clientX, clientY) {
+        return this._pickingScene
+            ? this._pickingScene.getMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
+            : null;
+    }
+    runQueuedSelection() {
         if (this._queuedSelection) {
             const { ids, isolate } = this._queuedSelection;
-            this.findAndSelectMeshes(ids, isolate, render);
+            this.findAndSelectMeshes(ids, isolate);
         }
     }
-    findAndSelectMeshes(ids, isolate, render) {
+    findAndSelectMeshes(ids, isolate) {
         const { found } = this.findMeshesByIds(new Set(ids));
         if (found.length) {
-            this.selectMeshes(found, false, isolate, render);
+            this.selectMeshes(found, false, isolate);
         }
     }
     findMeshesByIds(ids) {
@@ -888,27 +1031,26 @@ class GltfViewer {
     }
     removeSelection() {
         for (const mesh of this._selectedMeshes) {
-            mesh[this._selProp] = undefined;
+            mesh.userData.selected = undefined;
             this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._selectedMeshes.length = 0;
     }
     removeIsolation() {
         for (const mesh of this._isolatedMeshes) {
-            mesh[this._isolProp] = undefined;
+            mesh.userData.isolated = undefined;
             this._sourceMeshesNeedColorUpdate.add(mesh);
         }
         this._isolatedMeshes.length = 0;
     }
     selectMeshAtPoint(x, y, keepPreviousSelection) {
-        const position = this.getPickingPosition(x, y);
-        const mesh = this.getItemAtPickingPosition(position);
+        const mesh = this.getMeshAt(x, y);
         if (!mesh) {
-            this.selectMeshes([], true, false, true);
+            this.selectMeshes([], true, false);
             return;
         }
         if (keepPreviousSelection) {
-            if (mesh[this._selProp]) {
+            if (mesh.userData.selected) {
                 this.removeFromSelection(mesh);
             }
             else {
@@ -916,51 +1058,55 @@ class GltfViewer {
             }
         }
         else {
-            this.selectMeshes([mesh], true, false, true);
+            this.selectMeshes([mesh], true, false);
         }
     }
     addToSelection(mesh) {
         const meshes = [mesh, ...this._selectedMeshes];
-        this.selectMeshes(meshes, true, false, true);
+        this.selectMeshes(meshes, true, false);
         return true;
     }
     removeFromSelection(mesh) {
         const meshes = this._selectedMeshes.filter(x => x !== mesh);
-        this.selectMeshes(meshes, true, false, true);
+        this.selectMeshes(meshes, true, false);
         return true;
     }
-    selectMeshes(meshes, manual, isolateSelected, render) {
+    selectMeshes(meshes, manual, isolateSelected) {
         this.removeSelection();
         this.removeIsolation();
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
-            this.emitSelectionChanged(manual, render);
+            this.emitSelectionChanged(manual, true);
             return null;
         }
         meshes.forEach(x => {
-            x[this._selProp] = true;
+            x.userData.selected = true;
             this._sourceMeshesNeedColorUpdate.add(x);
         });
+        this._selectedMeshes = meshes;
         if (isolateSelected) {
+            this.emitSelectionChanged(manual, false);
             this.isolateSelectedMeshes();
         }
-        this._selectedMeshes = meshes;
-        this.emitSelectionChanged(manual, render);
+        else {
+            this.emitSelectionChanged(manual, true);
+        }
     }
     isolateSelectedMeshes() {
+        if (!this._selectedMeshes.length) {
+            return;
+        }
         this._loadedMeshesArray.forEach(x => {
-            if (!x[this._selProp]) {
-                x[this._isolProp] = true;
+            if (!x.userData.selected) {
+                x.userData.isolated = true;
                 this._sourceMeshesNeedColorUpdate.add(x);
                 this._isolatedMeshes.push(x);
             }
         });
+        this.render(this._selectedMeshes);
     }
     emitSelectionChanged(manual, render) {
-        if (!manual) {
-            this.fitCameraToObjects(this._selectedMeshes);
-        }
         if (render) {
-            this.render();
+            this.render(manual ? null : this._selectedMeshes);
         }
         const ids = new Set();
         this._selectedMeshes.forEach(x => ids.add(x.userData.id));
@@ -970,8 +1116,7 @@ class GltfViewer {
         }
     }
     highlightMeshAtPoint(x, y) {
-        const position = this.getPickingPosition(x, y);
-        const mesh = this.getItemAtPickingPosition(position);
+        const mesh = this.getMeshAt(x, y);
         this.highlightItem(mesh);
     }
     highlightItem(mesh) {
@@ -980,7 +1125,7 @@ class GltfViewer {
         }
         this.removeHighlighting();
         if (mesh) {
-            mesh[this._hlProp] = true;
+            mesh.userData.highlighted = true;
             this._sourceMeshesNeedColorUpdate.add(mesh);
             this._highlightedMesh = mesh;
         }
@@ -989,49 +1134,10 @@ class GltfViewer {
     removeHighlighting() {
         if (this._highlightedMesh) {
             const mesh = this._highlightedMesh;
-            mesh[this._hlProp] = undefined;
+            mesh.userData.highlighted = undefined;
             this._sourceMeshesNeedColorUpdate.add(mesh);
             this._highlightedMesh = null;
         }
-    }
-    initMaterials() {
-        const isolationColor = new Color(this._options.isolationColor);
-        const isolationRgbRmoColor = new RgbRmoColor(isolationColor.r, isolationColor.g, isolationColor.b, 1, 0, this._options.isolationOpacity);
-        const selectionColor = new Color(this._options.selectionColor);
-        const highlightColor = new Color(this._options.highlightColor);
-        this._renderMaterial = this.buildRenderMaterial(true);
-        this._isolationColor = isolationRgbRmoColor;
-        this._selectionColor = selectionColor;
-        this._highlightColor = highlightColor;
-    }
-    buildRenderMaterial(transparent) {
-        const renderMaterial = new MeshPhysicalMaterial({
-            vertexColors: true,
-            flatShading: true,
-            blending: NormalBlending,
-            side: DoubleSide,
-            transparent,
-        });
-        renderMaterial.onBeforeCompile = shader => {
-            shader.vertexShader =
-                `
-        attribute vec3 rmo;        
-        varying float roughness;
-        varying float metalness;
-        varying float opacity;
-        `
-                    + shader.vertexShader;
-            shader.vertexShader = shader.vertexShader.replace("void main() {", `
-        void main() {
-          roughness = rmo.x;
-          metalness = rmo.y;
-          opacity = rmo.z;
-        `);
-            shader.fragmentShader = shader.fragmentShader.replace("uniform float roughness;", "varying float roughness;");
-            shader.fragmentShader = shader.fragmentShader.replace("uniform float metalness;", "varying float metalness;");
-            shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");
-        };
-        return renderMaterial;
     }
 }
 
