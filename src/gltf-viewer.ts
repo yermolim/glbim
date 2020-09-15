@@ -100,27 +100,20 @@ export class GltfViewer {
       throw new Error("Container not found!");
     }
 
-    this.init(new GltfViewerOptions(options));
-  }
-
-  init(options: GltfViewerOptions) {
+    const viewerOptions = new GltfViewerOptions(options);    
     this.initObservables();
-
     this._pickingScene = new PickingScene();
-    this._colorRgbRmoUtils = new ColorRgbRmoUtils(options);
-
-    this.initLights(options); 
-    this.initLoader(options); 
-    this.initRenderer(options);
-
+    this._colorRgbRmoUtils = new ColorRgbRmoUtils(viewerOptions);
+    this.initLights(viewerOptions); 
+    this.initLoader(viewerOptions); 
+    this.initRenderer(viewerOptions);
     this._cameraControls = new CameraControls(this._renderer.domElement, () => this.render());    
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
       const { width, height } = this._container.getBoundingClientRect();
       this._cameraControls.resize(width, height);
       this.resizeRenderer(width, height);
     }); 
-
-    this.addCanvasEventListeners(options);
+    this.addCanvasEventListeners(viewerOptions);
     this.render();
   }
 

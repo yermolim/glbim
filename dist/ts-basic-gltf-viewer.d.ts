@@ -95,7 +95,6 @@ export declare class GltfViewer {
 	private _loadedMeshesById;
 	private _loadedMeshesArray;
 	constructor(containerId: string, options: GltfViewerOptions);
-	init(options: GltfViewerOptions): void;
 	destroy(): void;
 	openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]>;
 	closeModelsAsync(modelGuids: string[]): Promise<void>;
