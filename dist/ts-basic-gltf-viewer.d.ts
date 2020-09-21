@@ -119,6 +119,7 @@ export declare class GltfViewer {
 	private sortRenderGeometriesIndicesByOpacity;
 	private updateRenderGeometriesColors;
 	private updateRenderGeometryColors;
+	private prepareToRender;
 	private render;
 	private initLoader;
 	private processLoadingQueueAsync;

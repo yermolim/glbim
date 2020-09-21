@@ -590,11 +590,7 @@ export class GltfViewer {
     }  
   }
 
-  private render(focusObjects: Object3D[] = null) {
-    if (!this._renderScene) {
-      return;
-    }
-
+  private prepareToRender(focusObjects: Object3D[] = null) {
     if (focusObjects?.length) {
       this._cameraControls.focusCameraOnObjects(focusObjects);
     }
@@ -611,10 +607,15 @@ export class GltfViewer {
     if (this._renderGeometryIndicesNeedSort.size) {
       this.sortRenderGeometriesIndicesByOpacity();
       this._renderGeometryIndicesNeedSort.clear();
-    }    
+    }   
+  }
 
+  private render(focusObjects: Object3D[] = null) {
+    this.prepareToRender(focusObjects);
     requestAnimationFrame(() => { 
-      this._renderer.render(this._renderScene, this._cameraControls.camera);
+      if (this._renderScene) {
+        this._renderer.render(this._renderScene, this._cameraControls.camera);
+      }
     });
   }
   // #endregion

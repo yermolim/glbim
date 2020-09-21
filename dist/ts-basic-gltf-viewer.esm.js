@@ -86,22 +86,23 @@ class ColorRgbRmoUtils {
         this.globalMaterial = null;
     }
     refreshMeshColors(mesh) {
+        const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);
         if (!mesh.userData.isolated) {
             ColorRgbRmo.deleteFromMesh(mesh);
         }
-        const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);
+        const baseRgbRmo = ColorRgbRmo.getFromMesh(mesh);
         let newRgbRmo;
         if (mesh.userData.highlighted) {
-            newRgbRmo = new ColorRgbRmo(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+            newRgbRmo = new ColorRgbRmo(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, baseRgbRmo.roughness, baseRgbRmo.metalness, baseRgbRmo.opacity);
         }
         else if (mesh.userData.selected) {
-            newRgbRmo = new ColorRgbRmo(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, initialRgbRmo.roughness, initialRgbRmo.metalness, initialRgbRmo.opacity);
+            newRgbRmo = new ColorRgbRmo(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, baseRgbRmo.roughness, baseRgbRmo.metalness, baseRgbRmo.opacity);
         }
         else if (mesh.userData.isolated) {
             newRgbRmo = this._isolationColor;
         }
         else {
-            newRgbRmo = initialRgbRmo;
+            newRgbRmo = baseRgbRmo;
         }
         ColorRgbRmo.setToMesh(mesh, newRgbRmo);
         return {
@@ -812,10 +813,7 @@ class GltfViewer {
             this._renderGeometryIndicesNeedSort.add(rgIndex);
         }
     }
-    render(focusObjects = null) {
-        if (!this._renderScene) {
-            return;
-        }
+    prepareToRender(focusObjects = null) {
         if (focusObjects === null || focusObjects === void 0 ? void 0 : focusObjects.length) {
             this._cameraControls.focusCameraOnObjects(focusObjects);
         }
@@ -832,8 +830,13 @@ class GltfViewer {
             this.sortRenderGeometriesIndicesByOpacity();
             this._renderGeometryIndicesNeedSort.clear();
         }
+    }
+    render(focusObjects = null) {
+        this.prepareToRender(focusObjects);
         requestAnimationFrame(() => {
-            this._renderer.render(this._renderScene, this._cameraControls.camera);
+            if (this._renderScene) {
+                this._renderer.render(this._renderScene, this._cameraControls.camera);
+            }
         });
     }
     initLoader(options) {

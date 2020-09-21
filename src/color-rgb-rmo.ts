@@ -104,12 +104,12 @@ export class ColorRgbRmoUtils {
   }
   
   refreshMeshColors(mesh: MeshBgSm): {rgbRmo: ColorRgbRmo; opacityChanged: boolean} { 
-      
+    
+    const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);       
     if (!mesh.userData.isolated) {
       ColorRgbRmo.deleteFromMesh(mesh);
     }
-
-    const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);  
+    const baseRgbRmo = ColorRgbRmo.getFromMesh(mesh);  
 
     let newRgbRmo: ColorRgbRmo;
     if (mesh.userData.highlighted) {  
@@ -117,23 +117,23 @@ export class ColorRgbRmoUtils {
         this._highlightColor.r,
         this._highlightColor.g,
         this._highlightColor.b,
-        initialRgbRmo.roughness,
-        initialRgbRmo.metalness,
-        initialRgbRmo.opacity,  
+        baseRgbRmo.roughness,
+        baseRgbRmo.metalness,
+        baseRgbRmo.opacity,  
       );
     } else if (mesh.userData.selected) {  
       newRgbRmo = new ColorRgbRmo(        
         this._selectionColor.r,
         this._selectionColor.g,
         this._selectionColor.b,
-        initialRgbRmo.roughness,
-        initialRgbRmo.metalness,
-        initialRgbRmo.opacity,  
+        baseRgbRmo.roughness,
+        baseRgbRmo.metalness,
+        baseRgbRmo.opacity,  
       );
     } else if (mesh.userData.isolated) { 
       newRgbRmo = this._isolationColor;
     } else {
-      newRgbRmo = initialRgbRmo;
+      newRgbRmo = baseRgbRmo;
     }
 
     ColorRgbRmo.setToMesh(mesh, newRgbRmo);
