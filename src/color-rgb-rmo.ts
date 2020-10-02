@@ -1,6 +1,6 @@
-import { Color, MeshStandardMaterial, MeshPhysicalMaterial, NormalBlending, DoubleSide } from "three";
+import { Color, MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
+  NormalBlending, DoubleSide } from "three";
 import { MeshBgSm } from "./common-types";
-import { GltfViewerOptions } from "./gltf-viewer-options";
 
 export class ColorRgbRmo {
   private static readonly prop = "rgbrmo";
@@ -13,6 +13,25 @@ export class ColorRgbRmo {
   roughness: number;
   metalness: number;
   opacity: number;
+
+  get rByte(): number {
+    return this.r * 255;
+  }
+  get gByte(): number {
+    return this.g * 255;
+  }
+  get bByte(): number {
+    return this.b * 255;
+  }
+  get roughnessByte(): number {
+    return this.roughness * 255;
+  }
+  get metalnessByte(): number {
+    return this.metalness * 255;
+  }
+  get opacityByte(): number {
+    return this.opacity * 255;
+  }
 
   constructor(r: number, g: number, b: number,
     roughness: number, metalness: number, opacity: number) {
@@ -78,33 +97,59 @@ export class ColorRgbRmo {
 }
 
 export class ColorRgbRmoUtils {
-  globalMaterial: MeshStandardMaterial;
-
   private _isolationColor: ColorRgbRmo;
   private _selectionColor: Color;
   private _highlightColor: Color;
 
+  private _globalMaterial: MeshStandardMaterial;
+  private _simpleMaterial: MeshPhongMaterial;
   private _materials = new Map<string, MeshStandardMaterial>();
+
+  get globalMaterial(): MeshStandardMaterial {
+    return this._globalMaterial;
+  }
+  get simpleMaterial(): MeshPhongMaterial {
+    return this._simpleMaterial;
+  }
+  get materials(): MeshStandardMaterial[] {
+    return [...this._materials.values()];
+  }
   
-  constructor(options: GltfViewerOptions) {
-    const {isolationColor, isolationOpacity, selectionColor, highlightColor} = options;
+  constructor(isolationColor: number, isolationOpacity: number, 
+    selectionColor: number, highlightColor: number) {
+
     this._isolationColor = this.buildIsolationColor(isolationColor, isolationOpacity);
     this._selectionColor = new Color(selectionColor);
     this._highlightColor = new Color(highlightColor);
 
-    this.globalMaterial = this.buildGlobalMaterial();
+    this._globalMaterial = this.buildGlobalMaterial();
+    this._simpleMaterial = this.buildSimpleMaterial();
+  }
+
+  updateColors(isolationColor: number, isolationOpacity: number, 
+    selectionColor: number, highlightColor: number) {
+
+    this._isolationColor = this.buildIsolationColor(isolationColor, isolationOpacity);
+    this._selectionColor = new Color(selectionColor);
+    this._highlightColor = new Color(highlightColor);
+  }
+  
+  updateMaterials() {
+    this._globalMaterial.needsUpdate = true;
+    this._simpleMaterial.needsUpdate = true;
+    this._materials.forEach(v => v.needsUpdate = true);
   }
 
   destroy() {
+    this._globalMaterial.dispose();
+    this._globalMaterial = null; 
+    this._simpleMaterial.dispose();
+    this._simpleMaterial = null;
     this._materials.forEach(v => v.dispose());
     this._materials = null;
-
-    this.globalMaterial.dispose();
-    this.globalMaterial = null;    
   }
   
-  refreshMeshColors(mesh: MeshBgSm): {rgbRmo: ColorRgbRmo; opacityChanged: boolean} { 
-    
+  refreshMeshColors(mesh: MeshBgSm): {rgbRmo: ColorRgbRmo; opacityChanged: boolean} {     
     const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);       
     if (!mesh.userData.isolated) {
       ColorRgbRmo.deleteFromMesh(mesh);
@@ -149,7 +194,7 @@ export class ColorRgbRmoUtils {
     if (this._materials.has(key)) {
       return this._materials.get(key);
     }
-    const material = this.buildMaterial(rgbRmo);     
+    const material = this.buildStandardMaterial(rgbRmo);     
     this._materials.set(key, material);
     return material;
   }
@@ -192,9 +237,20 @@ export class ColorRgbRmoUtils {
       shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");  
     };
     return material;
+  }  
+
+  private buildSimpleMaterial(): MeshPhongMaterial {
+    const material = new MeshPhongMaterial({
+      color: 0x808080,
+      transparent: false,
+      flatShading: true,
+      blending: NormalBlending,
+      side: DoubleSide,
+    });
+    return material;
   }
 
-  private buildMaterial(rgbRmo: ColorRgbRmo): MeshStandardMaterial {
+  private buildStandardMaterial(rgbRmo: ColorRgbRmo): MeshStandardMaterial {
     const material = new MeshPhysicalMaterial(<MeshPhysicalMaterial>{
       blending: NormalBlending,
       side: DoubleSide,

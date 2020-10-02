@@ -2,9 +2,7 @@ import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from
 import { first } from "rxjs/operators";
 
 import { WebGLRenderer, NoToneMapping, sRGBEncoding,
-  Object3D, Scene, Mesh, Color, MeshStandardMaterial, 
-  Light, AmbientLight, HemisphereLight, DirectionalLight,
-  BufferGeometry, Uint32BufferAttribute, Float32BufferAttribute } from "three";
+  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -12,16 +10,20 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshMergeType, MeshBgSm, RenderGeometry, ColoringInfo, PointerEventHelper } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper } from "./common-types";
 import { ColorRgbRmo, ColorRgbRmoUtils } from "./color-rgb-rmo";
+import { RenderScene } from "./render-scene";
+import { SimplifiedScene } from "./simplified-scene";
 import { PickingScene } from "./picking-scene";
 import { CameraControls } from "./camera-controls";
+import { Lights } from "./lights";
 import { GltfViewerOptions } from "./gltf-viewer-options";
 
 export { ModelFileInfo, ModelOpenedInfo, GltfViewerOptions };
 
 export class GltfViewer {
   // #region public observables
+  optionsChange$: Observable<GltfViewerOptions>;
   loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
@@ -29,9 +31,11 @@ export class GltfViewer {
   openedModelsChange$: Observable<ModelOpenedInfo[]>;  
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
+  lastFrameTime$: Observable<number>;
   // #endregion  
   
   // #region private rx subjects
+  private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
   private _loadingStateChange = new BehaviorSubject<boolean>(false);
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
@@ -39,33 +43,28 @@ export class GltfViewer {
   private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);   
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
+  private _lastFrameTime = new BehaviorSubject<number>(0);  
   // #endregion
   
   private _subscriptions: Subscription[] = [];
+  
+  private _options: GltfViewerOptions;  
 
-  // #region html container related fieds
   private _container: Element;
   private _containerResizeSensor: ResizeSensor;
-  // #endregion
+  private _canvas: HTMLCanvasElement;
 
-  // #region renderer related fieds
+  // #region rendering related fields
   private _renderer: WebGLRenderer;
-  private _lights: Light[] = [];
-  private _loader: GLTFLoader;
-  
-  private _colorRgbRmoUtils: ColorRgbRmoUtils;
-  private _cameraControls: CameraControls;
-  // #endregion
+  private _deferRender: number;
 
-  // #region render scene
-  private _renderMeshMergeType: MeshMergeType;
-  private _renderScene: Scene;
-  private _renderGeometries: RenderGeometry[] = [];
-  private _renderGeometryIndexBySourceMesh = new Map<MeshBgSm, number>();
-  private _sourceMeshesByRenderGeometryIndex = new Map<number, MeshBgSm[]>();
-  private _sourceMeshesNeedColorUpdate = new Set<MeshBgSm>();
-  private _renderGeometryIndicesNeedSort = new Set<number>();
-  private _renderMeshBySourceMesh = new Map<MeshBgSm, MeshBgSm>();
+  private _colorRgbRmoUtils: ColorRgbRmoUtils;
+  private _cameraControls: CameraControls; 
+  private _lights: Lights; 
+
+  private _renderScene: RenderScene; 
+  private _simplifiedScene: SimplifiedScene; 
+  private _meshesNeedColorUpdate = new Set<MeshBgSm>();
   // #endregion
 
   // #region selection related fieds
@@ -81,7 +80,9 @@ export class GltfViewer {
   private _coloredMeshes: MeshBgSm[] = [];
   // #endregion
 
-  // #region loaded models related fieds
+  // #region loading models related fieds
+  private _loader: GLTFLoader;  
+
   private _loadingInProgress = false;
   private _loadingQueue: (() => Promise<void>)[] = [];
 
@@ -94,60 +95,120 @@ export class GltfViewer {
   private _loadedMeshesArray: MeshBgSm[] = [];
   // #endregion
 
-  constructor(containerId: string, options: GltfViewerOptions) { 
-    this._container = document.getElementById(containerId);
-    if (!this._container) {
-      throw new Error("Container not found!");
-    }
-
-    const viewerOptions = new GltfViewerOptions(options);    
+  constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) { 
+    this.initCanvas(containerId);
     this.initObservables();
+
+    this._options = new GltfViewerOptions(options);  
+    this._optionsChange.next(this._options);
+
+    this._colorRgbRmoUtils = new ColorRgbRmoUtils(this._options.isolationColor, this._options.isolationOpacity,
+      this._options.selectionColor, this._options.highlightColor);
+    this._lights = new Lights(this._options.usePhysicalLights, 
+      this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity); 
+    this._renderScene = new RenderScene(this._colorRgbRmoUtils);
+    this._simplifiedScene = new SimplifiedScene(this._colorRgbRmoUtils);
     this._pickingScene = new PickingScene();
-    this._colorRgbRmoUtils = new ColorRgbRmoUtils(viewerOptions);
-    this.initLights(viewerOptions); 
-    this.initLoader(viewerOptions); 
-    this.initRenderer(viewerOptions);
-    this._cameraControls = new CameraControls(this._renderer.domElement, () => this.render());    
+
+    this.initLoader(dracoDecoderPath);
+    this.initRenderer();
+
+    this._cameraControls = new CameraControls(this._canvas, () => this.renderOnCameraMove());   
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
       const { width, height } = this._container.getBoundingClientRect();
       this._cameraControls.resize(width, height);
       this.resizeRenderer(width, height);
     }); 
-    this.addCanvasEventListeners(viewerOptions);
-    this.render();
+
+    this.addCanvasEventListeners();
   }
 
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
-    this.closeSubjects();
-
+    this.closeSubjects();     
+    
     this._containerResizeSensor?.detach();
-    this._containerResizeSensor = null;    
+    this._containerResizeSensor = null;
     
     this._cameraControls?.destroy();
     this._cameraControls = null;
 
+    this._renderer?.dispose();
+    this._loader?.dracoLoader?.dispose();
+
     this._pickingScene?.destroy();
     this._pickingScene = null;
+    
+    this._simplifiedScene?.destroy();
+    this._simplifiedScene = null;
+
+    this._renderScene?.destroy();
+    this._renderScene = null;   
 
     this._colorRgbRmoUtils?.destroy();
-    this._colorRgbRmoUtils = null;
+    this._colorRgbRmoUtils = null; 
 
     this._loadedMeshes?.forEach(x => {
       x.geometry.dispose();
       x.material.dispose();
     });
-    this._loadedMeshes = null;
-
-    this._renderGeometries?.forEach(x => x.geometry.dispose());
-    this._renderGeometries = null;
-    this._renderScene = null;
-
-    this._renderer?.dispose();
-    this._loader?.dracoLoader?.dispose();    
+    this._loadedMeshes = null;  
   }
 
-  // #region public interaction
+  // #region public interaction 
+  async updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions> {
+    const oldOptions = this._options;
+    this._options = new GltfViewerOptions(options);    
+
+    let rendererReinitialized = false;
+    let lightsReinitialized = false;
+    let colorsUpdated = false;
+
+    if (this._options.useAntialiasing !== oldOptions.useAntialiasing
+        || this._options.usePhysicalLights !== oldOptions.usePhysicalLights) {
+      this.initRenderer();
+      rendererReinitialized = true;
+    }
+    
+    if (this._options.usePhysicalLights !== oldOptions.usePhysicalLights
+        || this._options.ambientLightIntensity !== oldOptions.ambientLightIntensity
+        || this._options.hemiLightIntensity !== oldOptions.hemiLightIntensity
+        || this._options.dirLightIntensity !== oldOptions.dirLightIntensity) {
+      this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity,
+        this._options.hemiLightIntensity, this._options.dirLightIntensity);
+      lightsReinitialized = true;
+    }  
+
+    if (this._options.isolationColor !== oldOptions.isolationColor
+        || this._options.isolationOpacity !== oldOptions.isolationOpacity
+        || this._options.selectionColor !== oldOptions.selectionColor
+        || this._options.highlightColor !== oldOptions.highlightColor) {      
+      this._colorRgbRmoUtils.updateColors(this._options.isolationColor, this._options.isolationOpacity,
+        this._options.selectionColor, this._options.highlightColor);
+      colorsUpdated = true;
+    }
+
+    if (rendererReinitialized || lightsReinitialized || colorsUpdated) {
+      this._colorRgbRmoUtils.updateMaterials();
+    }
+
+    if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
+      if (this._options.highlightingEnabled) {        
+        this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
+      } else {
+        this._canvas.removeEventListener("mousemove", this.onCanvasMouseMove);
+      }
+    }
+
+    if (this._options.meshMergeType !== oldOptions.meshMergeType
+        || this._options.fastRenderType !== oldOptions.fastRenderType) {
+      await this.updateRenderSceneAsync();
+    }
+
+    this._optionsChange.next(this._options);  
+    return this._options;
+  }
+
   async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
     if (!modelInfos?.length) {
       return [];
@@ -238,6 +299,7 @@ export class GltfViewer {
 
   // #region rx
   private initObservables() {
+    this.optionsChange$ = this._optionsChange.asObservable();
     this.loadingStateChange$ = this._loadingStateChange.asObservable();
     this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
     this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
@@ -245,9 +307,11 @@ export class GltfViewer {
     this.openedModelsChange$ = this._openedModelsChange.asObservable();
     this.selectionChange$ = this._selectionChange.asObservable();
     this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
+    this.lastFrameTime$ = this._lastFrameTime.asObservable();
   }
 
   private closeSubjects() {
+    this._optionsChange.complete();
     this._loadingStateChange.complete();
     this._modelLoadingStart.complete();
     this._modelLoadingProgress.complete();
@@ -255,16 +319,17 @@ export class GltfViewer {
     this._openedModelsChange.complete();   
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
+    this._lastFrameTime.complete();
   }
   // #endregion
 
   // #region canvas event handlers 
-  private _onCanvasPointerDown = (e: PointerEvent) => {
+  private onCanvasPointerDown = (e: PointerEvent) => {
     this._pointerEventHelper.downX = e.clientX;
     this._pointerEventHelper.downY = e.clientY;
   };
 
-  private _onCanvasPointerUp = (e: PointerEvent) => {
+  private onCanvasPointerUp = (e: PointerEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
@@ -289,7 +354,7 @@ export class GltfViewer {
     this._pointerEventHelper.downY = null;
   };
 
-  private _onCanvasMouseMove = (e: MouseEvent) => {   
+  private onCanvasMouseMove = (e: MouseEvent) => {   
     if (e.buttons) {
       return;
     } 
@@ -303,59 +368,46 @@ export class GltfViewer {
     }, 30);
   };
 
-  private addCanvasEventListeners(options: GltfViewerOptions) {
-    const { highlightingEnabled } = options;
+  private addCanvasEventListeners() {
+    const { highlightingEnabled } = this._options;
 
-    this._renderer.domElement.addEventListener("pointerdown", this._onCanvasPointerDown);
-    this._renderer.domElement.addEventListener("pointerup", this._onCanvasPointerUp);
+    this._canvas.addEventListener("pointerdown", this.onCanvasPointerDown);
+    this._canvas.addEventListener("pointerup", this.onCanvasPointerUp);
     if (highlightingEnabled) {      
-      this._renderer.domElement.addEventListener("mousemove", this._onCanvasMouseMove);
+      this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
     }
   }
   // #endregion
 
   // #region renderer
-  private initLights(options: GltfViewerOptions) {
-    if (options.ambientLight) {
-      const ambientLight = new AmbientLight(0x222222, 
-        options.physicalLights 
-          ? options.ambientLightIntensity * Math.PI 
-          : options.ambientLightIntensity);
-      this._lights.push(ambientLight);
+  private initCanvas(containerId: string) {
+    this._container = document.getElementById(containerId);
+    if (!this._container) {
+      throw new Error("Container not found!");
     }
-    if (options.hemiLight) {
-      const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 
-        options.physicalLights 
-          ? options.hemiLightIntensity * Math.PI 
-          : options.hemiLightIntensity);
-      hemiLight.position.set(0, 2000, 0);
-      this._lights.push(hemiLight);
-    }    
-    if (options.dirLight) {
-      const dirLight = new DirectionalLight(0xffffff,
-        options.physicalLights 
-          ? options.dirLightIntensity * Math.PI 
-          : options.dirLightIntensity);
-      dirLight.position.set(-2, 10, 2);
-      this._lights.push(dirLight);
-    }
+    this._canvas = document.createElement("canvas");
+    this._container.appendChild(this._canvas);
   }
 
-  private initRenderer(options: GltfViewerOptions) {
-    const { useAntialiasing, physicalLights, meshMergeType } = options;
+  private initRenderer() {
+    if (this._renderer) {
+      this._renderer.dispose();
+      this._renderer = null;
+    }
+
+    const { useAntialiasing, usePhysicalLights } = this._options;
 
     const renderer = new WebGLRenderer({
+      canvas: this._canvas,
       alpha: true, 
       antialias: useAntialiasing,
     });
     renderer.setClearColor(0x000000, 0);
     renderer.outputEncoding = sRGBEncoding;
-    renderer.physicallyCorrectLights = physicalLights;
     renderer.toneMapping = NoToneMapping;
+    renderer.physicallyCorrectLights = usePhysicalLights;
 
-    this._container.append(renderer.domElement);
     this._renderer = renderer;
-    this._renderMeshMergeType = meshMergeType;
   }
   
   private resizeRenderer(width: number, height: number) {
@@ -366,228 +418,17 @@ export class GltfViewer {
   }
 
   private async updateRenderSceneAsync(): Promise<void> {
-    this._renderScene = null;
-
-    const scene = new Scene();
-    scene.add(...this._lights);     
-
-    this._renderGeometries.forEach(x => x.geometry.dispose());
-    this._renderGeometries.length = 0;
-    this._renderGeometryIndexBySourceMesh.clear();   
-    this._sourceMeshesByRenderGeometryIndex.clear(); 
-    this._renderMeshBySourceMesh.clear();  
-    this._renderGeometryIndicesNeedSort.clear();  
-
-    if (this._renderMeshMergeType) {
-      const grouppedMeshes = await this.groupModelMeshesByMergeType(this._loadedMeshesArray, 
-        this._loadedModelsArray, this._renderMeshMergeType);
-      for (const meshes of grouppedMeshes) {
-        if (meshes.length) {
-          const geometry = await this.buildRenderGeometryAsync(meshes);          
-          this._renderGeometries.push(geometry);
-          const i = this._renderGeometries.length - 1;
-          this._sourceMeshesByRenderGeometryIndex.set(i, meshes);
-          this._renderGeometryIndicesNeedSort.add(i);
-          meshes.forEach(x => {
-            this._renderGeometryIndexBySourceMesh.set(x, i);
-          });
-        }
-      }
-      this._renderGeometries.forEach(x => {    
-        const mesh = new Mesh(x.geometry, this._colorRgbRmoUtils.globalMaterial);
-        scene.add(mesh);
-      });
+    await this._renderScene.updateSceneAsync(this._lights.getLights(), this._loadedMeshesArray, this._loadedModelsArray,
+      this._options.meshMergeType);
+      
+    if (this._options.fastRenderType) {
+      await this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), this._loadedMeshesArray, 
+        this._options.fastRenderType);
     } else {
-      this._loadedMeshesArray.forEach(sourceMesh => {
-        const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
-        const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
-        const renderMesh = new Mesh(sourceMesh.geometry, material);
-        renderMesh.applyMatrix4(sourceMesh.matrix);
-        this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
-        scene.add(renderMesh); 
-      });
-    } 
-
-    this._renderScene = scene;
-    this.render(this._loadedMeshesArray.length ? [this._renderScene] : null);
-  }
-
-  private async groupModelMeshesByMergeType(meshes: MeshBgSm[], models: ModelGeometryInfo[], 
-    meshMergeType: MeshMergeType): Promise<MeshBgSm[][]> {
-
-    let grouppedMeshes: MeshBgSm[][];
-    switch (meshMergeType) {
-      case "scene":
-        grouppedMeshes = [meshes];
-        break;
-      case "model_uncapped":
-        grouppedMeshes = models.map(x => x.meshes).filter(x => x.length);
-        break;
-      case "model_capped":
-        grouppedMeshes = [];  
-        const chunkSize = 1000;
-        models.map(x => x.meshes).filter(x => x.length).forEach(x => {
-          if (x.length <= chunkSize) {
-            grouppedMeshes.push(x);
-          } else {
-            for (let i = 0; i < x.length; i += chunkSize) {
-              const chunk = x.slice(i, i + chunkSize);
-              grouppedMeshes.push(chunk);
-            }
-          }
-        });
-        break;
-      default:
-        grouppedMeshes = [];
-    }   
-
-    return grouppedMeshes;
-  }
-
-  private async buildRenderGeometryAsync(meshes: MeshBgSm[]): Promise<RenderGeometry> {
-    let positionsLen = 0;
-    let indicesLen = 0;
-    meshes.forEach(x => {
-      positionsLen += x.geometry.getAttribute("position").count * 3;
-      indicesLen += x.geometry.getIndex().count;;      
-    });
-
-    if (positionsLen === 0) {
-      return;
+      this._simplifiedScene.clearScene();
     }
 
-    const indexBuffer = new Uint32BufferAttribute(new Uint32Array(indicesLen), 1);
-    const colorBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-    const rmoBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-    const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-    const indicesBySourceMesh = new Map<MeshBgSm, Uint32Array>();    
-    
-    let positionsOffset = 0; 
-    let indicesOffset = 0;
-    // splitting into chunks to UI remain responsible
-    const chunkSize = 100;
-    const processChunk = (chunk: MeshBgSm[]) => {    
-      chunk.forEach(x => {
-        const geometry = <BufferGeometry>x.geometry
-          .clone()
-          .applyMatrix4(x.matrix);        
-        const positions = geometry.getAttribute("position").array;
-        const indices = geometry.getIndex().array;
-        const meshIndices = new Uint32Array(indices.length);
-        indicesBySourceMesh.set(x, meshIndices);
-        for (let i = 0; i < indices.length; i++) {
-          const index = indices[i] + positionsOffset;
-          indexBuffer.setX(indicesOffset++, index);
-          meshIndices[i] = index;
-        }
-        for (let i = 0; i < positions.length;) {   
-          const rgbrmo = ColorRgbRmo.getFromMesh(x);
-          colorBuffer.setXYZ(positionsOffset, rgbrmo.r, rgbrmo.g, rgbrmo.b);
-          rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughness, rgbrmo.metalness, rgbrmo.opacity);
-          positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
-        }
-        geometry.dispose();
-      });
-    };
-    for (let i = 0; i < meshes.length; i += chunkSize) {
-      await new Promise((resolve) => { 
-        setTimeout(() => {
-          processChunk(meshes.slice(i, i + chunkSize));
-          resolve();
-        }, 0);
-      });
-    }
-
-    const renderGeometry = new BufferGeometry();
-    renderGeometry.setIndex(indexBuffer);   
-    renderGeometry.setAttribute("color", colorBuffer);      
-    renderGeometry.setAttribute("rmo", rmoBuffer); 
-    renderGeometry.setAttribute("position", positionBuffer); 
-    
-    return {
-      geometry: renderGeometry,
-      positions: positionBuffer,
-      colors: colorBuffer,
-      rmos: rmoBuffer,
-      indices: indexBuffer,
-      indicesBySourceMesh,
-    };
-  } 
-
-  private updateMeshRenderMaterials() {
-    this._sourceMeshesNeedColorUpdate.forEach(sourceMesh => { 
-      const { rgbRmo } = this._colorRgbRmoUtils.refreshMeshColors(sourceMesh);      
-      const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
-      const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
-      renderMesh.material = material;
-    });
-  }
-
-  private sortRenderGeometriesIndicesByOpacity() {
-    this._renderGeometryIndicesNeedSort.forEach(i => {
-      const meshes = this._sourceMeshesByRenderGeometryIndex.get(i);
-
-      const opaqueMeshes: MeshBgSm[] = [];
-      const transparentMeshes: MeshBgSm[] = [];
-      meshes.forEach(x => {
-        if (ColorRgbRmo.getFromMesh(x).opacity === 1) {
-          opaqueMeshes.push(x);
-        } else {
-          transparentMeshes.push(x);
-        }
-      });
-
-      const { indices, indicesBySourceMesh } = this._renderGeometries[i];
-      let currentIndex = 0;
-      opaqueMeshes.forEach(mesh => {
-        indicesBySourceMesh.get(mesh).forEach(value => {
-          indices.setX(currentIndex++, value);
-        });
-      });
-      transparentMeshes.forEach(mesh => {
-        indicesBySourceMesh.get(mesh).forEach(value => {
-          indices.setX(currentIndex++, value);
-        });
-      });
-      indices.needsUpdate = true;
-    });
-  }  
-
-  private updateRenderGeometriesColors() {
-    const meshesByRgIndex = new Map<number, MeshBgSm[]>();
-    this._sourceMeshesNeedColorUpdate.forEach(mesh => {
-      const rgIndex = this._renderGeometryIndexBySourceMesh.get(mesh);
-      if (meshesByRgIndex.has(rgIndex)) {
-        meshesByRgIndex.get(rgIndex).push(mesh);
-      } else {
-        meshesByRgIndex.set(rgIndex, [mesh]);
-      }
-    });
-
-    meshesByRgIndex.forEach((v, k) => {
-      this.updateRenderGeometryColors(k, v);
-    });
-  }
-
-  private updateRenderGeometryColors(rgIndex: number, meshes: MeshBgSm[]) {
-    const { colors, rmos, indicesBySourceMesh } = this._renderGeometries[rgIndex];
-    let anyMeshOpacityChanged = false;
-    meshes.forEach(mesh => {
-      const { rgbRmo, opacityChanged } = this._colorRgbRmoUtils
-        .refreshMeshColors(mesh); 
-      indicesBySourceMesh.get(mesh).forEach(i => {
-        colors.setXYZ(i, rgbRmo.r, rgbRmo.g, rgbRmo.b);
-        rmos.setXYZ(i, rgbRmo.roughness, rgbRmo.metalness, rgbRmo.opacity);
-      });
-      if (!anyMeshOpacityChanged && opacityChanged) {
-        anyMeshOpacityChanged = true;
-      }
-    });
-    colors.needsUpdate = true;
-    rmos.needsUpdate = true;  
-    if (anyMeshOpacityChanged) {
-      this._renderGeometryIndicesNeedSort.add(rgIndex);
-    }  
+    this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
   }
 
   private prepareToRender(focusObjects: Object3D[] = null) {
@@ -595,52 +436,65 @@ export class GltfViewer {
       this._cameraControls.focusCameraOnObjects(focusObjects);
     }
 
-    if (this._sourceMeshesNeedColorUpdate.size) {
-      if (this._renderMeshMergeType) {
-        this.updateRenderGeometriesColors();
-      } else {
-        this.updateMeshRenderMaterials();
-      }
-      this._sourceMeshesNeedColorUpdate.clear();
-    }
-
-    if (this._renderGeometryIndicesNeedSort.size) {
-      this.sortRenderGeometriesIndicesByOpacity();
-      this._renderGeometryIndicesNeedSort.clear();
-    }   
+    if (this._meshesNeedColorUpdate.size) {
+      this._renderScene.updateMeshColors(this._meshesNeedColorUpdate);
+      this._meshesNeedColorUpdate.clear();
+    }  
   }
 
-  private render(focusObjects: Object3D[] = null) {
+  private render(focusObjects: Object3D[] = null, fast = false) {
     this.prepareToRender(focusObjects);
     requestAnimationFrame(() => { 
-      if (this._renderScene) {
-        this._renderer.render(this._renderScene, this._cameraControls.camera);
+      if (!this._renderer) {
+        return;
       }
+      const start = performance.now();
+      if (fast && this._simplifiedScene?.scene) {
+        this._renderer.render(this._simplifiedScene.scene, this._cameraControls.camera);
+      } else if (this._renderScene?.scene) {
+        this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
+      }
+      const frameTime = performance.now() - start;
+      this._lastFrameTime.next(frameTime);
+      console.log(frameTime);
     });
+  }
+
+  private renderOnCameraMove() {
+    if (this._options.fastRenderType) {
+      if (this._deferRender) {
+        clearTimeout(this._deferRender);
+        this._deferRender = null;
+      }
+      this.render(null, true);
+      this._deferRender = window.setTimeout(() => {
+        this._deferRender = null;
+        this.render();
+      }, 300);
+    } else {
+      this.render();
+    }
   }
   // #endregion
 
   // #region loading models
-  private initLoader(options: GltfViewerOptions) {
-    const { dracoDecoderEnabled, dracoDecoderPath } = options;
-
+  private initLoader(dracoDecoderPath: string) {
     const loader = new GLTFLoader();
-
-    if (dracoDecoderEnabled) {
+    if (dracoDecoderPath) {
       const dracoLoader = new DRACOLoader();
       dracoLoader.setDecoderPath(dracoDecoderPath);
       dracoLoader.preload();
       loader.setDRACOLoader(dracoLoader);
     }
-
     this._loader = loader;
-    this.processLoadingQueueAsync();
   }
 
   private async processLoadingQueueAsync(): Promise<void> {
-    if (!this._renderer || !this._loader || this._loadingInProgress) {
+    if (!this._loader 
+        || this._loadingInProgress 
+        || !this._loadingQueue.length) {
       return;
-    }  
+    }
 
     this._loadingInProgress = true;  
     this._loadingStateChange.next(true);
@@ -650,12 +504,17 @@ export class GltfViewer {
       await action();
     } 
     
+    this.updateModelsDataArrays();    
     this.runQueuedColoring();
     this.runQueuedSelection();
     await this.updateRenderSceneAsync();
 
+    this.emitOpenedModelsChanged();
     this._loadingStateChange.next(false);
     this._loadingInProgress = false;
+
+    // run loop once more to check queue update while awaiting this.updateRenderSceneAsync()
+    await this.processLoadingQueueAsync(); 
   }
 
   private async loadModel(url: string, guid: string, name: string): Promise<ModelLoadedInfo> {
@@ -721,9 +580,6 @@ export class GltfViewer {
     const modelInfo = {name, meshes, handles};
     this._loadedModels.add(modelInfo);
     this._loadedModelsByGuid.set(modelGuid, modelInfo);
-
-    this.updateModelsDataArrays();
-    this.emitOpenedModelsChanged();
   }
 
   private removeModelFromLoaded(modelGuid: string) {
@@ -746,9 +602,6 @@ export class GltfViewer {
     
     this._loadedModels.delete(modelData);
     this._loadedModelsByGuid.delete(modelGuid);
-
-    this.updateModelsDataArrays();
-    this.emitOpenedModelsChanged();
   }
 
   private updateModelsDataArrays() {
@@ -792,7 +645,7 @@ export class GltfViewer {
             meshes.forEach(mesh => {
               mesh.userData.colored = true;
               ColorRgbRmo.setCustomToMesh(mesh, customColor);
-              this._sourceMeshesNeedColorUpdate.add(mesh);
+              this._meshesNeedColorUpdate.add(mesh);
               this._coloredMeshes.push(mesh);
             });
           }
@@ -807,7 +660,7 @@ export class GltfViewer {
     for (const mesh of this._coloredMeshes) {
       mesh.userData.colored = undefined;
       ColorRgbRmo.deleteFromMesh(mesh, true);
-      this._sourceMeshesNeedColorUpdate.add(mesh);
+      this._meshesNeedColorUpdate.add(mesh);
     }
     this._coloredMeshes.length = 0;
   }
@@ -815,8 +668,8 @@ export class GltfViewer {
 
   // #region item selection/isolation    
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {   
-    return this._pickingScene
-      ? this._pickingScene.getMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
+    return this._renderer && this._pickingScene
+      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
       : null;
   }
   
@@ -852,7 +705,7 @@ export class GltfViewer {
   private removeSelection() {
     for (const mesh of this._selectedMeshes) {
       mesh.userData.selected = undefined;
-      this._sourceMeshesNeedColorUpdate.add(mesh);
+      this._meshesNeedColorUpdate.add(mesh);
     }
     this._selectedMeshes.length = 0;
   }
@@ -860,7 +713,7 @@ export class GltfViewer {
   private removeIsolation() {
     for (const mesh of this._isolatedMeshes) {
       mesh.userData.isolated = undefined;
-      this._sourceMeshesNeedColorUpdate.add(mesh);
+      this._meshesNeedColorUpdate.add(mesh);
     }
     this._isolatedMeshes.length = 0;
   }
@@ -908,7 +761,7 @@ export class GltfViewer {
     
     meshes.forEach(x => {
       x.userData.selected = true;
-      this._sourceMeshesNeedColorUpdate.add(x);
+      this._meshesNeedColorUpdate.add(x);
     });
 
 
@@ -929,7 +782,7 @@ export class GltfViewer {
     this._loadedMeshesArray.forEach(x => {
       if (!x.userData.selected) {
         x.userData.isolated = true;
-        this._sourceMeshesNeedColorUpdate.add(x);
+        this._meshesNeedColorUpdate.add(x);
         this._isolatedMeshes.push(x);
       }
     }); 
@@ -965,7 +818,7 @@ export class GltfViewer {
     this.removeHighlighting();
     if (mesh) {
       mesh.userData.highlighted = true;
-      this._sourceMeshesNeedColorUpdate.add(mesh);
+      this._meshesNeedColorUpdate.add(mesh);
       this._highlightedMesh = mesh;
     }
     this.render();
@@ -975,7 +828,7 @@ export class GltfViewer {
     if (this._highlightedMesh) {
       const mesh = this._highlightedMesh;
       mesh.userData.highlighted = undefined;
-      this._sourceMeshesNeedColorUpdate.add(mesh);
+      this._meshesNeedColorUpdate.add(mesh);
       this._highlightedMesh = null;
     }
   }

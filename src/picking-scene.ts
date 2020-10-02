@@ -1,19 +1,17 @@
-import { Scene, Mesh, Color, DirectionalLight, PerspectiveCamera,
-  WebGLRenderer, WebGLRenderTarget, sRGBEncoding, NoToneMapping,
-  MeshStandardMaterial, NoBlending, DoubleSide } from "three";
+import { Scene, Mesh, Color, PerspectiveCamera,
+  WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
-import { MeshBgSm } from "./common-types";
+import { MeshBgBm, MeshBgSm } from "./common-types";
 
 export class PickingScene {
   private _scene: Scene;
   private _target: WebGLRenderTarget;
-  private _cameraLight: DirectionalLight;
 
   private _lastPickingColor = 0;
-  private _materials: MeshStandardMaterial[] = [];
-  private _releasedMaterials: MeshStandardMaterial[] = [];
+  private _materials: MeshBasicMaterial[] = [];
+  private _releasedMaterials: MeshBasicMaterial[] = [];
 
-  private _pickingMeshById = new Map<string, MeshBgSm>();
+  private _pickingMeshById = new Map<string, MeshBgBm>();
   private _sourceMeshByPickingColor = new Map<string, MeshBgSm>();
 
   constructor() {    
@@ -22,12 +20,8 @@ export class PickingScene {
     const scene = new Scene();
     scene.background = new Color(0);
 
-    const cameraLight = new DirectionalLight(0xFFFFFF, 1);
-    cameraLight.position.set(-1, 2, 4);
-
     this._scene = scene;
     this._target = target;
-    this._cameraLight = cameraLight;
   }
 
   destroy() {
@@ -63,7 +57,7 @@ export class PickingScene {
     }
   }
 
-  getMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, clientX: number, clientY: number): MeshBgSm { 
+  getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, clientX: number, clientY: number): MeshBgSm { 
     const rect = renderer.domElement.getBoundingClientRect();
     const x = (clientX - rect.left) * renderer.domElement.width / rect.width;
     const y = (clientY - rect.top) * renderer.domElement.height / rect.height;     
@@ -74,14 +68,12 @@ export class PickingScene {
       x * pixelRatio || 0,
       y * pixelRatio || 0,
       1, 1);
-    camera.add(this._cameraLight);
     renderer.setRenderTarget(this._target);
     renderer.render(this._scene, camera);
 
     // reset changes made to renderer and camera
     renderer.setRenderTarget(null);
-    camera.clearViewOffset();
-    camera.remove(this._cameraLight);    
+    camera.clearViewOffset(); 
 
     const pixelBuffer = new Uint8Array(4);
     renderer.readRenderTargetPixels(this._target, 0, 0, 1, 1, pixelBuffer); 
@@ -99,26 +91,23 @@ export class PickingScene {
     return ++this._lastPickingColor;
   }
   
-  private getMaterial(): MeshStandardMaterial {
+  private getMaterial(): MeshBasicMaterial {
     if (this._releasedMaterials.length) {
       return this._releasedMaterials.pop();
     }  
 
     const color = new Color(this.nextPickingColor());
-    const material = new MeshStandardMaterial({ 
+    const material = new MeshBasicMaterial({ 
       color: color, 
-      emissive: color,
       flatShading: true,
       blending: NoBlending,
-      side: DoubleSide,      
-      roughness: 1,
-      metalness: 0,
+      side: DoubleSide,
     });
     this._materials.push(material);
     return material;
   }
 
-  private releaseMaterial(material: MeshStandardMaterial) {
+  private releaseMaterial(material: MeshBasicMaterial) {
     this._releasedMaterials.push(material);
   }
 }
