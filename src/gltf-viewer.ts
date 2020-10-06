@@ -12,9 +12,9 @@ import { ResizeSensor } from "css-element-queries";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
   MeshBgSm, ColoringInfo, PointerEventHelper } from "./common-types";
 import { ColorRgbRmo, ColorRgbRmoUtils } from "./color-rgb-rmo";
-import { RenderScene } from "./render-scene";
-import { SimplifiedScene } from "./simplified-scene";
-import { PickingScene } from "./picking-scene";
+import { RenderScene } from "./scenes/render-scene";
+import { SimplifiedScene } from "./scenes/simplified-scene";
+import { PickingScene } from "./scenes/picking-scene";
 import { CameraControls } from "./camera-controls";
 import { Lights } from "./lights";
 import { GltfViewerOptions } from "./gltf-viewer-options";
@@ -52,7 +52,6 @@ export class GltfViewer {
 
   private _container: Element;
   private _containerResizeSensor: ResizeSensor;
-  private _canvas: HTMLCanvasElement;
 
   // #region rendering related fields
   private _renderer: WebGLRenderer;
@@ -95,9 +94,13 @@ export class GltfViewer {
   private _loadedMeshesArray: MeshBgSm[] = [];
   // #endregion
 
-  constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) { 
-    this.initCanvas(containerId);
+  constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) {
     this.initObservables();
+
+    this._container = document.getElementById(containerId);
+    if (!this._container) {
+      throw new Error("Container not found!");
+    }
 
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
@@ -112,15 +115,10 @@ export class GltfViewer {
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
-
-    this._cameraControls = new CameraControls(this._canvas, () => this.renderOnCameraMove());   
+ 
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
-      const { width, height } = this._container.getBoundingClientRect();
-      this._cameraControls.resize(width, height);
-      this.resizeRenderer(width, height);
+      this.resizeRenderer();
     }); 
-
-    this.addCanvasEventListeners();
   }
 
   destroy() {   
@@ -158,14 +156,13 @@ export class GltfViewer {
   // #region public interaction 
   async updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions> {
     const oldOptions = this._options;
-    this._options = new GltfViewerOptions(options);    
+    this._options = new GltfViewerOptions(options);
 
     let rendererReinitialized = false;
     let lightsReinitialized = false;
     let colorsUpdated = false;
 
-    if (this._options.useAntialiasing !== oldOptions.useAntialiasing
-        || this._options.usePhysicalLights !== oldOptions.usePhysicalLights) {
+    if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
       this.initRenderer();
       rendererReinitialized = true;
     }
@@ -174,6 +171,7 @@ export class GltfViewer {
         || this._options.ambientLightIntensity !== oldOptions.ambientLightIntensity
         || this._options.hemiLightIntensity !== oldOptions.hemiLightIntensity
         || this._options.dirLightIntensity !== oldOptions.dirLightIntensity) {
+      this._renderer.physicallyCorrectLights = this._options.usePhysicalLights;
       this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity,
         this._options.hemiLightIntensity, this._options.dirLightIntensity);
       lightsReinitialized = true;
@@ -194,9 +192,9 @@ export class GltfViewer {
 
     if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
       if (this._options.highlightingEnabled) {        
-        this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
+        this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
       } else {
-        this._canvas.removeEventListener("mousemove", this.onCanvasMouseMove);
+        this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
       }
     }
 
@@ -371,34 +369,26 @@ export class GltfViewer {
   private addCanvasEventListeners() {
     const { highlightingEnabled } = this._options;
 
-    this._canvas.addEventListener("pointerdown", this.onCanvasPointerDown);
-    this._canvas.addEventListener("pointerup", this.onCanvasPointerUp);
+    this._renderer.domElement.addEventListener("pointerdown", this.onCanvasPointerDown);
+    this._renderer.domElement.addEventListener("pointerup", this.onCanvasPointerUp);
     if (highlightingEnabled) {      
-      this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
+      this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
     }
   }
   // #endregion
 
   // #region renderer
-  private initCanvas(containerId: string) {
-    this._container = document.getElementById(containerId);
-    if (!this._container) {
-      throw new Error("Container not found!");
-    }
-    this._canvas = document.createElement("canvas");
-    this._container.appendChild(this._canvas);
-  }
-
-  private initRenderer() {
+  private initRenderer() {    
     if (this._renderer) {
+      this._renderer.domElement.remove();
       this._renderer.dispose();
+      this._renderer.forceContextLoss();
       this._renderer = null;
     }
 
     const { useAntialiasing, usePhysicalLights } = this._options;
 
     const renderer = new WebGLRenderer({
-      canvas: this._canvas,
       alpha: true, 
       antialias: useAntialiasing,
     });
@@ -408,13 +398,23 @@ export class GltfViewer {
     renderer.physicallyCorrectLights = usePhysicalLights;
 
     this._renderer = renderer;
+    this.resizeRenderer();
+    this.addCanvasEventListeners();
+
+    if (this._cameraControls) {      
+      this._cameraControls.changeCanvas(this._renderer.domElement);
+    } else {
+      this._cameraControls = new CameraControls(this._renderer.domElement, () => this.renderOnCameraMove()); 
+    } 
+    
+    this._container.append(this._renderer.domElement);
   }
   
-  private resizeRenderer(width: number, height: number) {
-    if (this._renderer) {
-      this._renderer.setSize(width, height, false);
-      this.render();      
-    }
+  private resizeRenderer() {
+    const { width, height } = this._container.getBoundingClientRect();
+    this._cameraControls?.resize(width, height);
+    this._renderer?.setSize(width, height, false);
+    this.render();   
   }
 
   private async updateRenderSceneAsync(): Promise<void> {

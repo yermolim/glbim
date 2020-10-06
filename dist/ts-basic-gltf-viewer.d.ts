@@ -67,7 +67,6 @@ export declare class GltfViewer {
 	private _options;
 	private _container;
 	private _containerResizeSensor;
-	private _canvas;
 	private _renderer;
 	private _deferRender;
 	private _colorRgbRmoUtils;
@@ -109,7 +108,6 @@ export declare class GltfViewer {
 	private onCanvasPointerUp;
 	private onCanvasMouseMove;
 	private addCanvasEventListeners;
-	private initCanvas;
 	private initRenderer;
 	private resizeRenderer;
 	private updateRenderSceneAsync;

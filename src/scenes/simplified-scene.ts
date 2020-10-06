@@ -2,8 +2,8 @@ import { Light, Scene, Mesh, Box3, Matrix4, Vector3, BufferGeometry, BufferAttri
   Uint32BufferAttribute, Float32BufferAttribute, BoxBufferGeometry } from "three";
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull";
 
-import { MeshBgSm, FastRenderType } from "./common-types";
-import { ColorRgbRmoUtils } from "./color-rgb-rmo";
+import { MeshBgSm, FastRenderType } from "../common-types";
+import { ColorRgbRmoUtils } from "../color-rgb-rmo";
 
 export class SimplifiedScene {
   private readonly _boxIndices = [ 

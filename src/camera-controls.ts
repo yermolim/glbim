@@ -2,11 +2,17 @@ import { Object3D, Box3, Vector3, PerspectiveCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 export class CameraControls {
+
+  private _changeCallback: () => void;
+
   private _camera: PerspectiveCamera;
   get camera(): PerspectiveCamera {
     return this._camera;
   }
+
   private _orbitControls: OrbitControls;
+
+  private _lastFocusBox: Box3;
 
   constructor(rendererCanvas: HTMLCanvasElement, changeCallback: () => void) {
     const camera = new PerspectiveCamera(75, 1, 1, 10000);    
@@ -16,8 +22,19 @@ export class CameraControls {
     camera.lookAt (0, 0, 0);    
     orbitControls.update();
 
+    this._changeCallback = changeCallback;
     this._camera = camera;
     this._orbitControls = orbitControls;
+  }
+
+  changeCanvas(rendererCanvas: HTMLCanvasElement) {
+    this._orbitControls.dispose();
+    this._orbitControls = new OrbitControls(this.camera, rendererCanvas);
+    this._orbitControls.addEventListener("change", this._changeCallback);
+
+    if (this._lastFocusBox) {
+      this.focusCameraOnBox(this._lastFocusBox);
+    }
   }
 
   destroy() {
@@ -40,7 +57,14 @@ export class CameraControls {
     for (const object of objects) {
       box.expandByObject(object);
     }      
-    
+
+    this._lastFocusBox = box;
+    this.focusCameraOnBox(box);
+  }  
+
+  private focusCameraOnBox(box: Box3) {    
+    const offset = 1.2;
+
     const size = box.getSize(new Vector3());
     const center = box.getCenter(new Vector3());
     
@@ -63,5 +87,5 @@ export class CameraControls {
     this._camera.position.copy(this._orbitControls.target).sub(direction);
 
     this._orbitControls.update();
-  }  
+  }
 }

@@ -767,11 +767,20 @@ class CameraControls {
         camera.position.set(0, 1000, 1000);
         camera.lookAt(0, 0, 0);
         orbitControls.update();
+        this._changeCallback = changeCallback;
         this._camera = camera;
         this._orbitControls = orbitControls;
     }
     get camera() {
         return this._camera;
+    }
+    changeCanvas(rendererCanvas) {
+        this._orbitControls.dispose();
+        this._orbitControls = new OrbitControls(this.camera, rendererCanvas);
+        this._orbitControls.addEventListener("change", this._changeCallback);
+        if (this._lastFocusBox) {
+            this.focusCameraOnBox(this._lastFocusBox);
+        }
     }
     destroy() {
         this._orbitControls.dispose();
@@ -790,6 +799,11 @@ class CameraControls {
         for (const object of objects) {
             box.expandByObject(object);
         }
+        this._lastFocusBox = box;
+        this.focusCameraOnBox(box);
+    }
+    focusCameraOnBox(box) {
+        const offset = 1.2;
         const size = box.getSize(new Vector3());
         const center = box.getCenter(new Vector3());
         const maxSize = Math.max(size.x, size.y, size.z);
@@ -949,8 +963,11 @@ class GltfViewer {
                 this.highlightMeshAtPoint(x, y);
             }, 30);
         };
-        this.initCanvas(containerId);
         this.initObservables();
+        this._container = document.getElementById(containerId);
+        if (!this._container) {
+            throw new Error("Container not found!");
+        }
         this._options = new GltfViewerOptions(options);
         this._optionsChange.next(this._options);
         this._colorRgbRmoUtils = new ColorRgbRmoUtils(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
@@ -960,13 +977,9 @@ class GltfViewer {
         this._pickingScene = new PickingScene();
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
-        this._cameraControls = new CameraControls(this._canvas, () => this.renderOnCameraMove());
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
-            const { width, height } = this._container.getBoundingClientRect();
-            this._cameraControls.resize(width, height);
-            this.resizeRenderer(width, height);
+            this.resizeRenderer();
         });
-        this.addCanvasEventListeners();
     }
     destroy() {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
@@ -999,8 +1012,7 @@ class GltfViewer {
             let rendererReinitialized = false;
             let lightsReinitialized = false;
             let colorsUpdated = false;
-            if (this._options.useAntialiasing !== oldOptions.useAntialiasing
-                || this._options.usePhysicalLights !== oldOptions.usePhysicalLights) {
+            if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
                 this.initRenderer();
                 rendererReinitialized = true;
             }
@@ -1008,6 +1020,7 @@ class GltfViewer {
                 || this._options.ambientLightIntensity !== oldOptions.ambientLightIntensity
                 || this._options.hemiLightIntensity !== oldOptions.hemiLightIntensity
                 || this._options.dirLightIntensity !== oldOptions.dirLightIntensity) {
+                this._renderer.physicallyCorrectLights = this._options.usePhysicalLights;
                 this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity);
                 lightsReinitialized = true;
             }
@@ -1023,10 +1036,10 @@ class GltfViewer {
             }
             if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
                 if (this._options.highlightingEnabled) {
-                    this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
+                    this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
                 }
                 else {
-                    this._canvas.removeEventListener("mousemove", this.onCanvasMouseMove);
+                    this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
                 }
             }
             if (this._options.meshMergeType !== oldOptions.meshMergeType
@@ -1140,28 +1153,21 @@ class GltfViewer {
     }
     addCanvasEventListeners() {
         const { highlightingEnabled } = this._options;
-        this._canvas.addEventListener("pointerdown", this.onCanvasPointerDown);
-        this._canvas.addEventListener("pointerup", this.onCanvasPointerUp);
+        this._renderer.domElement.addEventListener("pointerdown", this.onCanvasPointerDown);
+        this._renderer.domElement.addEventListener("pointerup", this.onCanvasPointerUp);
         if (highlightingEnabled) {
-            this._canvas.addEventListener("mousemove", this.onCanvasMouseMove);
+            this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
         }
-    }
-    initCanvas(containerId) {
-        this._container = document.getElementById(containerId);
-        if (!this._container) {
-            throw new Error("Container not found!");
-        }
-        this._canvas = document.createElement("canvas");
-        this._container.appendChild(this._canvas);
     }
     initRenderer() {
         if (this._renderer) {
+            this._renderer.domElement.remove();
             this._renderer.dispose();
+            this._renderer.forceContextLoss();
             this._renderer = null;
         }
         const { useAntialiasing, usePhysicalLights } = this._options;
         const renderer = new WebGLRenderer({
-            canvas: this._canvas,
             alpha: true,
             antialias: useAntialiasing,
         });
@@ -1170,12 +1176,22 @@ class GltfViewer {
         renderer.toneMapping = NoToneMapping;
         renderer.physicallyCorrectLights = usePhysicalLights;
         this._renderer = renderer;
-    }
-    resizeRenderer(width, height) {
-        if (this._renderer) {
-            this._renderer.setSize(width, height, false);
-            this.render();
+        this.resizeRenderer();
+        this.addCanvasEventListeners();
+        if (this._cameraControls) {
+            this._cameraControls.changeCanvas(this._renderer.domElement);
         }
+        else {
+            this._cameraControls = new CameraControls(this._renderer.domElement, () => this.renderOnCameraMove());
+        }
+        this._container.append(this._renderer.domElement);
+    }
+    resizeRenderer() {
+        var _a, _b;
+        const { width, height } = this._container.getBoundingClientRect();
+        (_a = this._cameraControls) === null || _a === void 0 ? void 0 : _a.resize(width, height);
+        (_b = this._renderer) === null || _b === void 0 ? void 0 : _b.setSize(width, height, false);
+        this.render();
     }
     updateRenderSceneAsync() {
         return __awaiter$2(this, void 0, void 0, function* () {

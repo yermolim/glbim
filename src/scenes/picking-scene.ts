@@ -1,7 +1,7 @@
 import { Scene, Mesh, Color, PerspectiveCamera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
-import { MeshBgBm, MeshBgSm } from "./common-types";
+import { MeshBgBm, MeshBgSm } from "../common-types";
 
 export class PickingScene {
   private _scene: Scene;

@@ -1,8 +1,8 @@
 import { Light, Scene, Mesh, BufferGeometry, 
   Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute } from "three";
 
-import { ModelGeometryInfo, MeshMergeType, MeshBgSm, RenderGeometry } from "./common-types";
-import { ColorRgbRmo, ColorRgbRmoUtils } from "./color-rgb-rmo";
+import { ModelGeometryInfo, MeshMergeType, MeshBgSm, RenderGeometry } from "../common-types";
+import { ColorRgbRmo, ColorRgbRmoUtils } from "../color-rgb-rmo";
 
 export class RenderScene {
   private _colorRgbRmoUtils: ColorRgbRmoUtils;
