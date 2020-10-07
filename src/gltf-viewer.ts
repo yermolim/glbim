@@ -456,7 +456,6 @@ export class GltfViewer {
       }
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
-      console.log(frameTime);
     });
   }
 
