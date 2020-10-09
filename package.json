@@ -23,6 +23,7 @@
     "glb",
     "gltf",
     "threejs",
+    "webgl",
     "draco",
     "rxjs"
   ],
