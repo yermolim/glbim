@@ -1,5 +1,5 @@
 import { Color, MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
-  NormalBlending, DoubleSide } from "three";
+  MeshBasicMaterial, LineBasicMaterial, NormalBlending, DoubleSide } from "three";
 import { MeshBgSm } from "./common-types";
 
 export class ColorRgbRmo {
@@ -103,6 +103,9 @@ export class ColorRgbRmoUtils {
 
   private _globalMaterial: MeshStandardMaterial;
   private _simpleMaterial: MeshPhongMaterial;
+  private _markerMaterials: MeshBasicMaterial[];
+  private _lineMaterials: LineBasicMaterial[];
+
   private _materials = new Map<string, MeshStandardMaterial>();
 
   get globalMaterial(): MeshStandardMaterial {
@@ -110,6 +113,12 @@ export class ColorRgbRmoUtils {
   }
   get simpleMaterial(): MeshPhongMaterial {
     return this._simpleMaterial;
+  }
+  get markerMaterials(): MeshBasicMaterial[] {
+    return this._markerMaterials;
+  }
+  get lineMaterials(): LineBasicMaterial[] {
+    return this._lineMaterials;
   }
   get materials(): MeshStandardMaterial[] {
     return [...this._materials.values()];
@@ -124,6 +133,14 @@ export class ColorRgbRmoUtils {
 
     this._globalMaterial = this.buildGlobalMaterial();
     this._simpleMaterial = this.buildSimpleMaterial();
+
+    this._markerMaterials = new Array(3);
+    this._markerMaterials[0] = this.buildMarkerMaterial(0xFF00FF);
+    this._markerMaterials[1] = this.buildMarkerMaterial(0x391285);
+    this._markerMaterials[2] = this.buildMarkerMaterial(0x00FFFF);
+
+    this._lineMaterials = new Array(1);
+    this._lineMaterials[0] = this.buildLineMaterial(0x0000FF, 3);
   }
 
   updateColors(isolationColor: number, isolationOpacity: number, 
@@ -143,8 +160,16 @@ export class ColorRgbRmoUtils {
   destroy() {
     this._globalMaterial.dispose();
     this._globalMaterial = null; 
+
     this._simpleMaterial.dispose();
     this._simpleMaterial = null;
+
+    this._markerMaterials?.forEach(x => x.dispose);
+    this._markerMaterials = null;
+
+    this._lineMaterials?.forEach(x => x.dispose);
+    this._markerMaterials = null;
+
     this._materials.forEach(v => v.dispose());
     this._materials = null;
   }
@@ -262,5 +287,13 @@ export class ColorRgbRmoUtils {
       opacity: rgbRmo.opacity,
     });
     return material;
+  }  
+
+  private buildMarkerMaterial(color: number): MeshBasicMaterial {
+    return new MeshBasicMaterial({color});
+  }
+  
+  private buildLineMaterial(color: number, width: number): LineBasicMaterial {
+    return new LineBasicMaterial({color, linewidth: width});
   }
 }

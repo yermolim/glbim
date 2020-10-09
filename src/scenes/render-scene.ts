@@ -1,7 +1,8 @@
-import { Light, Scene, Mesh, BufferGeometry, 
-  Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute } from "three";
+import { Light, Scene, Mesh, Vector3, BufferGeometry, BoxBufferGeometry, SphereBufferGeometry,
+  Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Line } from "three";
 
-import { ModelGeometryInfo, MeshMergeType, MeshBgSm, RenderGeometry } from "../common-types";
+import {MarkerType, SegmentType, MeshMergeType, MeshBgSm, MeshBgBm, 
+  RenderGeometry, ModelGeometryInfo, Marker, Segment } from "../common-types";
 import { ColorRgbRmo, ColorRgbRmoUtils } from "../color-rgb-rmo";
 
 export class RenderScene {
@@ -11,6 +12,8 @@ export class RenderScene {
 
   private _scene: Scene;
   private _geometries: RenderGeometry[] = [];
+  private _markers = new Map<MarkerType, Marker>();
+  private _segments = new Map<SegmentType, Segment>();
   
   private _geometryIndexBySourceMesh = new Map<MeshBgSm, number>();
   private _sourceMeshesByGeometryIndex = new Map<number, MeshBgSm[]>();
@@ -23,32 +26,144 @@ export class RenderScene {
   get geometries(): RenderGeometry[] {
     return this._geometries;
   }
+  get meshes(): MeshBgSm[] {
+    return [...this._renderMeshBySourceMesh.values()];
+  }
 
   constructor(colorRgbRmoUtils: ColorRgbRmoUtils) {
     if (!colorRgbRmoUtils) {
       throw new Error("ColorRgbRmoUtils is undefined!");
     }
     this._colorRgbRmoUtils = colorRgbRmoUtils;
+
+    this.buildMarkers();
+    this.buildSegments();
   }
 
   destroy() {    
+    this._scene = null;
+
     this._geometries?.forEach(x => x.geometry.dispose());
     this._geometries = null;
-    this._scene = null;
+
+    this._markers?.forEach(v => v.mesh.geometry.dispose());
+    this._markers = null;
+
+    this._segments?.forEach(v => v.line.geometry.dispose());
+    this._segments = null;
   }
   
   async updateSceneAsync(lights: Light[], meshes: MeshBgSm[], models: ModelGeometryInfo[], 
     meshMergeType: MeshMergeType): Promise<void> {
-    this._scene = null;
-    const scene = new Scene();
-    scene.add(...lights);     
 
+    this.deleteScene();
+    await this.createSceneAsync(lights, meshes, models, meshMergeType);
+  }  
+  
+  updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
+    if (this._currentMergeType) {
+      this.updateMeshGeometryColors(sourceMeshes);
+    } else {
+      this.updateMeshMaterials(sourceMeshes);
+    }
+
+    this.sortGeometryIndicesByOpacity(); 
+  }
+
+  // #region markers
+  setMarker(type: MarkerType, position: Vector3) {
+    const marker = this._markers.get(type);
+    if (!marker.active) {
+      this.scene.add(marker.mesh);
+      marker.active = true;
+    }
+    marker.mesh.position.set(position.x, position.y, position.z);
+  } 
+
+  resetMarker(type: MarkerType) {
+    const marker = this._markers.get(type);
+    if (marker.active) {
+      this.scene.remove(marker.mesh);
+      marker.active = false;
+      marker.mesh.position.set(0, 0, 0);
+    }
+  }  
+
+  resetMarkers() {
+    [...this._markers.keys()].forEach(x => this.resetMarker(x));
+  }
+  // #endregion
+
+  // #region segments
+  setSegment(type: SegmentType, start: Vector3, end: Vector3) {
+    const segment = this._segments.get(type);
+    if (!segment.active) {
+      this.scene.add(segment.line);
+      segment.active = true;
+    }
+    segment.line.geometry.setFromPoints([start, end]);
+  }
+
+  resetSegment(type: SegmentType) {
+    const segment = this._segments.get(type);
+    if (segment.active) {
+      this.scene.remove(segment.line);
+      segment.active = false;
+      segment.line.geometry.setFromPoints([new Vector3(), new Vector3()]);
+    }
+  }
+
+  resetSegments() {    
+    [...this._segments.keys()].forEach(x => this.resetSegment(x));
+  }
+  // #endregion
+
+  private buildMarkers() {    
+    this._markers.set("temp", {
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._colorRgbRmoUtils.markerMaterials[0]),
+      active: false,
+      type: "temp",
+    });
+    this._markers.set("start", {
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._colorRgbRmoUtils.markerMaterials[1]),
+      active: false,
+      type: "start",
+    });
+    this._markers.set("end", {
+      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._colorRgbRmoUtils.markerMaterials[2]),
+      active: false,
+      type: "end",
+    });
+  }
+
+  private buildSegments() {  
+    const distanceLine = new Line(new BufferGeometry()
+      .setFromPoints([new Vector3(), new Vector3()]), this._colorRgbRmoUtils.lineMaterials[0]);
+    distanceLine.frustumCulled = false;
+    this._segments.set("distance", {
+      line: distanceLine,
+      active: false,
+      type: "distance",
+    });
+  }
+
+  // #region private scene methods 
+  private deleteScene() {   
     this._geometries.forEach(x => x.geometry.dispose());
     this._geometries.length = 0;
     this._geometryIndexBySourceMesh.clear();   
     this._sourceMeshesByGeometryIndex.clear(); 
     this._renderMeshBySourceMesh.clear();  
     this._geometryIndicesNeedSort.clear();  
+    this._markers.forEach(x => x.active = false);
+    this._segments.forEach(x => x.active = false);
+    this._scene = null;
+  }
+
+  private async createSceneAsync(lights: Light[], meshes: MeshBgSm[], 
+    models: ModelGeometryInfo[], meshMergeType: MeshMergeType): Promise<void> {    
+    const scene = new Scene();
+    scene.add(...lights);
 
     if (meshMergeType) {
       const meshGroups = await this.groupModelMeshesByMergeType(meshes, 
@@ -85,16 +200,6 @@ export class RenderScene {
 
     this._currentMergeType = meshMergeType;
     this._scene = scene;
-  }  
-  
-  updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
-    if (this._currentMergeType) {
-      this.updateMeshGeometryColors(sourceMeshes);
-    } else {
-      this.updateMeshMaterials(sourceMeshes);
-    }
-
-    this.sortGeometryIndicesByOpacity(); 
   }
 
   private async groupModelMeshesByMergeType(meshes: MeshBgSm[], models: ModelGeometryInfo[], 
@@ -274,5 +379,6 @@ export class RenderScene {
       indices.needsUpdate = true;
     });
     this._geometryIndicesNeedSort.clear();
-  }  
+  } 
+  // #endregion
 }

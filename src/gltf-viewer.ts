@@ -2,7 +2,7 @@ import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from
 import { first } from "rxjs/operators";
 
 import { WebGLRenderer, NoToneMapping, sRGBEncoding,
-  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry } from "three";
+  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry, SphereBufferGeometry, MeshBasicMaterial, Vector3 } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -10,16 +10,16 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper, DistanceMeasure, Vec4 } from "./common-types";
+import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ColorRgbRmo, ColorRgbRmoUtils } from "./color-rgb-rmo";
 import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
 import { CameraControls } from "./camera-controls";
 import { Lights } from "./lights";
-import { GltfViewerOptions } from "./gltf-viewer-options";
 
-export { ModelFileInfo, ModelOpenedInfo, GltfViewerOptions };
+export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, DistanceMeasure, Vec4 };
 
 export class GltfViewer {
   // #region public observables
@@ -32,6 +32,8 @@ export class GltfViewer {
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
   lastFrameTime$: Observable<number>;
+  snapPointChange$: Observable<Vec4>;
+  distanceMeasureChange$: Observable<DistanceMeasure>;
   // #endregion  
   
   // #region private rx subjects
@@ -40,18 +42,22 @@ export class GltfViewer {
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
   private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
-  private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);   
+  private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);  
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
+  private _snapPointChange = new Subject<Vec4>();  
+  private _distanceMeasureChange = new Subject<DistanceMeasure>();  
   // #endregion
   
   private _subscriptions: Subscription[] = [];
   
-  private _options: GltfViewerOptions;  
-
   private _container: Element;
   private _containerResizeSensor: ResizeSensor;
+  private _options: GltfViewerOptions;  
+
+  private _measureMode = false;
+  private _measurePoints: {start: Vector3; end: Vector3} = {start: null, end: null};
 
   // #region rendering related fields
   private _renderer: WebGLRenderer;
@@ -66,7 +72,7 @@ export class GltfViewer {
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
   // #endregion
 
-  // #region selection related fieds
+  // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
   private _pickingScene: PickingScene;
 
@@ -293,6 +299,22 @@ export class GltfViewer {
   getSelectedItems(): Set<string> {
     return this._selectionChange.getValue();
   }
+
+  toggleMeasureMode(value: boolean) {
+    if (this._measureMode === value) {
+      return;
+    }
+    if (this._measureMode) {
+      this.clearMeasurements();
+      this._measureMode = false;
+    } else {
+      this._measureMode = true;
+    }
+  }
+
+  zoomOutScene() {
+    this.renderWholeScene();
+  }
   // #endregion
 
   // #region rx
@@ -306,6 +328,8 @@ export class GltfViewer {
     this.selectionChange$ = this._selectionChange.asObservable();
     this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
     this.lastFrameTime$ = this._lastFrameTime.asObservable();
+    this.snapPointChange$ = this._snapPointChange.asObservable();
+    this.distanceMeasureChange$ = this._distanceMeasureChange.asObservable();
   }
 
   private closeSubjects() {
@@ -318,6 +342,8 @@ export class GltfViewer {
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
     this._lastFrameTime.complete();
+    this._snapPointChange.complete();
+    this._distanceMeasureChange.complete();
   }
   // #endregion
 
@@ -337,15 +363,19 @@ export class GltfViewer {
       return;
     }
 
-    if (this._pointerEventHelper.waitForDouble) {
-      this.isolateSelectedMeshes();
-      this._pointerEventHelper.waitForDouble = false;
+    if (this._measureMode) {
+      this.setMeasureMarkerAtPoint(x, y);
     } else {
-      this._pointerEventHelper.waitForDouble = true;
-      setTimeout(() => {
+      if (this._pointerEventHelper.waitForDouble) {
+        this.isolateSelectedMeshes();
         this._pointerEventHelper.waitForDouble = false;
-      }, 300);
-      this.selectMeshAtPoint(x, y, e.ctrlKey);
+      } else {
+        this._pointerEventHelper.waitForDouble = true;
+        setTimeout(() => {
+          this._pointerEventHelper.waitForDouble = false;
+        }, 300);
+        this.selectMeshAtPoint(x, y, e.ctrlKey);
+      }
     }
 
     this._pointerEventHelper.downX = null;
@@ -363,6 +393,10 @@ export class GltfViewer {
       const x = e.clientX;
       const y = e.clientY;
       this.highlightMeshAtPoint(x, y);
+
+      if (this._measureMode) {
+        this.setTempMarkerAtPoint(x, y);
+      }
     }, 30);
   };
 
@@ -428,7 +462,7 @@ export class GltfViewer {
       this._simplifiedScene.clearScene();
     }
 
-    this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
+    this.renderWholeScene();
   }
 
   private prepareToRender(focusObjects: Object3D[] = null) {
@@ -457,6 +491,10 @@ export class GltfViewer {
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
     });
+  }  
+
+  private renderWholeScene() {    
+    this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
   }
 
   private renderOnCameraMove() {
@@ -625,9 +663,7 @@ export class GltfViewer {
   }
 
   private resetSelectionAndColorMeshes(coloringInfos: ColoringInfo[]) {    
-    this.removeIsolation();
-    this.removeSelection();
-
+    this.resetSelection();
     this.colorMeshes(coloringInfos);
   }
 
@@ -665,13 +701,21 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region item selection/isolation    
+  // #region item picking 
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {   
     return this._renderer && this._pickingScene
       ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
       : null;
   }
+
+  private getSnapPointAt(clientX: number, clientY: number): Vector3 {  
+    return this._renderer && this._pickingScene
+      ? this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, clientX, clientY)
+      : null;
+  }
+  // #endregion
   
+  // #region item selection/isolation   
   private runQueuedSelection() {    
     if (this._queuedSelection) {
       const { ids, isolate } = this._queuedSelection;
@@ -717,8 +761,13 @@ export class GltfViewer {
     this._isolatedMeshes.length = 0;
   }
 
-  private selectMeshAtPoint(x: number, y: number, keepPreviousSelection: boolean) {
-    const mesh = this.getMeshAt(x, y);
+  private resetSelection() {    
+    this.removeSelection();
+    this.removeIsolation();
+  }
+
+  private selectMeshAtPoint(clientX: number, clientY: number, keepPreviousSelection: boolean) {
+    const mesh = this.getMeshAt(clientX, clientY);
     if (!mesh) {
       this.selectMeshes([], true, false);
       return;
@@ -750,8 +799,7 @@ export class GltfViewer {
   private selectMeshes(meshes: MeshBgSm[], 
     manual: boolean, isolateSelected: boolean) { 
       
-    this.removeSelection();
-    this.removeIsolation();
+    this.resetSelection();
 
     if (!meshes?.length) {
       this.emitSelectionChanged(manual, true);
@@ -804,8 +852,8 @@ export class GltfViewer {
   // #endregion
 
   // #region item highlighting
-  private highlightMeshAtPoint(x: number, y: number) { 
-    const mesh = this.getMeshAt(x, y);  
+  private highlightMeshAtPoint(clientX: number, clientY: number) { 
+    const mesh = this.getMeshAt(clientX, clientY);  
     this.highlightItem(mesh);
   }
 
@@ -830,6 +878,80 @@ export class GltfViewer {
       this._meshesNeedColorUpdate.add(mesh);
       this._highlightedMesh = null;
     }
+  }
+  // #endregion
+
+  // #region measurements 
+  private setTempMarkerAtPoint(clientX: number, clientY: number) {    
+    const point = this.getSnapPointAt(clientX, clientY);
+    if (point) {
+      this._renderScene.setMarker("temp", point);
+      this._snapPointChange.next(new Vec4(point.x, point.y, point.z, 0, true));
+    } else {
+      this._renderScene.resetMarker("temp");
+      this._snapPointChange.next(null);
+    }
+    this.render(); 
+  }
+
+  private setMeasureMarkerAtPoint(x: number, y: number) {
+    const point = this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, x, y);
+
+    if (!point) {
+      if (this._measurePoints.start) {
+        this._measurePoints.start = null;
+      }
+      if (this._measurePoints.end) {
+        this._measurePoints.end = null;
+      }
+    } else {
+      if (this._measurePoints.end) {
+        this._measurePoints.start = this._measurePoints.end;
+        this._measurePoints.end = point;
+      } else if (this._measurePoints.start) {
+        this._measurePoints.end = point;
+      } else {
+        this._measurePoints.start = point;     
+      }
+    }
+
+    if (this._measurePoints.start) {
+      this._renderScene.setMarker("start", this._measurePoints.start);   
+    } else {
+      this._renderScene.resetMarker("start");
+    }
+
+    if (this._measurePoints.end) {
+      this._renderScene.setMarker("end", this._measurePoints.end);
+      this._renderScene.setSegment("distance", 
+        this._measurePoints.start, this._measurePoints.end);
+    } else {      
+      this._renderScene.resetMarker("end");
+      this._renderScene.resetSegment("distance");
+    }
+    
+    this.render(); 
+    this.emitDistanceMeasureChange();
+  }
+
+  private emitDistanceMeasureChange() {
+    if (this._measurePoints.start && this._measurePoints.end) {
+      this._distanceMeasureChange.next(new DistanceMeasure(
+        this._measurePoints.start, this._measurePoints.end, true));
+    } else {
+      this._distanceMeasureChange.next(null);
+    }
+  }
+
+  private clearMeasurements() {
+    this._measurePoints.start = null;
+    this._measurePoints.end = null;
+    this._distanceMeasureChange.next(null);
+
+    this._renderScene.resetMarkers();
+    this._renderScene.resetSegments();
+
+    this.render();
   }
   // #endregion
 }

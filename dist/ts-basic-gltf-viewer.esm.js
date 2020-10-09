@@ -1,6 +1,6 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { first } from 'rxjs/operators';
-import { Color, MeshPhysicalMaterial, NormalBlending, DoubleSide, MeshPhongMaterial, Scene, Mesh, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Box3, WebGLRenderTarget, MeshBasicMaterial, NoBlending, PerspectiveCamera, Vector3, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
+import { Color, MeshPhysicalMaterial, NormalBlending, DoubleSide, MeshPhongMaterial, MeshBasicMaterial, LineBasicMaterial, Vector3, Mesh, SphereBufferGeometry, BoxBufferGeometry, Line, BufferGeometry, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Box3, Raycaster, Triangle, WebGLRenderTarget, Vector2, NoBlending, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { ResizeSensor } from 'css-element-queries';
@@ -16,6 +16,54 @@ class PointerEventHelper {
             mouseMoveTimer: null,
             waitForDouble: false
         };
+    }
+}
+class Vec4 {
+    constructor(x, y, z, w = 0, toZup = false) {
+        this.x = x;
+        if (toZup) {
+            this.y = -z;
+            this.z = y;
+        }
+        else {
+            this.y = y;
+            this.z = z;
+        }
+        this.w = w;
+    }
+    static getDistance(start, end) {
+        const distX = end.x - start.x;
+        const distY = end.y - start.y;
+        const distZ = end.z - start.z;
+        const distW = Math.sqrt(distX * distX + distY * distY + distZ * distZ);
+        return new Vec4(distX, distY, distZ, distW);
+    }
+}
+class DistanceMeasure {
+    constructor(start, end, toZup) {
+        this.start = new Vec4(start.x, start.y, start.z, 0, toZup);
+        this.end = new Vec4(end.x, end.y, end.z, 0, toZup);
+        this.distance = Vec4.getDistance(this.start, this.end);
+    }
+}
+
+class GltfViewerOptions {
+    constructor(item = null) {
+        this.useAntialiasing = false;
+        this.usePhysicalLights = false;
+        this.ambientLightIntensity = 1;
+        this.hemiLightIntensity = 0.4;
+        this.dirLightIntensity = 0.6;
+        this.highlightingEnabled = true;
+        this.highlightColor = 0xFFFF00;
+        this.selectionColor = 0xFF0000;
+        this.isolationColor = 0x555555;
+        this.isolationOpacity = 0.2;
+        this.meshMergeType = null;
+        this.fastRenderType = null;
+        if (item != null) {
+            Object.assign(this, item);
+        }
     }
 }
 
@@ -97,12 +145,24 @@ class ColorRgbRmoUtils {
         this._highlightColor = new Color(highlightColor);
         this._globalMaterial = this.buildGlobalMaterial();
         this._simpleMaterial = this.buildSimpleMaterial();
+        this._markerMaterials = new Array(3);
+        this._markerMaterials[0] = this.buildMarkerMaterial(0xFF00FF);
+        this._markerMaterials[1] = this.buildMarkerMaterial(0x391285);
+        this._markerMaterials[2] = this.buildMarkerMaterial(0x00FFFF);
+        this._lineMaterials = new Array(1);
+        this._lineMaterials[0] = this.buildLineMaterial(0x0000FF, 3);
     }
     get globalMaterial() {
         return this._globalMaterial;
     }
     get simpleMaterial() {
         return this._simpleMaterial;
+    }
+    get markerMaterials() {
+        return this._markerMaterials;
+    }
+    get lineMaterials() {
+        return this._lineMaterials;
     }
     get materials() {
         return [...this._materials.values()];
@@ -118,10 +178,15 @@ class ColorRgbRmoUtils {
         this._materials.forEach(v => v.needsUpdate = true);
     }
     destroy() {
+        var _a, _b;
         this._globalMaterial.dispose();
         this._globalMaterial = null;
         this._simpleMaterial.dispose();
         this._simpleMaterial = null;
+        (_a = this._markerMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose);
+        this._markerMaterials = null;
+        (_b = this._lineMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose);
+        this._markerMaterials = null;
         this._materials.forEach(v => v.dispose());
         this._materials = null;
     }
@@ -216,6 +281,12 @@ class ColorRgbRmoUtils {
         });
         return material;
     }
+    buildMarkerMaterial(color) {
+        return new MeshBasicMaterial({ color });
+    }
+    buildLineMaterial(color, width) {
+        return new LineBasicMaterial({ color, linewidth: width });
+    }
 }
 
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
@@ -230,6 +301,8 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 class RenderScene {
     constructor(colorRgbRmoUtils) {
         this._geometries = [];
+        this._markers = new Map();
+        this._segments = new Map();
         this._geometryIndexBySourceMesh = new Map();
         this._sourceMeshesByGeometryIndex = new Map();
         this._renderMeshBySourceMesh = new Map();
@@ -238,6 +311,8 @@ class RenderScene {
             throw new Error("ColorRgbRmoUtils is undefined!");
         }
         this._colorRgbRmoUtils = colorRgbRmoUtils;
+        this.buildMarkers();
+        this.buildSegments();
     }
     get scene() {
         return this._scene;
@@ -245,23 +320,114 @@ class RenderScene {
     get geometries() {
         return this._geometries;
     }
+    get meshes() {
+        return [...this._renderMeshBySourceMesh.values()];
+    }
     destroy() {
-        var _a;
+        var _a, _b, _c;
+        this._scene = null;
         (_a = this._geometries) === null || _a === void 0 ? void 0 : _a.forEach(x => x.geometry.dispose());
         this._geometries = null;
-        this._scene = null;
+        (_b = this._markers) === null || _b === void 0 ? void 0 : _b.forEach(v => v.mesh.geometry.dispose());
+        this._markers = null;
+        (_c = this._segments) === null || _c === void 0 ? void 0 : _c.forEach(v => v.line.geometry.dispose());
+        this._segments = null;
     }
     updateSceneAsync(lights, meshes, models, meshMergeType) {
         return __awaiter(this, void 0, void 0, function* () {
-            this._scene = null;
+            this.deleteScene();
+            yield this.createSceneAsync(lights, meshes, models, meshMergeType);
+        });
+    }
+    updateMeshColors(sourceMeshes) {
+        if (this._currentMergeType) {
+            this.updateMeshGeometryColors(sourceMeshes);
+        }
+        else {
+            this.updateMeshMaterials(sourceMeshes);
+        }
+        this.sortGeometryIndicesByOpacity();
+    }
+    setMarker(type, position) {
+        const marker = this._markers.get(type);
+        if (!marker.active) {
+            this.scene.add(marker.mesh);
+            marker.active = true;
+        }
+        marker.mesh.position.set(position.x, position.y, position.z);
+    }
+    resetMarker(type) {
+        const marker = this._markers.get(type);
+        if (marker.active) {
+            this.scene.remove(marker.mesh);
+            marker.active = false;
+            marker.mesh.position.set(0, 0, 0);
+        }
+    }
+    resetMarkers() {
+        [...this._markers.keys()].forEach(x => this.resetMarker(x));
+    }
+    setSegment(type, start, end) {
+        const segment = this._segments.get(type);
+        if (!segment.active) {
+            this.scene.add(segment.line);
+            segment.active = true;
+        }
+        segment.line.geometry.setFromPoints([start, end]);
+    }
+    resetSegment(type) {
+        const segment = this._segments.get(type);
+        if (segment.active) {
+            this.scene.remove(segment.line);
+            segment.active = false;
+            segment.line.geometry.setFromPoints([new Vector3(), new Vector3()]);
+        }
+    }
+    resetSegments() {
+        [...this._segments.keys()].forEach(x => this.resetSegment(x));
+    }
+    buildMarkers() {
+        this._markers.set("temp", {
+            mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._colorRgbRmoUtils.markerMaterials[0]),
+            active: false,
+            type: "temp",
+        });
+        this._markers.set("start", {
+            mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._colorRgbRmoUtils.markerMaterials[1]),
+            active: false,
+            type: "start",
+        });
+        this._markers.set("end", {
+            mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._colorRgbRmoUtils.markerMaterials[2]),
+            active: false,
+            type: "end",
+        });
+    }
+    buildSegments() {
+        const distanceLine = new Line(new BufferGeometry()
+            .setFromPoints([new Vector3(), new Vector3()]), this._colorRgbRmoUtils.lineMaterials[0]);
+        distanceLine.frustumCulled = false;
+        this._segments.set("distance", {
+            line: distanceLine,
+            active: false,
+            type: "distance",
+        });
+    }
+    deleteScene() {
+        this._geometries.forEach(x => x.geometry.dispose());
+        this._geometries.length = 0;
+        this._geometryIndexBySourceMesh.clear();
+        this._sourceMeshesByGeometryIndex.clear();
+        this._renderMeshBySourceMesh.clear();
+        this._geometryIndicesNeedSort.clear();
+        this._markers.forEach(x => x.active = false);
+        this._segments.forEach(x => x.active = false);
+        this._scene = null;
+    }
+    createSceneAsync(lights, meshes, models, meshMergeType) {
+        return __awaiter(this, void 0, void 0, function* () {
             const scene = new Scene();
             scene.add(...lights);
-            this._geometries.forEach(x => x.geometry.dispose());
-            this._geometries.length = 0;
-            this._geometryIndexBySourceMesh.clear();
-            this._sourceMeshesByGeometryIndex.clear();
-            this._renderMeshBySourceMesh.clear();
-            this._geometryIndicesNeedSort.clear();
             if (meshMergeType) {
                 const meshGroups = yield this.groupModelMeshesByMergeType(meshes, models, meshMergeType);
                 for (const meshGroup of meshGroups) {
@@ -297,15 +463,6 @@ class RenderScene {
             this._currentMergeType = meshMergeType;
             this._scene = scene;
         });
-    }
-    updateMeshColors(sourceMeshes) {
-        if (this._currentMergeType) {
-            this.updateMeshGeometryColors(sourceMeshes);
-        }
-        else {
-            this.updateMeshMaterials(sourceMeshes);
-        }
-        this.sortGeometryIndicesByOpacity();
     }
     groupModelMeshesByMergeType(meshes, models, meshMergeType) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -677,6 +834,48 @@ class SimplifiedScene {
     }
 }
 
+class PointSnap {
+    constructor() {
+        this.raycaster = new Raycaster();
+    }
+    destroy() {
+    }
+    getPoint(camera, mesh, mousePoint) {
+        this.raycaster.setFromCamera(mousePoint, camera);
+        const intersection = this.raycaster.intersectObject(mesh)[0];
+        if (!intersection) {
+            return null;
+        }
+        const intersectionPoint = new Vector3().copy(intersection.point);
+        intersection.object.worldToLocal(intersectionPoint);
+        const snapPoint = new Vector3().copy(this.getNearestVertex(mesh, intersectionPoint, intersection.face));
+        if (!snapPoint) {
+            return null;
+        }
+        intersection.object.localToWorld(snapPoint);
+        return snapPoint;
+    }
+    getNearestVertex(mesh, point, face) {
+        const a = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.a);
+        const b = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.b);
+        const c = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.c);
+        const baryPoint = new Vector3();
+        new Triangle(a, b, c).getBarycoord(point, baryPoint);
+        if (baryPoint.x > baryPoint.y && baryPoint.x > baryPoint.z) {
+            return a;
+        }
+        else if (baryPoint.y > baryPoint.x && baryPoint.y > baryPoint.z) {
+            return b;
+        }
+        else if (baryPoint.z > baryPoint.x && baryPoint.z > baryPoint.y) {
+            return c;
+        }
+        else {
+            return null;
+        }
+    }
+}
+
 class PickingScene {
     constructor() {
         this._lastPickingColor = 0;
@@ -684,11 +883,11 @@ class PickingScene {
         this._releasedMaterials = [];
         this._pickingMeshById = new Map();
         this._sourceMeshByPickingColor = new Map();
-        const target = new WebGLRenderTarget(1, 1);
         const scene = new Scene();
         scene.background = new Color(0);
         this._scene = scene;
-        this._target = target;
+        this._target = new WebGLRenderTarget(1, 1);
+        this._pointSnap = new PointSnap();
     }
     destroy() {
         this._materials.forEach(x => x.dispose());
@@ -719,11 +918,39 @@ class PickingScene {
         }
     }
     getSourceMeshAt(camera, renderer, clientX, clientY) {
+        const position = this.convertClientToCanvas(renderer, clientX, clientY);
+        return this.getSourceMeshAtPosition(camera, renderer, position);
+    }
+    getSnapPointAt(camera, renderer, clientX, clientY) {
+        const position = this.convertClientToCanvas(renderer, clientX, clientY);
+        const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
+        if (!mesh) {
+            return null;
+        }
+        return this.getMeshSnapPointAtPosition(camera, renderer, position, this._pickingMeshById.get(mesh.uuid));
+    }
+    convertClientToCanvas(renderer, clientX, clientY) {
         const rect = renderer.domElement.getBoundingClientRect();
-        const x = (clientX - rect.left) * renderer.domElement.width / rect.width;
-        const y = (clientY - rect.top) * renderer.domElement.height / rect.height;
         const pixelRatio = renderer.getPixelRatio();
-        camera.setViewOffset(renderer.getContext().drawingBufferWidth, renderer.getContext().drawingBufferHeight, x * pixelRatio || 0, y * pixelRatio || 0, 1, 1);
+        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
+        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
+        return new Vector2(x, y);
+    }
+    convertWorldToCanvas(camera, renderer, point) {
+        const nPoint = new Vector3().copy(point).project(camera);
+        if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
+            return null;
+        }
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+        const x = (nPoint.x + 1) * canvasWidth / 2;
+        const y = (nPoint.y - 1) * canvasHeight / -2;
+        return new Vector2(x, y);
+    }
+    getSourceMeshAtPosition(camera, renderer, position) {
+        const context = renderer.getContext();
+        camera.setViewOffset(context.drawingBufferWidth, context.drawingBufferHeight, position.x, position.y, 1, 1);
         renderer.setRenderTarget(this._target);
         renderer.render(this._scene, camera);
         renderer.setRenderTarget(null);
@@ -733,6 +960,13 @@ class PickingScene {
         const hex = ((pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2])).toString(16);
         const mesh = this._sourceMeshByPickingColor.get(hex);
         return mesh;
+    }
+    getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
+        const context = renderer.getContext();
+        const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
+        const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
+        const point = this._pointSnap.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
+        return point;
     }
     nextPickingColor() {
         if (this._lastPickingColor === 16777215) {
@@ -868,26 +1102,6 @@ class Lights {
     }
 }
 
-class GltfViewerOptions {
-    constructor(item = null) {
-        this.useAntialiasing = false;
-        this.usePhysicalLights = false;
-        this.ambientLightIntensity = 1;
-        this.hemiLightIntensity = 0.4;
-        this.dirLightIntensity = 0.6;
-        this.highlightingEnabled = true;
-        this.highlightColor = 0xFFFF00;
-        this.selectionColor = 0xFF0000;
-        this.isolationColor = 0x555555;
-        this.isolationOpacity = 0.2;
-        this.meshMergeType = null;
-        this.fastRenderType = null;
-        if (item != null) {
-            Object.assign(this, item);
-        }
-    }
-}
-
 var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -908,7 +1122,11 @@ class GltfViewer {
         this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
         this._lastFrameTime = new BehaviorSubject(0);
+        this._snapPointChange = new Subject();
+        this._distanceMeasureChange = new Subject();
         this._subscriptions = [];
+        this._measureMode = false;
+        this._measurePoints = { start: null, end: null };
         this._meshesNeedColorUpdate = new Set();
         this._pointerEventHelper = PointerEventHelper.default;
         this._queuedColoring = null;
@@ -937,16 +1155,21 @@ class GltfViewer {
                 || Math.abs(y - this._pointerEventHelper.downY) > this._pointerEventHelper.maxDiff) {
                 return;
             }
-            if (this._pointerEventHelper.waitForDouble) {
-                this.isolateSelectedMeshes();
-                this._pointerEventHelper.waitForDouble = false;
+            if (this._measureMode) {
+                this.setMeasureMarkerAtPoint(x, y);
             }
             else {
-                this._pointerEventHelper.waitForDouble = true;
-                setTimeout(() => {
+                if (this._pointerEventHelper.waitForDouble) {
+                    this.isolateSelectedMeshes();
                     this._pointerEventHelper.waitForDouble = false;
-                }, 300);
-                this.selectMeshAtPoint(x, y, e.ctrlKey);
+                }
+                else {
+                    this._pointerEventHelper.waitForDouble = true;
+                    setTimeout(() => {
+                        this._pointerEventHelper.waitForDouble = false;
+                    }, 300);
+                    this.selectMeshAtPoint(x, y, e.ctrlKey);
+                }
             }
             this._pointerEventHelper.downX = null;
             this._pointerEventHelper.downY = null;
@@ -961,6 +1184,9 @@ class GltfViewer {
                 const x = e.clientX;
                 const y = e.clientY;
                 this.highlightMeshAtPoint(x, y);
+                if (this._measureMode) {
+                    this.setTempMarkerAtPoint(x, y);
+                }
             }, 30);
         };
         this.initObservables();
@@ -1129,6 +1355,21 @@ class GltfViewer {
     getSelectedItems() {
         return this._selectionChange.getValue();
     }
+    toggleMeasureMode(value) {
+        if (this._measureMode === value) {
+            return;
+        }
+        if (this._measureMode) {
+            this.clearMeasurements();
+            this._measureMode = false;
+        }
+        else {
+            this._measureMode = true;
+        }
+    }
+    zoomOutScene() {
+        this.renderWholeScene();
+    }
     initObservables() {
         this.optionsChange$ = this._optionsChange.asObservable();
         this.loadingStateChange$ = this._loadingStateChange.asObservable();
@@ -1139,6 +1380,8 @@ class GltfViewer {
         this.selectionChange$ = this._selectionChange.asObservable();
         this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
+        this.snapPointChange$ = this._snapPointChange.asObservable();
+        this.distanceMeasureChange$ = this._distanceMeasureChange.asObservable();
     }
     closeSubjects() {
         this._optionsChange.complete();
@@ -1150,6 +1393,8 @@ class GltfViewer {
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
         this._lastFrameTime.complete();
+        this._snapPointChange.complete();
+        this._distanceMeasureChange.complete();
     }
     addCanvasEventListeners() {
         const { highlightingEnabled } = this._options;
@@ -1202,7 +1447,7 @@ class GltfViewer {
             else {
                 this._simplifiedScene.clearScene();
             }
-            this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
+            this.renderWholeScene();
         });
     }
     prepareToRender(focusObjects = null) {
@@ -1231,6 +1476,9 @@ class GltfViewer {
             const frameTime = performance.now() - start;
             this._lastFrameTime.next(frameTime);
         });
+    }
+    renderWholeScene() {
+        this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
     }
     renderOnCameraMove() {
         if (this._options.fastRenderType) {
@@ -1375,8 +1623,7 @@ class GltfViewer {
         }
     }
     resetSelectionAndColorMeshes(coloringInfos) {
-        this.removeIsolation();
-        this.removeSelection();
+        this.resetSelection();
         this.colorMeshes(coloringInfos);
     }
     colorMeshes(coloringInfos) {
@@ -1411,6 +1658,11 @@ class GltfViewer {
     getMeshAt(clientX, clientY) {
         return this._renderer && this._pickingScene
             ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
+            : null;
+    }
+    getSnapPointAt(clientX, clientY) {
+        return this._renderer && this._pickingScene
+            ? this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, clientX, clientY)
             : null;
     }
     runQueuedSelection() {
@@ -1452,8 +1704,12 @@ class GltfViewer {
         }
         this._isolatedMeshes.length = 0;
     }
-    selectMeshAtPoint(x, y, keepPreviousSelection) {
-        const mesh = this.getMeshAt(x, y);
+    resetSelection() {
+        this.removeSelection();
+        this.removeIsolation();
+    }
+    selectMeshAtPoint(clientX, clientY, keepPreviousSelection) {
+        const mesh = this.getMeshAt(clientX, clientY);
         if (!mesh) {
             this.selectMeshes([], true, false);
             return;
@@ -1481,8 +1737,7 @@ class GltfViewer {
         return true;
     }
     selectMeshes(meshes, manual, isolateSelected) {
-        this.removeSelection();
-        this.removeIsolation();
+        this.resetSelection();
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
             this.emitSelectionChanged(manual, true);
             return null;
@@ -1524,8 +1779,8 @@ class GltfViewer {
             this._manualSelectionChange.next(ids);
         }
     }
-    highlightMeshAtPoint(x, y) {
-        const mesh = this.getMeshAt(x, y);
+    highlightMeshAtPoint(clientX, clientY) {
+        const mesh = this.getMeshAt(clientX, clientY);
         this.highlightItem(mesh);
     }
     highlightItem(mesh) {
@@ -1548,6 +1803,73 @@ class GltfViewer {
             this._highlightedMesh = null;
         }
     }
+    setTempMarkerAtPoint(clientX, clientY) {
+        const point = this.getSnapPointAt(clientX, clientY);
+        if (point) {
+            this._renderScene.setMarker("temp", point);
+            this._snapPointChange.next(new Vec4(point.x, point.y, point.z, 0, true));
+        }
+        else {
+            this._renderScene.resetMarker("temp");
+            this._snapPointChange.next(null);
+        }
+        this.render();
+    }
+    setMeasureMarkerAtPoint(x, y) {
+        const point = this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, x, y);
+        if (!point) {
+            if (this._measurePoints.start) {
+                this._measurePoints.start = null;
+            }
+            if (this._measurePoints.end) {
+                this._measurePoints.end = null;
+            }
+        }
+        else {
+            if (this._measurePoints.end) {
+                this._measurePoints.start = this._measurePoints.end;
+                this._measurePoints.end = point;
+            }
+            else if (this._measurePoints.start) {
+                this._measurePoints.end = point;
+            }
+            else {
+                this._measurePoints.start = point;
+            }
+        }
+        if (this._measurePoints.start) {
+            this._renderScene.setMarker("start", this._measurePoints.start);
+        }
+        else {
+            this._renderScene.resetMarker("start");
+        }
+        if (this._measurePoints.end) {
+            this._renderScene.setMarker("end", this._measurePoints.end);
+            this._renderScene.setSegment("distance", this._measurePoints.start, this._measurePoints.end);
+        }
+        else {
+            this._renderScene.resetMarker("end");
+            this._renderScene.resetSegment("distance");
+        }
+        this.render();
+        this.emitDistanceMeasureChange();
+    }
+    emitDistanceMeasureChange() {
+        if (this._measurePoints.start && this._measurePoints.end) {
+            this._distanceMeasureChange.next(new DistanceMeasure(this._measurePoints.start, this._measurePoints.end, true));
+        }
+        else {
+            this._distanceMeasureChange.next(null);
+        }
+    }
+    clearMeasurements() {
+        this._measurePoints.start = null;
+        this._measurePoints.end = null;
+        this._distanceMeasureChange.next(null);
+        this._renderScene.resetMarkers();
+        this._renderScene.resetSegments();
+        this.render();
+    }
 }
 
-export { GltfViewer, GltfViewerOptions };
+export { DistanceMeasure, GltfViewer, GltfViewerOptions, Vec4 };

@@ -1,27 +1,29 @@
-import { Scene, Mesh, Color, PerspectiveCamera,
+import { Scene, Mesh, Color, Vector2, Vector3, PerspectiveCamera, Camera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
-import { MeshBgBm, MeshBgSm } from "../common-types";
+import { MeshBgBm, MeshBgSm, MeshBgAm } from "../common-types";
+import { PointSnap } from "../point-snap";
 
 export class PickingScene {
   private _scene: Scene;
   private _target: WebGLRenderTarget;
+  private _pointSnap: PointSnap;
 
   private _lastPickingColor = 0;
+
   private _materials: MeshBasicMaterial[] = [];
   private _releasedMaterials: MeshBasicMaterial[] = [];
 
   private _pickingMeshById = new Map<string, MeshBgBm>();
   private _sourceMeshByPickingColor = new Map<string, MeshBgSm>();
 
-  constructor() {    
-    const target = new WebGLRenderTarget(1, 1);
-
+  constructor() { 
     const scene = new Scene();
     scene.background = new Color(0);
-
     this._scene = scene;
-    this._target = target;
+
+    this._target = new WebGLRenderTarget(1, 1);
+    this._pointSnap = new PointSnap();
   }
 
   destroy() {
@@ -57,17 +59,59 @@ export class PickingScene {
     }
   }
 
-  getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, clientX: number, clientY: number): MeshBgSm { 
+  getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
+    clientX: number, clientY: number): MeshBgSm { 
+    const position = this.convertClientToCanvas(renderer, clientX, clientY);
+    return this.getSourceMeshAtPosition(camera, renderer, position);
+  }
+
+  getSnapPointAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
+    clientX: number, clientY: number): Vector3 {
+
+    const position = this.convertClientToCanvas(renderer, clientX, clientY);
+    const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
+    if (!mesh) {
+      return null;
+    }
+
+    return this.getMeshSnapPointAtPosition(camera, renderer, position,
+      this._pickingMeshById.get(mesh.uuid));
+  }
+
+  convertClientToCanvas(renderer: WebGLRenderer, 
+    clientX: number, clientY: number): Vector2 {    
     const rect = renderer.domElement.getBoundingClientRect();
-    const x = (clientX - rect.left) * renderer.domElement.width / rect.width;
-    const y = (clientY - rect.top) * renderer.domElement.height / rect.height;     
     const pixelRatio = renderer.getPixelRatio();
+    const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
+    const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0; 
+    return new Vector2(x, y);
+  }
+
+  convertWorldToCanvas(camera: Camera, renderer: WebGLRenderer, 
+    point: Vector3): Vector2 {
+    const nPoint = new Vector3().copy(point).project(camera);
+    if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
+      // point is outside of canvas space, return null
+      return null;
+    }
+    
+    const rect = renderer.domElement.getBoundingClientRect();
+    const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+    const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+    const x = (nPoint.x + 1) * canvasWidth / 2;
+    const y = (nPoint.y - 1) * canvasHeight / -2;
+    return new Vector2(x, y);
+  }
+
+  private getSourceMeshAtPosition(camera: PerspectiveCamera, 
+    renderer: WebGLRenderer, position: Vector2): MeshBgSm {   
+    const context = renderer.getContext();  
+    
+    // set renderer and camera to 1x1 view
     camera.setViewOffset(
-      renderer.getContext().drawingBufferWidth,
-      renderer.getContext().drawingBufferHeight,
-      x * pixelRatio || 0,
-      y * pixelRatio || 0,
-      1, 1);
+      context.drawingBufferWidth,
+      context.drawingBufferHeight,
+      position.x, position.y, 1, 1);
     renderer.setRenderTarget(this._target);
     renderer.render(this._scene, camera);
 
@@ -82,6 +126,16 @@ export class PickingScene {
 
     const mesh = this._sourceMeshByPickingColor.get(hex);
     return mesh;
+  }
+
+  private getMeshSnapPointAtPosition(camera: Camera, renderer: WebGLRenderer, 
+    position: Vector2, mesh: MeshBgAm): Vector3 {
+    const context = renderer.getContext();  
+    
+    const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
+    const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
+    const point = this._pointSnap.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
+    return point;
   }
   
   private nextPickingColor(): number {
