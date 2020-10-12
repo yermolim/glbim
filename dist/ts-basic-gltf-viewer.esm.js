@@ -1,11 +1,11 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { first } from 'rxjs/operators';
-import { Color, MeshPhysicalMaterial, NormalBlending, DoubleSide, MeshPhongMaterial, MeshBasicMaterial, LineBasicMaterial, Vector3, Mesh, SphereBufferGeometry, BoxBufferGeometry, Line, BufferGeometry, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Box3, Raycaster, Triangle, WebGLRenderTarget, Vector2, NoBlending, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
+import { Color, MeshPhysicalMaterial, NormalBlending, DoubleSide, MeshPhongMaterial, MeshBasicMaterial, LineBasicMaterial, CanvasTexture, SpriteMaterial, PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, Quaternion, Object3D, Vector4, OrthographicCamera, BoxBufferGeometry, Mesh, Sprite, SphereBufferGeometry, Line, BufferGeometry, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Raycaster, Triangle, WebGLRenderTarget, Vector2, NoBlending, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { ResizeSensor } from 'css-element-queries';
-import { ConvexHull } from 'three/examples/jsm/math/ConvexHull';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { ConvexHull } from 'three/examples/jsm/math/ConvexHull';
 
 class PointerEventHelper {
     static get default() {
@@ -39,34 +39,13 @@ class Vec4 {
         return new Vec4(distX, distY, distZ, distW);
     }
 }
-class DistanceMeasure {
+class Distance {
     constructor(start, end, toZup) {
         this.start = new Vec4(start.x, start.y, start.z, 0, toZup);
         this.end = new Vec4(end.x, end.y, end.z, 0, toZup);
         this.distance = Vec4.getDistance(this.start, this.end);
     }
 }
-
-class GltfViewerOptions {
-    constructor(item = null) {
-        this.useAntialiasing = false;
-        this.usePhysicalLights = false;
-        this.ambientLightIntensity = 1;
-        this.hemiLightIntensity = 0.4;
-        this.dirLightIntensity = 0.6;
-        this.highlightingEnabled = true;
-        this.highlightColor = 0xFFFF00;
-        this.selectionColor = 0xFF0000;
-        this.isolationColor = 0x555555;
-        this.isolationOpacity = 0.2;
-        this.meshMergeType = null;
-        this.fastRenderType = null;
-        if (item != null) {
-            Object.assign(this, item);
-        }
-    }
-}
-
 class ColorRgbRmo {
     constructor(r, g, b, roughness, metalness, opacity) {
         this.r = r;
@@ -137,20 +116,53 @@ class ColorRgbRmo {
 ColorRgbRmo.prop = "rgbrmo";
 ColorRgbRmo.customProp = "rgbrmoC";
 ColorRgbRmo.defaultProp = "rgbrmoD";
-class ColorRgbRmoUtils {
+
+class GltfViewerOptions {
+    constructor(item = null) {
+        this.useAntialiasing = false;
+        this.usePhysicalLights = false;
+        this.ambientLightIntensity = 1;
+        this.hemiLightIntensity = 0.4;
+        this.dirLightIntensity = 0.6;
+        this.highlightingEnabled = true;
+        this.highlightColor = 0xFFFF00;
+        this.selectionColor = 0xFF0000;
+        this.isolationColor = 0x555555;
+        this.isolationOpacity = 0.2;
+        this.meshMergeType = null;
+        this.fastRenderType = null;
+        this.showAxesHelper = true;
+        if (item != null) {
+            Object.assign(this, item);
+        }
+    }
+}
+
+class Materials {
     constructor(isolationColor, isolationOpacity, selectionColor, highlightColor) {
         this._materials = new Map();
         this._isolationColor = this.buildIsolationColor(isolationColor, isolationOpacity);
         this._selectionColor = new Color(selectionColor);
         this._highlightColor = new Color(highlightColor);
         this._globalMaterial = this.buildGlobalMaterial();
-        this._simpleMaterial = this.buildSimpleMaterial();
-        this._markerMaterials = new Array(3);
-        this._markerMaterials[0] = this.buildMarkerMaterial(0xFF00FF);
-        this._markerMaterials[1] = this.buildMarkerMaterial(0x391285);
-        this._markerMaterials[2] = this.buildMarkerMaterial(0x00FFFF);
+        this._simpleMaterial = this.buildPhongMaterial();
         this._lineMaterials = new Array(1);
-        this._lineMaterials[0] = this.buildLineMaterial(0x0000FF, 3);
+        this._lineMaterials[0] = this.buildLineBasicMaterial(0x0000FF, 3);
+        this._markerMaterials = new Array(3);
+        this._markerMaterials[0] = this.buildBasicMaterial(0xFF00FF);
+        this._markerMaterials[1] = this.buildBasicMaterial(0x391285);
+        this._markerMaterials[2] = this.buildBasicMaterial(0x00FFFF);
+        this._axisMaterials = new Array(3);
+        this._axisMaterials[0] = this.buildBasicMaterial(0xFF3653);
+        this._axisMaterials[1] = this.buildBasicMaterial(0x8adb00);
+        this._axisMaterials[2] = this.buildBasicMaterial(0x2c8FFF);
+        this._axisLabelMaterials = new Array(6);
+        this._axisLabelMaterials[0] = this.buildSpriteMaterial(64, 0xFF3653, "X");
+        this._axisLabelMaterials[1] = this.buildSpriteMaterial(64, 0xA32235, "-X");
+        this._axisLabelMaterials[2] = this.buildSpriteMaterial(64, 0x8ADB00, "Y");
+        this._axisLabelMaterials[3] = this.buildSpriteMaterial(64, 0x588C00, "-Y");
+        this._axisLabelMaterials[4] = this.buildSpriteMaterial(64, 0x2C8FFF, "Z");
+        this._axisLabelMaterials[5] = this.buildSpriteMaterial(64, 0x1C5BA3, "-Z");
     }
     get globalMaterial() {
         return this._globalMaterial;
@@ -158,11 +170,17 @@ class ColorRgbRmoUtils {
     get simpleMaterial() {
         return this._simpleMaterial;
     }
+    get lineMaterials() {
+        return this._lineMaterials;
+    }
     get markerMaterials() {
         return this._markerMaterials;
     }
-    get lineMaterials() {
-        return this._lineMaterials;
+    get axisMaterials() {
+        return this._axisMaterials;
+    }
+    get axisLabelMaterials() {
+        return this._axisLabelMaterials;
     }
     get materials() {
         return [...this._materials.values()];
@@ -178,15 +196,19 @@ class ColorRgbRmoUtils {
         this._materials.forEach(v => v.needsUpdate = true);
     }
     destroy() {
-        var _a, _b;
+        var _a, _b, _c, _d;
         this._globalMaterial.dispose();
         this._globalMaterial = null;
         this._simpleMaterial.dispose();
         this._simpleMaterial = null;
-        (_a = this._markerMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose);
+        (_a = this._lineMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose());
         this._markerMaterials = null;
-        (_b = this._lineMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose);
+        (_b = this._markerMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose());
         this._markerMaterials = null;
+        (_c = this._axisMaterials) === null || _c === void 0 ? void 0 : _c.forEach(x => x.dispose());
+        this._axisMaterials = null;
+        (_d = this._axisLabelMaterials) === null || _d === void 0 ? void 0 : _d.forEach(x => { x.map.dispose(); x.dispose(); });
+        this._axisLabelMaterials = null;
         this._materials.forEach(v => v.dispose());
         this._materials = null;
     }
@@ -258,7 +280,7 @@ class ColorRgbRmoUtils {
         };
         return material;
     }
-    buildSimpleMaterial() {
+    buildPhongMaterial() {
         const material = new MeshPhongMaterial({
             color: 0x808080,
             transparent: false,
@@ -281,13 +303,200 @@ class ColorRgbRmoUtils {
         });
         return material;
     }
-    buildMarkerMaterial(color) {
+    buildBasicMaterial(color) {
         return new MeshBasicMaterial({ color });
     }
-    buildLineMaterial(color, width) {
+    buildLineBasicMaterial(color, width) {
         return new LineBasicMaterial({ color, linewidth: width });
     }
+    buildSpriteMaterial(size, color, text) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 4, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = new Color(color).getStyle();
+        ctx.fill();
+        if (text) {
+            ctx.font = size / 3 + "px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = "#000000";
+            ctx.fillText(text, size / 2, size / 2 - size / 6);
+        }
+        const texture = new CanvasTexture(canvas);
+        return new SpriteMaterial({ map: texture, toneMapped: false });
+    }
 }
+
+class CameraControls {
+    constructor(rendererCanvas, changeCallback) {
+        const camera = new PerspectiveCamera(75, 1, 1, 10000);
+        const orbitControls = new OrbitControls(camera, rendererCanvas);
+        orbitControls.addEventListener("change", changeCallback);
+        camera.position.set(0, 1000, 1000);
+        camera.lookAt(0, 0, 0);
+        orbitControls.update();
+        this._changeCallback = changeCallback;
+        this._camera = camera;
+        this._orbitControls = orbitControls;
+    }
+    get camera() {
+        return this._camera;
+    }
+    changeCanvas(rendererCanvas) {
+        this._orbitControls.dispose();
+        this._orbitControls = new OrbitControls(this.camera, rendererCanvas);
+        this._orbitControls.addEventListener("change", this._changeCallback);
+        if (this._lastFocusBox) {
+            this.focusCameraOnBox(this._lastFocusBox);
+        }
+    }
+    destroy() {
+        this._orbitControls.dispose();
+    }
+    resize(width, height) {
+        if (this._camera) {
+            this._camera.aspect = width / height;
+            this._camera.updateProjectionMatrix();
+        }
+    }
+    focusCameraOnObjects(objects, offset = 1.2) {
+        if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
+            return;
+        }
+        const box = new Box3();
+        for (const object of objects) {
+            box.expandByObject(object);
+        }
+        this._lastFocusBox = box;
+        this.focusCameraOnBox(box);
+    }
+    focusCameraOnBox(box) {
+        const offset = 1.2;
+        const size = box.getSize(new Vector3());
+        const center = box.getCenter(new Vector3());
+        const maxSize = Math.max(size.x, size.y, size.z);
+        const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
+        const fitWidthDistance = fitHeightDistance / this._camera.aspect;
+        const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
+        const direction = this._orbitControls.target.clone()
+            .sub(this._camera.position)
+            .normalize()
+            .multiplyScalar(distance);
+        this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
+        this._orbitControls.target.copy(center);
+        this._camera.near = Math.min(distance / 100, 1);
+        this._camera.far = Math.max(distance * 100, 10000);
+        this._camera.updateProjectionMatrix();
+        this._camera.position.copy(this._orbitControls.target).sub(direction);
+        this._orbitControls.update();
+    }
+}
+
+class Lights {
+    constructor(physicalLights, ambientLightIntensity, hemiLightIntensity, dirLightIntensity) {
+        const ambientLight = new AmbientLight(0x222222, physicalLights
+            ? ambientLightIntensity * Math.PI
+            : ambientLightIntensity);
+        this._ambientLight = ambientLight;
+        const hemiLight = new HemisphereLight(0xffffbb, 0x080820, physicalLights
+            ? hemiLightIntensity * Math.PI
+            : hemiLightIntensity);
+        hemiLight.position.set(0, 2000, 0);
+        this._hemisphereLight = hemiLight;
+        const dirLight = new DirectionalLight(0xffffff, physicalLights
+            ? dirLightIntensity * Math.PI
+            : dirLightIntensity);
+        dirLight.position.set(-2, 10, 2);
+        this._directionalLight = dirLight;
+    }
+    update(physicalLights, ambientLightIntensity, hemiLightIntensity, dirLightIntensity) {
+        this._ambientLight.intensity = physicalLights
+            ? ambientLightIntensity * Math.PI
+            : ambientLightIntensity;
+        this._hemisphereLight.intensity = physicalLights
+            ? hemiLightIntensity * Math.PI
+            : hemiLightIntensity;
+        this._directionalLight.intensity = physicalLights
+            ? dirLightIntensity * Math.PI
+            : dirLightIntensity;
+    }
+    getLights() {
+        return [
+            this._ambientLight,
+            this._hemisphereLight,
+            this._directionalLight,
+        ];
+    }
+    getCopy() {
+        return [
+            new AmbientLight().copy(this._ambientLight),
+            new HemisphereLight().copy(this._hemisphereLight),
+            new DirectionalLight().copy(this._directionalLight),
+        ];
+    }
+}
+
+class Axes extends Object3D {
+    constructor(materials) {
+        super();
+        this._size = 96;
+        this._viewportBak = new Vector4();
+        this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
+        this._camera.position.set(0, 0, 2);
+        this._axisGeometry = new BoxBufferGeometry(0.8, 0.05, 0.05).translate(0.4, 0, 0);
+        this.buildAxes(materials);
+    }
+    destroy() {
+        this._axisGeometry.dispose();
+    }
+    render(mainCamera, renderer) {
+        this.quaternion.copy(mainCamera.quaternion).inverse();
+        this.quaternion.multiply(Axes._toZUp);
+        this.updateMatrixWorld();
+        renderer.getViewport(this._viewportBak);
+        renderer.autoClear = false;
+        renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
+        renderer.render(this, this._camera);
+        renderer.setViewport(this._viewportBak.x, this._viewportBak.y, this._viewportBak.z, this._viewportBak.w);
+        renderer.autoClear = true;
+    }
+    buildAxes(materials) {
+        this.xAxis = new Mesh(this._axisGeometry, materials.axisMaterials[0]);
+        this.yAxis = new Mesh(this._axisGeometry, materials.axisMaterials[1]);
+        this.zAxis = new Mesh(this._axisGeometry, materials.axisMaterials[2]);
+        this.yAxis.rotation.z = Math.PI / 2;
+        this.zAxis.rotation.y = -Math.PI / 2;
+        this.add(this.xAxis);
+        this.add(this.yAxis);
+        this.add(this.zAxis);
+        this.xLabel = new Sprite(materials.axisLabelMaterials[0]);
+        this.xLabelN = new Sprite(materials.axisLabelMaterials[1]);
+        this.yLabel = new Sprite(materials.axisLabelMaterials[2]);
+        this.yLabelN = new Sprite(materials.axisLabelMaterials[3]);
+        this.zLabel = new Sprite(materials.axisLabelMaterials[4]);
+        this.zLabelN = new Sprite(materials.axisLabelMaterials[5]);
+        this.xLabel.position.x = 1;
+        this.yLabel.position.y = 1;
+        this.zLabel.position.z = 1;
+        this.xLabelN.position.x = -1;
+        this.yLabelN.position.y = -1;
+        this.zLabelN.position.z = -1;
+        this.xLabelN.scale.setScalar(0.8);
+        this.yLabelN.scale.setScalar(0.8);
+        this.zLabelN.scale.setScalar(0.8);
+        this.add(this.xLabel);
+        this.add(this.yLabel);
+        this.add(this.zLabel);
+        this.add(this.xLabelN);
+        this.add(this.yLabelN);
+        this.add(this.zLabelN);
+    }
+}
+Axes._toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
 
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -299,7 +508,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 class RenderScene {
-    constructor(colorRgbRmoUtils) {
+    constructor(materials) {
         this._geometries = [];
         this._markers = new Map();
         this._segments = new Map();
@@ -307,10 +516,10 @@ class RenderScene {
         this._sourceMeshesByGeometryIndex = new Map();
         this._renderMeshBySourceMesh = new Map();
         this._geometryIndicesNeedSort = new Set();
-        if (!colorRgbRmoUtils) {
+        if (!materials) {
             throw new Error("ColorRgbRmoUtils is undefined!");
         }
-        this._colorRgbRmoUtils = colorRgbRmoUtils;
+        this._materials = materials;
         this.buildMarkers();
         this.buildSegments();
     }
@@ -388,24 +597,24 @@ class RenderScene {
     }
     buildMarkers() {
         this._markers.set("temp", {
-            mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._colorRgbRmoUtils.markerMaterials[0]),
+            mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._materials.markerMaterials[0]),
             active: false,
             type: "temp",
         });
         this._markers.set("start", {
-            mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._colorRgbRmoUtils.markerMaterials[1]),
+            mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._materials.markerMaterials[1]),
             active: false,
             type: "start",
         });
         this._markers.set("end", {
-            mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._colorRgbRmoUtils.markerMaterials[2]),
+            mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._materials.markerMaterials[2]),
             active: false,
             type: "end",
         });
     }
     buildSegments() {
         const distanceLine = new Line(new BufferGeometry()
-            .setFromPoints([new Vector3(), new Vector3()]), this._colorRgbRmoUtils.lineMaterials[0]);
+            .setFromPoints([new Vector3(), new Vector3()]), this._materials.lineMaterials[0]);
         distanceLine.frustumCulled = false;
         this._segments.set("distance", {
             line: distanceLine,
@@ -446,14 +655,14 @@ class RenderScene {
                     }
                 }
                 this._geometries.forEach(x => {
-                    const mesh = new Mesh(x.geometry, this._colorRgbRmoUtils.globalMaterial);
+                    const mesh = new Mesh(x.geometry, this._materials.globalMaterial);
                     scene.add(mesh);
                 });
             }
             else {
                 meshes.forEach(sourceMesh => {
                     const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
-                    const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+                    const material = this._materials.getMaterial(rgbRmo);
                     const renderMesh = new Mesh(sourceMesh.geometry, material);
                     renderMesh.applyMatrix4(sourceMesh.matrix);
                     this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
@@ -562,8 +771,8 @@ class RenderScene {
     }
     updateMeshMaterials(sourceMeshes) {
         sourceMeshes.forEach((sourceMesh) => {
-            const { rgbRmo } = this._colorRgbRmoUtils.refreshMeshColors(sourceMesh);
-            const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+            const { rgbRmo } = this._materials.refreshMeshColors(sourceMesh);
+            const material = this._materials.getMaterial(rgbRmo);
             const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
             renderMesh.material = material;
         });
@@ -587,7 +796,7 @@ class RenderScene {
         const { colors, rmos, indicesBySourceMesh } = this._geometries[rgIndex];
         let anyMeshOpacityChanged = false;
         meshes.forEach(mesh => {
-            const { rgbRmo, opacityChanged } = this._colorRgbRmoUtils
+            const { rgbRmo, opacityChanged } = this._materials
                 .refreshMeshColors(mesh);
             indicesBySourceMesh.get(mesh).forEach(i => {
                 colors.setXYZ(i, rgbRmo.rByte, rgbRmo.gByte, rgbRmo.bByte);
@@ -644,7 +853,7 @@ var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class SimplifiedScene {
-    constructor(colorRgbRmoUtils) {
+    constructor(materials) {
         this._boxIndices = [
             0, 1, 3,
             3, 1, 2,
@@ -660,10 +869,10 @@ class SimplifiedScene {
             0, 5, 1,
         ];
         this._geometries = [];
-        if (!colorRgbRmoUtils) {
+        if (!materials) {
             throw new Error("ColorRgbRmoUtils is undefined!");
         }
-        this._colorRgbRmoUtils = colorRgbRmoUtils;
+        this._materials = materials;
     }
     get scene() {
         return this._scene;
@@ -703,7 +912,7 @@ class SimplifiedScene {
                 this._geometries.push(geometry);
             }
             this._geometries.forEach(x => {
-                const mesh = new Mesh(x, this._colorRgbRmoUtils.simpleMaterial);
+                const mesh = new Mesh(x, this._materials.simpleMaterial);
                 scene.add(mesh);
             });
             this._scene = scene;
@@ -993,115 +1202,6 @@ class PickingScene {
     }
 }
 
-class CameraControls {
-    constructor(rendererCanvas, changeCallback) {
-        const camera = new PerspectiveCamera(75, 1, 1, 10000);
-        const orbitControls = new OrbitControls(camera, rendererCanvas);
-        orbitControls.addEventListener("change", changeCallback);
-        camera.position.set(0, 1000, 1000);
-        camera.lookAt(0, 0, 0);
-        orbitControls.update();
-        this._changeCallback = changeCallback;
-        this._camera = camera;
-        this._orbitControls = orbitControls;
-    }
-    get camera() {
-        return this._camera;
-    }
-    changeCanvas(rendererCanvas) {
-        this._orbitControls.dispose();
-        this._orbitControls = new OrbitControls(this.camera, rendererCanvas);
-        this._orbitControls.addEventListener("change", this._changeCallback);
-        if (this._lastFocusBox) {
-            this.focusCameraOnBox(this._lastFocusBox);
-        }
-    }
-    destroy() {
-        this._orbitControls.dispose();
-    }
-    resize(width, height) {
-        if (this._camera) {
-            this._camera.aspect = width / height;
-            this._camera.updateProjectionMatrix();
-        }
-    }
-    focusCameraOnObjects(objects, offset = 1.2) {
-        if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
-            return;
-        }
-        const box = new Box3();
-        for (const object of objects) {
-            box.expandByObject(object);
-        }
-        this._lastFocusBox = box;
-        this.focusCameraOnBox(box);
-    }
-    focusCameraOnBox(box) {
-        const offset = 1.2;
-        const size = box.getSize(new Vector3());
-        const center = box.getCenter(new Vector3());
-        const maxSize = Math.max(size.x, size.y, size.z);
-        const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
-        const fitWidthDistance = fitHeightDistance / this._camera.aspect;
-        const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
-        const direction = this._orbitControls.target.clone()
-            .sub(this._camera.position)
-            .normalize()
-            .multiplyScalar(distance);
-        this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
-        this._orbitControls.target.copy(center);
-        this._camera.near = Math.min(distance / 100, 1);
-        this._camera.far = Math.max(distance * 100, 10000);
-        this._camera.updateProjectionMatrix();
-        this._camera.position.copy(this._orbitControls.target).sub(direction);
-        this._orbitControls.update();
-    }
-}
-
-class Lights {
-    constructor(physicalLights, ambientLightIntensity, hemiLightIntensity, dirLightIntensity) {
-        const ambientLight = new AmbientLight(0x222222, physicalLights
-            ? ambientLightIntensity * Math.PI
-            : ambientLightIntensity);
-        this._ambientLight = ambientLight;
-        const hemiLight = new HemisphereLight(0xffffbb, 0x080820, physicalLights
-            ? hemiLightIntensity * Math.PI
-            : hemiLightIntensity);
-        hemiLight.position.set(0, 2000, 0);
-        this._hemisphereLight = hemiLight;
-        const dirLight = new DirectionalLight(0xffffff, physicalLights
-            ? dirLightIntensity * Math.PI
-            : dirLightIntensity);
-        dirLight.position.set(-2, 10, 2);
-        this._directionalLight = dirLight;
-    }
-    update(physicalLights, ambientLightIntensity, hemiLightIntensity, dirLightIntensity) {
-        this._ambientLight.intensity = physicalLights
-            ? ambientLightIntensity * Math.PI
-            : ambientLightIntensity;
-        this._hemisphereLight.intensity = physicalLights
-            ? hemiLightIntensity * Math.PI
-            : hemiLightIntensity;
-        this._directionalLight.intensity = physicalLights
-            ? dirLightIntensity * Math.PI
-            : dirLightIntensity;
-    }
-    getLights() {
-        return [
-            this._ambientLight,
-            this._hemisphereLight,
-            this._directionalLight,
-        ];
-    }
-    getCopy() {
-        return [
-            new AmbientLight().copy(this._ambientLight),
-            new HemisphereLight().copy(this._hemisphereLight),
-            new DirectionalLight().copy(this._directionalLight),
-        ];
-    }
-}
-
 var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -1196,11 +1296,12 @@ class GltfViewer {
         }
         this._options = new GltfViewerOptions(options);
         this._optionsChange.next(this._options);
-        this._colorRgbRmoUtils = new ColorRgbRmoUtils(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
+        this._materials = new Materials(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
         this._lights = new Lights(this._options.usePhysicalLights, this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity);
-        this._renderScene = new RenderScene(this._colorRgbRmoUtils);
-        this._simplifiedScene = new SimplifiedScene(this._colorRgbRmoUtils);
         this._pickingScene = new PickingScene();
+        this._renderScene = new RenderScene(this._materials);
+        this._simplifiedScene = new SimplifiedScene(this._materials);
+        this._axes = new Axes(this._materials);
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
@@ -1208,24 +1309,26 @@ class GltfViewer {
         });
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
         (_a = this._containerResizeSensor) === null || _a === void 0 ? void 0 : _a.detach();
         this._containerResizeSensor = null;
         (_b = this._cameraControls) === null || _b === void 0 ? void 0 : _b.destroy();
         this._cameraControls = null;
-        (_c = this._renderer) === null || _c === void 0 ? void 0 : _c.dispose();
-        (_e = (_d = this._loader) === null || _d === void 0 ? void 0 : _d.dracoLoader) === null || _e === void 0 ? void 0 : _e.dispose();
-        (_f = this._pickingScene) === null || _f === void 0 ? void 0 : _f.destroy();
+        (_c = this._axes) === null || _c === void 0 ? void 0 : _c.destroy();
+        this._axes = null;
+        (_d = this._renderer) === null || _d === void 0 ? void 0 : _d.dispose();
+        (_f = (_e = this._loader) === null || _e === void 0 ? void 0 : _e.dracoLoader) === null || _f === void 0 ? void 0 : _f.dispose();
+        (_g = this._pickingScene) === null || _g === void 0 ? void 0 : _g.destroy();
         this._pickingScene = null;
-        (_g = this._simplifiedScene) === null || _g === void 0 ? void 0 : _g.destroy();
+        (_h = this._simplifiedScene) === null || _h === void 0 ? void 0 : _h.destroy();
         this._simplifiedScene = null;
-        (_h = this._renderScene) === null || _h === void 0 ? void 0 : _h.destroy();
+        (_j = this._renderScene) === null || _j === void 0 ? void 0 : _j.destroy();
         this._renderScene = null;
-        (_j = this._colorRgbRmoUtils) === null || _j === void 0 ? void 0 : _j.destroy();
-        this._colorRgbRmoUtils = null;
-        (_k = this._loadedMeshes) === null || _k === void 0 ? void 0 : _k.forEach(x => {
+        (_k = this._materials) === null || _k === void 0 ? void 0 : _k.destroy();
+        this._materials = null;
+        (_l = this._loadedMeshes) === null || _l === void 0 ? void 0 : _l.forEach(x => {
             x.geometry.dispose();
             x.material.dispose();
         });
@@ -1236,8 +1339,10 @@ class GltfViewer {
             const oldOptions = this._options;
             this._options = new GltfViewerOptions(options);
             let rendererReinitialized = false;
-            let lightsReinitialized = false;
+            let lightsUpdated = false;
             let colorsUpdated = false;
+            let materialsUpdated = false;
+            let sceneUpdated = false;
             if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
                 this.initRenderer();
                 rendererReinitialized = true;
@@ -1248,17 +1353,27 @@ class GltfViewer {
                 || this._options.dirLightIntensity !== oldOptions.dirLightIntensity) {
                 this._renderer.physicallyCorrectLights = this._options.usePhysicalLights;
                 this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity);
-                lightsReinitialized = true;
+                lightsUpdated = true;
             }
             if (this._options.isolationColor !== oldOptions.isolationColor
                 || this._options.isolationOpacity !== oldOptions.isolationOpacity
                 || this._options.selectionColor !== oldOptions.selectionColor
                 || this._options.highlightColor !== oldOptions.highlightColor) {
-                this._colorRgbRmoUtils.updateColors(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
+                this._materials.updateColors(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
                 colorsUpdated = true;
             }
-            if (rendererReinitialized || lightsReinitialized || colorsUpdated) {
-                this._colorRgbRmoUtils.updateMaterials();
+            if (rendererReinitialized || lightsUpdated || colorsUpdated) {
+                this._materials.updateMaterials();
+                materialsUpdated = true;
+            }
+            if (this._options.meshMergeType !== oldOptions.meshMergeType
+                || this._options.fastRenderType !== oldOptions.fastRenderType) {
+                yield this.updateRenderSceneAsync();
+                sceneUpdated = true;
+            }
+            if (this._options.showAxesHelper !== oldOptions.showAxesHelper
+                && !(materialsUpdated || sceneUpdated)) {
+                this.render();
             }
             if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
                 if (this._options.highlightingEnabled) {
@@ -1267,10 +1382,6 @@ class GltfViewer {
                 else {
                     this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
                 }
-            }
-            if (this._options.meshMergeType !== oldOptions.meshMergeType
-                || this._options.fastRenderType !== oldOptions.fastRenderType) {
-                yield this.updateRenderSceneAsync();
             }
             this._optionsChange.next(this._options);
             return this._options;
@@ -1462,7 +1573,7 @@ class GltfViewer {
     render(focusObjects = null, fast = false) {
         this.prepareToRender(focusObjects);
         requestAnimationFrame(() => {
-            var _a, _b;
+            var _a, _b, _c;
             if (!this._renderer) {
                 return;
             }
@@ -1472,6 +1583,9 @@ class GltfViewer {
             }
             else if ((_b = this._renderScene) === null || _b === void 0 ? void 0 : _b.scene) {
                 this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
+            }
+            if (this._options.showAxesHelper) {
+                (_c = this._axes) === null || _c === void 0 ? void 0 : _c.render(this._cameraControls.camera, this._renderer);
             }
             const frameTime = performance.now() - start;
             this._lastFrameTime.next(frameTime);
@@ -1856,7 +1970,7 @@ class GltfViewer {
     }
     emitDistanceMeasureChange() {
         if (this._measurePoints.start && this._measurePoints.end) {
-            this._distanceMeasureChange.next(new DistanceMeasure(this._measurePoints.start, this._measurePoints.end, true));
+            this._distanceMeasureChange.next(new Distance(this._measurePoints.start, this._measurePoints.end, true));
         }
         else {
             this._distanceMeasureChange.next(null);
@@ -1872,4 +1986,4 @@ class GltfViewer {
     }
 }
 
-export { DistanceMeasure, GltfViewer, GltfViewerOptions, Vec4 };
+export { Distance, GltfViewer, GltfViewerOptions, Vec4 };

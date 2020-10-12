@@ -10,16 +10,17 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, DistanceMeasure, Vec4 } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4, ColorRgbRmo } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
-import { ColorRgbRmo, ColorRgbRmoUtils } from "./color-rgb-rmo";
+import { Materials } from "./components/materials";
+import { CameraControls } from "./components/camera-controls";
+import { Lights } from "./components/lights";
+import { Axes } from "./components/axes";
 import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
-import { CameraControls } from "./camera-controls";
-import { Lights } from "./lights";
 
-export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, DistanceMeasure, Vec4 };
+export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4 };
 
 export class GltfViewer {
   // #region public observables
@@ -33,7 +34,7 @@ export class GltfViewer {
   manualSelectionChange$: Observable<Set<string>>; 
   lastFrameTime$: Observable<number>;
   snapPointChange$: Observable<Vec4>;
-  distanceMeasureChange$: Observable<DistanceMeasure>;
+  distanceMeasureChange$: Observable<Distance>;
   // #endregion  
   
   // #region private rx subjects
@@ -47,7 +48,7 @@ export class GltfViewer {
   private _manualSelectionChange = new Subject<Set<string>>();  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
   private _snapPointChange = new Subject<Vec4>();  
-  private _distanceMeasureChange = new Subject<DistanceMeasure>();  
+  private _distanceMeasureChange = new Subject<Distance>();  
   // #endregion
   
   private _subscriptions: Subscription[] = [];
@@ -63,9 +64,10 @@ export class GltfViewer {
   private _renderer: WebGLRenderer;
   private _deferRender: number;
 
-  private _colorRgbRmoUtils: ColorRgbRmoUtils;
+  private _materials: Materials;
   private _cameraControls: CameraControls; 
   private _lights: Lights; 
+  private _axes: Axes;
 
   private _renderScene: RenderScene; 
   private _simplifiedScene: SimplifiedScene; 
@@ -111,13 +113,14 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
 
-    this._colorRgbRmoUtils = new ColorRgbRmoUtils(this._options.isolationColor, this._options.isolationOpacity,
+    this._materials = new Materials(this._options.isolationColor, this._options.isolationOpacity,
       this._options.selectionColor, this._options.highlightColor);
     this._lights = new Lights(this._options.usePhysicalLights, 
       this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity); 
-    this._renderScene = new RenderScene(this._colorRgbRmoUtils);
-    this._simplifiedScene = new SimplifiedScene(this._colorRgbRmoUtils);
     this._pickingScene = new PickingScene();
+    this._renderScene = new RenderScene(this._materials);
+    this._simplifiedScene = new SimplifiedScene(this._materials);
+    this._axes = new Axes(this._materials);
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
@@ -137,6 +140,9 @@ export class GltfViewer {
     this._cameraControls?.destroy();
     this._cameraControls = null;
 
+    this._axes?.destroy();
+    this._axes = null;
+
     this._renderer?.dispose();
     this._loader?.dracoLoader?.dispose();
 
@@ -149,8 +155,8 @@ export class GltfViewer {
     this._renderScene?.destroy();
     this._renderScene = null;   
 
-    this._colorRgbRmoUtils?.destroy();
-    this._colorRgbRmoUtils = null; 
+    this._materials?.destroy();
+    this._materials = null; 
 
     this._loadedMeshes?.forEach(x => {
       x.geometry.dispose();
@@ -165,8 +171,10 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);
 
     let rendererReinitialized = false;
-    let lightsReinitialized = false;
+    let lightsUpdated = false;
     let colorsUpdated = false;
+    let materialsUpdated = false;
+    let sceneUpdated = false;
 
     if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
       this.initRenderer();
@@ -180,21 +188,34 @@ export class GltfViewer {
       this._renderer.physicallyCorrectLights = this._options.usePhysicalLights;
       this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity,
         this._options.hemiLightIntensity, this._options.dirLightIntensity);
-      lightsReinitialized = true;
+      lightsUpdated = true;
     }  
 
     if (this._options.isolationColor !== oldOptions.isolationColor
         || this._options.isolationOpacity !== oldOptions.isolationOpacity
         || this._options.selectionColor !== oldOptions.selectionColor
         || this._options.highlightColor !== oldOptions.highlightColor) {      
-      this._colorRgbRmoUtils.updateColors(this._options.isolationColor, this._options.isolationOpacity,
+      this._materials.updateColors(this._options.isolationColor, this._options.isolationOpacity,
         this._options.selectionColor, this._options.highlightColor);
       colorsUpdated = true;
     }
 
-    if (rendererReinitialized || lightsReinitialized || colorsUpdated) {
-      this._colorRgbRmoUtils.updateMaterials();
+    if (rendererReinitialized || lightsUpdated || colorsUpdated) {
+      this._materials.updateMaterials();
+      materialsUpdated = true;
     }
+
+    if (this._options.meshMergeType !== oldOptions.meshMergeType
+        || this._options.fastRenderType !== oldOptions.fastRenderType) {
+      await this.updateRenderSceneAsync();
+      sceneUpdated = true;
+    }
+
+    if (this._options.showAxesHelper !== oldOptions.showAxesHelper
+      && !(materialsUpdated || sceneUpdated)) {
+      this.render();
+    }
+    
 
     if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
       if (this._options.highlightingEnabled) {        
@@ -202,11 +223,6 @@ export class GltfViewer {
       } else {
         this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
       }
-    }
-
-    if (this._options.meshMergeType !== oldOptions.meshMergeType
-        || this._options.fastRenderType !== oldOptions.fastRenderType) {
-      await this.updateRenderSceneAsync();
     }
 
     this._optionsChange.next(this._options);  
@@ -487,6 +503,9 @@ export class GltfViewer {
         this._renderer.render(this._simplifiedScene.scene, this._cameraControls.camera);
       } else if (this._renderScene?.scene) {
         this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
+      }
+      if (this._options.showAxesHelper) {
+        this._axes?.render(this._cameraControls.camera, this._renderer);
       }
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
@@ -936,7 +955,7 @@ export class GltfViewer {
 
   private emitDistanceMeasureChange() {
     if (this._measurePoints.start && this._measurePoints.end) {
-      this._distanceMeasureChange.next(new DistanceMeasure(
+      this._distanceMeasureChange.next(new Distance(
         this._measurePoints.start, this._measurePoints.end, true));
     } else {
       this._distanceMeasureChange.next(null);

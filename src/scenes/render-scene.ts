@@ -1,12 +1,12 @@
 import { Light, Scene, Mesh, Vector3, BufferGeometry, BoxBufferGeometry, SphereBufferGeometry,
   Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Line } from "three";
 
-import {MarkerType, SegmentType, MeshMergeType, MeshBgSm, MeshBgBm, 
+import {MarkerType, SegmentType, MeshMergeType, MeshBgSm, ColorRgbRmo, 
   RenderGeometry, ModelGeometryInfo, Marker, Segment } from "../common-types";
-import { ColorRgbRmo, ColorRgbRmoUtils } from "../color-rgb-rmo";
+import { Materials } from "../components/materials";
 
 export class RenderScene {
-  private _colorRgbRmoUtils: ColorRgbRmoUtils;
+  private _materials: Materials;
 
   private _currentMergeType: MeshMergeType;
 
@@ -30,11 +30,11 @@ export class RenderScene {
     return [...this._renderMeshBySourceMesh.values()];
   }
 
-  constructor(colorRgbRmoUtils: ColorRgbRmoUtils) {
-    if (!colorRgbRmoUtils) {
+  constructor(materials: Materials) {
+    if (!materials) {
       throw new Error("ColorRgbRmoUtils is undefined!");
     }
-    this._colorRgbRmoUtils = colorRgbRmoUtils;
+    this._materials = materials;
 
     this.buildMarkers();
     this.buildSegments();
@@ -120,17 +120,17 @@ export class RenderScene {
 
   private buildMarkers() {    
     this._markers.set("temp", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._colorRgbRmoUtils.markerMaterials[0]),
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._materials.markerMaterials[0]),
       active: false,
       type: "temp",
     });
     this._markers.set("start", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._colorRgbRmoUtils.markerMaterials[1]),
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._materials.markerMaterials[1]),
       active: false,
       type: "start",
     });
     this._markers.set("end", {
-      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._colorRgbRmoUtils.markerMaterials[2]),
+      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._materials.markerMaterials[2]),
       active: false,
       type: "end",
     });
@@ -138,7 +138,7 @@ export class RenderScene {
 
   private buildSegments() {  
     const distanceLine = new Line(new BufferGeometry()
-      .setFromPoints([new Vector3(), new Vector3()]), this._colorRgbRmoUtils.lineMaterials[0]);
+      .setFromPoints([new Vector3(), new Vector3()]), this._materials.lineMaterials[0]);
     distanceLine.frustumCulled = false;
     this._segments.set("distance", {
       line: distanceLine,
@@ -184,13 +184,13 @@ export class RenderScene {
         }
       }
       this._geometries.forEach(x => {    
-        const mesh = new Mesh(x.geometry, this._colorRgbRmoUtils.globalMaterial);
+        const mesh = new Mesh(x.geometry, this._materials.globalMaterial);
         scene.add(mesh);
       });
     } else {
       meshes.forEach(sourceMesh => {
         const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
-        const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+        const material = this._materials.getMaterial(rgbRmo);
         const renderMesh = new Mesh(sourceMesh.geometry, material);
         renderMesh.applyMatrix4(sourceMesh.matrix);
         this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
@@ -306,8 +306,8 @@ export class RenderScene {
 
   private updateMeshMaterials(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
     sourceMeshes.forEach((sourceMesh: MeshBgSm) => { 
-      const { rgbRmo } = this._colorRgbRmoUtils.refreshMeshColors(sourceMesh);      
-      const material = this._colorRgbRmoUtils.getMaterial(rgbRmo);
+      const { rgbRmo } = this._materials.refreshMeshColors(sourceMesh);      
+      const material = this._materials.getMaterial(rgbRmo);
       const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
       renderMesh.material = material;
     });
@@ -333,7 +333,7 @@ export class RenderScene {
     const { colors, rmos, indicesBySourceMesh } = this._geometries[rgIndex];
     let anyMeshOpacityChanged = false;
     meshes.forEach(mesh => {
-      const { rgbRmo, opacityChanged } = this._colorRgbRmoUtils
+      const { rgbRmo, opacityChanged } = this._materials
         .refreshMeshColors(mesh); 
       indicesBySourceMesh.get(mesh).forEach(i => {
         colors.setXYZ(i, rgbRmo.rByte, rgbRmo.gByte, rgbRmo.bByte);

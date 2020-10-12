@@ -3,7 +3,7 @@ import { Light, Scene, Mesh, Box3, Matrix4, Vector3, BufferGeometry, BufferAttri
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull";
 
 import { MeshBgSm, FastRenderType } from "../common-types";
-import { ColorRgbRmoUtils } from "../color-rgb-rmo";
+import { Materials } from "../components/materials";
 
 export class SimplifiedScene {
   private readonly _boxIndices = [ 
@@ -21,7 +21,7 @@ export class SimplifiedScene {
     0, 5, 1,
   ];
 
-  private _colorRgbRmoUtils: ColorRgbRmoUtils;
+  private _materials: Materials;
 
   private _scene: Scene;
   private _geometries: BufferGeometry[] = [];
@@ -33,11 +33,11 @@ export class SimplifiedScene {
     return this._geometries;
   }
 
-  constructor(colorRgbRmoUtils: ColorRgbRmoUtils) {
-    if (!colorRgbRmoUtils) {
+  constructor(materials: Materials) {
+    if (!materials) {
       throw new Error("ColorRgbRmoUtils is undefined!");
     }
-    this._colorRgbRmoUtils = colorRgbRmoUtils;
+    this._materials = materials;
   }
 
   destroy() {
@@ -76,7 +76,7 @@ export class SimplifiedScene {
     }
 
     this._geometries.forEach(x => {    
-      const mesh = new Mesh(x, this._colorRgbRmoUtils.simpleMaterial);
+      const mesh = new Mesh(x, this._materials.simpleMaterial);
       scene.add(mesh);
     });
 

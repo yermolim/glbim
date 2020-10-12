@@ -11,10 +11,12 @@ export class GltfViewerOptions {
   highlightColor = 0xFFFF00;
   selectionColor = 0xFF0000;
   isolationColor = 0x555555;
-  isolationOpacity = 0.2;
+  isolationOpacity = 0.2;  
 
   meshMergeType: MeshMergeType = null;
   fastRenderType: FastRenderType = null;
+
+  showAxesHelper = true;
   
   constructor(item: object = null) {
     if (item != null) {

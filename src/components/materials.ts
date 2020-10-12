@@ -1,110 +1,19 @@
-import { Color, MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
-  MeshBasicMaterial, LineBasicMaterial, NormalBlending, DoubleSide } from "three";
-import { MeshBgSm } from "./common-types";
+import { Color, DoubleSide, NormalBlending, CanvasTexture,
+  MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
+  MeshBasicMaterial, LineBasicMaterial, SpriteMaterial } from "three";
+import { MeshBgSm, ColorRgbRmo } from "../common-types";
 
-export class ColorRgbRmo {
-  private static readonly prop = "rgbrmo";
-  private static readonly customProp = "rgbrmoC";
-  private static readonly defaultProp = "rgbrmoD";
-
-  r: number;
-  g: number;
-  b: number;
-  roughness: number;
-  metalness: number;
-  opacity: number;
-
-  get rByte(): number {
-    return this.r * 255;
-  }
-  get gByte(): number {
-    return this.g * 255;
-  }
-  get bByte(): number {
-    return this.b * 255;
-  }
-  get roughnessByte(): number {
-    return this.roughness * 255;
-  }
-  get metalnessByte(): number {
-    return this.metalness * 255;
-  }
-  get opacityByte(): number {
-    return this.opacity * 255;
-  }
-
-  constructor(r: number, g: number, b: number,
-    roughness: number, metalness: number, opacity: number) {
-    this.r = r;
-    this.g = g;
-    this.b = b;
-    this.roughness = roughness;
-    this.metalness = metalness;
-    this.opacity = opacity;
-  }
-
-  static createFromMaterial(material: MeshStandardMaterial): ColorRgbRmo {
-    return new ColorRgbRmo(
-      material.color.r,
-      material.color.g,
-      material.color.b,
-      material.roughness,
-      material.metalness,
-      material.opacity);
-  }
-
-  static deleteFromMesh(mesh: MeshBgSm,
-    deleteCustom = false, deleteDefault = false) {
-
-    mesh[ColorRgbRmo.prop] = null;
-    if (deleteCustom) {
-      mesh[ColorRgbRmo.customProp] = null;
-    }
-    if (deleteDefault) {
-      mesh[ColorRgbRmo.defaultProp] = null;
-    }
-  }
-
-  static getDefaultFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    if (!mesh[ColorRgbRmo.defaultProp]) {      
-      mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
-    }
-    return mesh[ColorRgbRmo.defaultProp];
-  }
-  static getCustomFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    return mesh[ColorRgbRmo.customProp];
-  }
-  static getFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    if (mesh[ColorRgbRmo.prop]) {
-      return mesh[ColorRgbRmo.prop];
-    }
-    if (mesh[ColorRgbRmo.customProp]) {      
-      return mesh[ColorRgbRmo.customProp];
-    }
-    return ColorRgbRmo.getDefaultFromMesh(mesh);
-  }
-
-  static setCustomToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
-    mesh[ColorRgbRmo.customProp] = rgbRmo;
-  }
-  static setToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
-    mesh[ColorRgbRmo.prop] = rgbRmo;
-  }  
-
-  toString() {
-    return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
-  }
-}
-
-export class ColorRgbRmoUtils {
+export class Materials {
   private _isolationColor: ColorRgbRmo;
   private _selectionColor: Color;
   private _highlightColor: Color;
 
   private _globalMaterial: MeshStandardMaterial;
   private _simpleMaterial: MeshPhongMaterial;
-  private _markerMaterials: MeshBasicMaterial[];
   private _lineMaterials: LineBasicMaterial[];
+  private _markerMaterials: MeshBasicMaterial[];
+  private _axisMaterials: MeshBasicMaterial[];
+  private _axisLabelMaterials: SpriteMaterial[];
 
   private _materials = new Map<string, MeshStandardMaterial>();
 
@@ -114,11 +23,17 @@ export class ColorRgbRmoUtils {
   get simpleMaterial(): MeshPhongMaterial {
     return this._simpleMaterial;
   }
+  get lineMaterials(): LineBasicMaterial[] {
+    return this._lineMaterials;
+  }
   get markerMaterials(): MeshBasicMaterial[] {
     return this._markerMaterials;
   }
-  get lineMaterials(): LineBasicMaterial[] {
-    return this._lineMaterials;
+  get axisMaterials(): MeshBasicMaterial[] {
+    return this._axisMaterials;
+  }
+  get axisLabelMaterials(): SpriteMaterial[] {
+    return this._axisLabelMaterials;
   }
   get materials(): MeshStandardMaterial[] {
     return [...this._materials.values()];
@@ -132,15 +47,28 @@ export class ColorRgbRmoUtils {
     this._highlightColor = new Color(highlightColor);
 
     this._globalMaterial = this.buildGlobalMaterial();
-    this._simpleMaterial = this.buildSimpleMaterial();
-
-    this._markerMaterials = new Array(3);
-    this._markerMaterials[0] = this.buildMarkerMaterial(0xFF00FF);
-    this._markerMaterials[1] = this.buildMarkerMaterial(0x391285);
-    this._markerMaterials[2] = this.buildMarkerMaterial(0x00FFFF);
+    this._simpleMaterial = this.buildPhongMaterial();
 
     this._lineMaterials = new Array(1);
-    this._lineMaterials[0] = this.buildLineMaterial(0x0000FF, 3);
+    this._lineMaterials[0] = this.buildLineBasicMaterial(0x0000FF, 3);
+
+    this._markerMaterials = new Array(3);
+    this._markerMaterials[0] = this.buildBasicMaterial(0xFF00FF);
+    this._markerMaterials[1] = this.buildBasicMaterial(0x391285);
+    this._markerMaterials[2] = this.buildBasicMaterial(0x00FFFF);
+    
+    this._axisMaterials = new Array(3);
+    this._axisMaterials[0] = this.buildBasicMaterial(0xFF3653);
+    this._axisMaterials[1] = this.buildBasicMaterial(0x8adb00);
+    this._axisMaterials[2] = this.buildBasicMaterial(0x2c8FFF);
+
+    this._axisLabelMaterials = new Array(6);
+    this._axisLabelMaterials[0] = this.buildSpriteMaterial(64, 0xFF3653, "X");
+    this._axisLabelMaterials[1] = this.buildSpriteMaterial(64, 0xA32235, "-X");
+    this._axisLabelMaterials[2] = this.buildSpriteMaterial(64, 0x8ADB00, "Y");
+    this._axisLabelMaterials[3] = this.buildSpriteMaterial(64, 0x588C00, "-Y");
+    this._axisLabelMaterials[4] = this.buildSpriteMaterial(64, 0x2C8FFF, "Z");
+    this._axisLabelMaterials[5] = this.buildSpriteMaterial(64, 0x1C5BA3, "-Z");
   }
 
   updateColors(isolationColor: number, isolationOpacity: number, 
@@ -164,11 +92,17 @@ export class ColorRgbRmoUtils {
     this._simpleMaterial.dispose();
     this._simpleMaterial = null;
 
-    this._markerMaterials?.forEach(x => x.dispose);
+    this._lineMaterials?.forEach(x => x.dispose());
     this._markerMaterials = null;
 
-    this._lineMaterials?.forEach(x => x.dispose);
+    this._markerMaterials?.forEach(x => x.dispose());
     this._markerMaterials = null;
+    
+    this._axisMaterials?.forEach(x => x.dispose());
+    this._axisMaterials = null;
+
+    this._axisLabelMaterials?.forEach(x => { x.map.dispose(); x.dispose(); });
+    this._axisLabelMaterials = null;
 
     this._materials.forEach(v => v.dispose());
     this._materials = null;
@@ -264,7 +198,7 @@ export class ColorRgbRmoUtils {
     return material;
   }  
 
-  private buildSimpleMaterial(): MeshPhongMaterial {
+  private buildPhongMaterial(): MeshPhongMaterial {
     const material = new MeshPhongMaterial({
       color: 0x808080,
       transparent: false,
@@ -289,11 +223,35 @@ export class ColorRgbRmoUtils {
     return material;
   }  
 
-  private buildMarkerMaterial(color: number): MeshBasicMaterial {
+  private buildBasicMaterial(color: number): MeshBasicMaterial {
     return new MeshBasicMaterial({color});
   }
   
-  private buildLineMaterial(color: number, width: number): LineBasicMaterial {
+  private buildLineBasicMaterial(color: number, width: number): LineBasicMaterial {
     return new LineBasicMaterial({color, linewidth: width});
+  }
+
+  private buildSpriteMaterial(size: number, color: number, text: string) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    ctx.beginPath();
+    ctx.arc(size/2, size/2, size/4, 0, 2*Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = new Color(color).getStyle();
+    ctx.fill();
+
+    if (text) {
+      ctx.font = size/3 + "px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#000000";
+      ctx.fillText(text, size/2, size/2 - size/6);
+    }
+
+    const texture = new CanvasTexture(canvas);
+    return new SpriteMaterial({map: texture, toneMapped: false});
   }
 }

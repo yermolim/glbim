@@ -38,7 +38,7 @@ export declare class Vec4 {
 	constructor(x: number, y: number, z: number, w?: number, toZup?: boolean);
 	static getDistance(start: Vec4, end: Vec4): Vec4;
 }
-export declare class DistanceMeasure {
+export declare class Distance {
 	start: Vec4;
 	end: Vec4;
 	distance: Vec4;
@@ -57,6 +57,7 @@ export declare class GltfViewerOptions {
 	isolationOpacity: number;
 	meshMergeType: MeshMergeType;
 	fastRenderType: FastRenderType;
+	showAxesHelper: boolean;
 	constructor(item?: object);
 }
 export declare class GltfViewer {
@@ -70,7 +71,7 @@ export declare class GltfViewer {
 	manualSelectionChange$: Observable<Set<string>>;
 	lastFrameTime$: Observable<number>;
 	snapPointChange$: Observable<Vec4>;
-	distanceMeasureChange$: Observable<DistanceMeasure>;
+	distanceMeasureChange$: Observable<Distance>;
 	private _optionsChange;
 	private _loadingStateChange;
 	private _modelLoadingStart;
@@ -90,9 +91,10 @@ export declare class GltfViewer {
 	private _measurePoints;
 	private _renderer;
 	private _deferRender;
-	private _colorRgbRmoUtils;
+	private _materials;
 	private _cameraControls;
 	private _lights;
+	private _axes;
 	private _renderScene;
 	private _simplifiedScene;
 	private _meshesNeedColorUpdate;

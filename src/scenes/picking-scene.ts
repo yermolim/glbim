@@ -2,7 +2,7 @@ import { Scene, Mesh, Color, Vector2, Vector3, PerspectiveCamera, Camera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
 import { MeshBgBm, MeshBgSm, MeshBgAm } from "../common-types";
-import { PointSnap } from "../point-snap";
+import { PointSnap } from "../components/point-snap";
 
 export class PickingScene {
   private _scene: Scene;
