@@ -93,7 +93,6 @@ export declare class GltfViewer {
 	private _measurePoints;
 	private _renderer;
 	private _deferRender;
-	private _materials;
 	private _cameraControls;
 	private _lights;
 	private _axes;

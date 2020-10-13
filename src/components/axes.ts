@@ -1,19 +1,25 @@
 import { Object3D, Sprite, Vector4, Camera, OrthographicCamera, 
-  BufferGeometry, BoxBufferGeometry, WebGLRenderer, Mesh, Quaternion, Vector3 } from "three";
-import { Materials } from "./materials";
-import { MeshBgBm } from "../common-types";
+  WebGLRenderer, Quaternion, Vector3, SpriteMaterial } from "three";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { Line2 } from "three/examples/jsm/lines/Line2";
+
+import { MaterialBuilder } from "../helpers/material-builder";
 
 export class Axes extends Object3D {
   private static readonly _toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), - Math.PI/2);
 
   private _camera: Camera;
-  private _axisGeometry: BufferGeometry;
+  private _axisGeometry: LineGeometry;
   private _size = 96;
-  private _viewportBak = new Vector4();
+  private _viewportBak = new Vector4();  
+  
+  private _axisMaterials: LineMaterial[] = new Array(3);
+  private _axisLabelMaterials: SpriteMaterial[] = new Array(6);
 
-  private xAxis: MeshBgBm;
-  private yAxis: MeshBgBm;
-  private zAxis: MeshBgBm;
+  private xAxis: Line2;
+  private yAxis: Line2;
+  private zAxis: Line2;
 
   private xLabel: Sprite;
   private yLabel: Sprite;
@@ -22,18 +28,17 @@ export class Axes extends Object3D {
   private yLabelN: Sprite;
   private zLabelN: Sprite;
 
-  constructor(materials: Materials) {
+  constructor() {
     super();
 
     this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
     this._camera.position.set(0, 0, 2);
 
-    this._axisGeometry = new BoxBufferGeometry(0.8, 0.05, 0.05).translate(0.4, 0, 0);
-    this.buildAxes(materials);
+    this.buildAxes();
   }
 
   destroy() {
-    this._axisGeometry.dispose();
+    this.destroyAxes();
   }
 
   render(mainCamera: Camera, renderer: WebGLRenderer) {
@@ -54,10 +59,24 @@ export class Axes extends Object3D {
     renderer.autoClear = true;
   }
 
-  private buildAxes(materials: Materials) {
-    this.xAxis = new Mesh(this._axisGeometry, materials.axisMaterials[0]);
-    this.yAxis = new Mesh(this._axisGeometry, materials.axisMaterials[1]);
-    this.zAxis = new Mesh(this._axisGeometry, materials.axisMaterials[2]);
+  private buildAxes() {
+    this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02);
+    this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02);
+    this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02);
+
+    this._axisLabelMaterials[0] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xFF3653, "X");
+    this._axisLabelMaterials[1] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xA32235, "-X");
+    this._axisLabelMaterials[2] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x8ADB00, "Y");
+    this._axisLabelMaterials[3] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x588C00, "-Y");
+    this._axisLabelMaterials[4] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x2C8FFF, "Z");
+    this._axisLabelMaterials[5] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x1C5BA3, "-Z");
+
+    this._axisGeometry = new LineGeometry();
+    this._axisGeometry.setPositions([0, 0, 0, 0.8, 0, 0]);
+
+    this.xAxis = new Line2(this._axisGeometry, this._axisMaterials[0]);
+    this.yAxis = new Line2(this._axisGeometry, this._axisMaterials[1]);
+    this.zAxis = new Line2(this._axisGeometry, this._axisMaterials[2]);
 
     this.yAxis.rotation.z = Math.PI / 2;
     this.zAxis.rotation.y = - Math.PI / 2;
@@ -66,12 +85,12 @@ export class Axes extends Object3D {
     this.add(this.yAxis);
     this.add(this.zAxis);
     
-    this.xLabel = new Sprite(materials.axisLabelMaterials[0]);
-    this.xLabelN = new Sprite(materials.axisLabelMaterials[1]);
-    this.yLabel = new Sprite(materials.axisLabelMaterials[2]);
-    this.yLabelN = new Sprite(materials.axisLabelMaterials[3]);
-    this.zLabel = new Sprite(materials.axisLabelMaterials[4]);
-    this.zLabelN = new Sprite(materials.axisLabelMaterials[5]);
+    this.xLabel = new Sprite(this._axisLabelMaterials[0]);
+    this.xLabelN = new Sprite(this._axisLabelMaterials[1]);
+    this.yLabel = new Sprite(this._axisLabelMaterials[2]);
+    this.yLabelN = new Sprite(this._axisLabelMaterials[3]);
+    this.zLabel = new Sprite(this._axisLabelMaterials[4]);
+    this.zLabelN = new Sprite(this._axisLabelMaterials[5]);
 
     this.xLabel.position.x = 1;
     this.yLabel.position.y = 1;
@@ -89,5 +108,15 @@ export class Axes extends Object3D {
     this.add(this.xLabelN);
     this.add(this.yLabelN);
     this.add(this.zLabelN);
+  }
+
+  private destroyAxes() {
+    this._axisGeometry.dispose();    
+    
+    this._axisMaterials?.forEach(x => x.dispose());
+    this._axisMaterials = null;
+
+    this._axisLabelMaterials?.forEach(x => { x.map.dispose(); x.dispose(); });
+    this._axisLabelMaterials = null;
   }
 }

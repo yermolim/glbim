@@ -1,9 +1,9 @@
 import { Light, Scene, Mesh, Box3, Matrix4, Vector3, BufferGeometry, BufferAttribute,
-  Uint32BufferAttribute, Float32BufferAttribute, BoxBufferGeometry } from "three";
+  Uint32BufferAttribute, Float32BufferAttribute, BoxBufferGeometry, MeshPhongMaterial } from "three";
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull";
 
 import { MeshBgSm, FastRenderType } from "../common-types";
-import { Materials } from "../components/materials";
+import { MaterialBuilder } from "../helpers/material-builder";
 
 export class SimplifiedScene {
   private readonly _boxIndices = [ 
@@ -21,7 +21,7 @@ export class SimplifiedScene {
     0, 5, 1,
   ];
 
-  private _materials: Materials;
+  private _simpleMaterial: MeshPhongMaterial;
 
   private _scene: Scene;
   private _geometries: BufferGeometry[] = [];
@@ -33,17 +33,17 @@ export class SimplifiedScene {
     return this._geometries;
   }
 
-  constructor(materials: Materials) {
-    if (!materials) {
-      throw new Error("ColorRgbRmoUtils is undefined!");
-    }
-    this._materials = materials;
+  constructor() {
+    this._simpleMaterial = MaterialBuilder.buildPhongMaterial();
   }
 
   destroy() {
     this._geometries?.forEach(x => x.dispose());
     this._geometries = null;
-    this._scene = null;
+    this._scene = null;    
+
+    this._simpleMaterial.dispose();
+    this._simpleMaterial = null;
   }
 
   clearScene() {    
@@ -76,12 +76,16 @@ export class SimplifiedScene {
     }
 
     this._geometries.forEach(x => {    
-      const mesh = new Mesh(x, this._materials.simpleMaterial);
+      const mesh = new Mesh(x, this._simpleMaterial);
       scene.add(mesh);
     });
 
     this._scene = scene;
   }  
+
+  updateSceneMaterials() {
+    this._simpleMaterial.needsUpdate = true;
+  }
 
   private async buildHullGeometryAsync(meshes: MeshBgSm[]): Promise<BufferGeometry> {    
     if (!meshes?.length) {

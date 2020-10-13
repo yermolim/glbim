@@ -1,7 +1,7 @@
 import { Raycaster, Camera, Vector2, Vector3, Triangle, Face3, BufferAttribute } from "three";
 import { MeshBgAm } from "../common-types";
 
-export class PointSnap {
+export class PointSnapHelper {
   raycaster: Raycaster;
 
   constructor() {

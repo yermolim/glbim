@@ -2,12 +2,12 @@ import { Scene, Mesh, Color, Vector2, Vector3, PerspectiveCamera, Camera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
 import { MeshBgBm, MeshBgSm, MeshBgAm } from "../common-types";
-import { PointSnap } from "../components/point-snap";
+import { PointSnapHelper } from "../helpers/point-snap-helper";
 
 export class PickingScene {
   private _scene: Scene;
   private _target: WebGLRenderTarget;
-  private _pointSnap: PointSnap;
+  private _pointSnap: PointSnapHelper;
 
   private _lastPickingColor = 0;
 
@@ -23,12 +23,13 @@ export class PickingScene {
     this._scene = scene;
 
     this._target = new WebGLRenderTarget(1, 1);
-    this._pointSnap = new PointSnap();
+    this._pointSnap = new PointSnapHelper();
   }
 
   destroy() {
     this._materials.forEach(x => x.dispose());
     this._materials = null;
+
     this._target.dispose();
     this._target = null;
   }

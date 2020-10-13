@@ -1,19 +1,31 @@
-import { Light, Scene, Mesh, Vector3, BufferGeometry, BoxBufferGeometry, SphereBufferGeometry,
-  Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, Line } from "three";
+import { Light, Scene, Mesh, Vector3, Color,
+  BufferGeometry, BoxBufferGeometry, SphereBufferGeometry,
+  Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, 
+  MeshBasicMaterial, MeshStandardMaterial } from "three";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { Line2 } from "three/examples/jsm/lines/Line2";
 
-import {MarkerType, SegmentType, MeshMergeType, MeshBgSm, ColorRgbRmo, 
-  RenderGeometry, ModelGeometryInfo, Marker, Segment } from "../common-types";
-import { Materials } from "../components/materials";
+import {MarkerType, LineType, MeshMergeType, MeshBgSm, 
+  RenderGeometry, ModelGeometryInfo, MarkerInfo, LineInfo } from "../common-types";
+import { MaterialBuilder } from "../helpers/material-builder";
+import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
 export class RenderScene {
-  private _materials: Materials;
-
-  private _currentMergeType: MeshMergeType;
+  private _currentMergeType: MeshMergeType;  
+  private _isolationColor: ColorRgbRmo;
+  private _selectionColor: Color;
+  private _highlightColor: Color;
 
   private _scene: Scene;
   private _geometries: RenderGeometry[] = [];
-  private _markers = new Map<MarkerType, Marker>();
-  private _segments = new Map<SegmentType, Segment>();
+  private _globalMaterial: MeshStandardMaterial;
+  private _materials = new Map<string, MeshStandardMaterial>();
+
+  private _markerMaterials: MeshBasicMaterial[] = [];
+  private _lineMaterials: LineMaterial[] = [];
+  private _markers = new Map<MarkerType, MarkerInfo>();
+  private _lines = new Map<LineType, LineInfo>();
   
   private _geometryIndexBySourceMesh = new Map<MeshBgSm, number>();
   private _sourceMeshesByGeometryIndex = new Map<number, MeshBgSm[]>();
@@ -30,27 +42,21 @@ export class RenderScene {
     return [...this._renderMeshBySourceMesh.values()];
   }
 
-  constructor(materials: Materials) {
-    if (!materials) {
-      throw new Error("ColorRgbRmoUtils is undefined!");
-    }
-    this._materials = materials;
+  constructor(isolationColor: number, isolationOpacity: number, 
+    selectionColor: number, highlightColor: number) {
+
+    this.updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor);
+    this._globalMaterial = MaterialBuilder.buildGlobalMaterial(); 
 
     this.buildMarkers();
-    this.buildSegments();
+    this.buildLines();
   }
 
   destroy() {    
-    this._scene = null;
-
-    this._geometries?.forEach(x => x.geometry.dispose());
-    this._geometries = null;
-
-    this._markers?.forEach(v => v.mesh.geometry.dispose());
-    this._markers = null;
-
-    this._segments?.forEach(v => v.line.geometry.dispose());
-    this._segments = null;
+    this.destroyScene();
+    this.destroyMaterials();
+    this.destroyMarkers();
+    this.destroyLines();
   }
   
   async updateSceneAsync(lights: Light[], meshes: MeshBgSm[], models: ModelGeometryInfo[], 
@@ -58,7 +64,16 @@ export class RenderScene {
 
     this.deleteScene();
     await this.createSceneAsync(lights, meshes, models, meshMergeType);
-  }  
+  }    
+
+  updateSceneMaterials() {
+    this._globalMaterial.needsUpdate = true;
+    this._materials.forEach(v => v.needsUpdate = true);
+  }
+
+  updateResolution(rendererBufferWidth: number, rendererBufferHeight: number) {
+    this._lineMaterials.forEach(x => x.resolution.set(rendererBufferWidth, rendererBufferHeight));
+  }
   
   updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
     if (this._currentMergeType) {
@@ -68,6 +83,14 @@ export class RenderScene {
     }
 
     this.sortGeometryIndicesByOpacity(); 
+  }  
+
+  updateCommonColors(isolationColor: number, isolationOpacity: number, 
+    selectionColor: number, highlightColor: number) {
+
+    this._isolationColor = MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity);
+    this._selectionColor = new Color(selectionColor);
+    this._highlightColor = new Color(highlightColor);
   }
 
   // #region markers
@@ -95,57 +118,85 @@ export class RenderScene {
   // #endregion
 
   // #region segments
-  setSegment(type: SegmentType, start: Vector3, end: Vector3) {
-    const segment = this._segments.get(type);
-    if (!segment.active) {
-      this.scene.add(segment.line);
-      segment.active = true;
+  setSegment(type: LineType, start: Vector3, end: Vector3) {
+    const lineInfo = this._lines.get(type);
+    if (!lineInfo.active) {
+      this.scene.add(lineInfo.line);
+      lineInfo.active = true;
     }
-    segment.line.geometry.setFromPoints([start, end]);
+    lineInfo.line.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);
+    
   }
 
-  resetSegment(type: SegmentType) {
-    const segment = this._segments.get(type);
-    if (segment.active) {
-      this.scene.remove(segment.line);
-      segment.active = false;
-      segment.line.geometry.setFromPoints([new Vector3(), new Vector3()]);
+  resetSegment(type: LineType) {
+    const lineInfo = this._lines.get(type);
+    if (lineInfo.active) {
+      this.scene.remove(lineInfo.line);
+      lineInfo.active = false;
+      lineInfo.line.geometry.setPositions([0, 0, 0, 0, 0, 0]);
     }
   }
 
   resetSegments() {    
-    [...this._segments.keys()].forEach(x => this.resetSegment(x));
+    [...this._lines.keys()].forEach(x => this.resetSegment(x));
   }
   // #endregion
 
-  private buildMarkers() {    
+  // #region private markers
+  private buildMarkers() { 
+    this._markerMaterials[0] = MaterialBuilder.buildBasicMaterial(0xFF00FF);
+    this._markerMaterials[1] = MaterialBuilder.buildBasicMaterial(0x391285);
+    this._markerMaterials[2] = MaterialBuilder.buildBasicMaterial(0x00FFFF);
+    
     this._markers.set("temp", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._materials.markerMaterials[0]),
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._markerMaterials[0]),
       active: false,
       type: "temp",
     });
     this._markers.set("start", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._materials.markerMaterials[1]),
+      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._markerMaterials[1]),
       active: false,
       type: "start",
     });
     this._markers.set("end", {
-      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._materials.markerMaterials[2]),
+      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._markerMaterials[2]),
       active: false,
       type: "end",
     });
-  }
+  }  
 
-  private buildSegments() {  
-    const distanceLine = new Line(new BufferGeometry()
-      .setFromPoints([new Vector3(), new Vector3()]), this._materials.lineMaterials[0]);
+  private destroyMarkers() {
+    this._markers?.forEach(v => v.mesh.geometry.dispose());
+    this._markers = null;
+    
+    this._markerMaterials?.forEach(x => x.dispose());
+    this._markerMaterials = null;
+  }
+  // #endregion
+
+  // #region private lines
+  private buildLines() { 
+    this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 4);
+
+    const lineGeometry = new LineGeometry();
+    lineGeometry.setPositions([0, 0, 0, 0, 0, 0]);
+    const distanceLine = new Line2(lineGeometry, this._lineMaterials[0]);
     distanceLine.frustumCulled = false;
-    this._segments.set("distance", {
+    this._lines.set("distance", {
       line: distanceLine,
       active: false,
       type: "distance",
     });
   }
+
+  private destroyLines() {
+    this._lines?.forEach(v => v.line.geometry.dispose());
+    this._lines = null;
+    
+    this._lineMaterials?.forEach(x => x.dispose());
+    this._lineMaterials = null;
+  }
+  // #endregion
 
   // #region private scene methods 
   private deleteScene() {   
@@ -156,7 +207,7 @@ export class RenderScene {
     this._renderMeshBySourceMesh.clear();  
     this._geometryIndicesNeedSort.clear();  
     this._markers.forEach(x => x.active = false);
-    this._segments.forEach(x => x.active = false);
+    this._lines.forEach(x => x.active = false);
     this._scene = null;
   }
 
@@ -184,13 +235,13 @@ export class RenderScene {
         }
       }
       this._geometries.forEach(x => {    
-        const mesh = new Mesh(x.geometry, this._materials.globalMaterial);
+        const mesh = new Mesh(x.geometry, this._globalMaterial);
         scene.add(mesh);
       });
     } else {
       meshes.forEach(sourceMesh => {
         const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
-        const material = this._materials.getMaterial(rgbRmo);
+        const material = this.getMaterialByColor(rgbRmo);
         const renderMesh = new Mesh(sourceMesh.geometry, material);
         renderMesh.applyMatrix4(sourceMesh.matrix);
         this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
@@ -306,12 +357,12 @@ export class RenderScene {
 
   private updateMeshMaterials(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
     sourceMeshes.forEach((sourceMesh: MeshBgSm) => { 
-      const { rgbRmo } = this._materials.refreshMeshColors(sourceMesh);      
-      const material = this._materials.getMaterial(rgbRmo);
+      const { rgbRmo } = this.refreshMeshColors(sourceMesh);      
+      const material = this.getMaterialByColor(rgbRmo);
       const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
       renderMesh.material = material;
     });
-  }  
+  } 
 
   private updateMeshGeometryColors(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
     const meshesByRgIndex = new Map<number, MeshBgSm[]>();
@@ -330,11 +381,14 @@ export class RenderScene {
   }
 
   private updateGeometryColors(rgIndex: number, meshes: MeshBgSm[]) {
-    const { colors, rmos, indicesBySourceMesh } = this._geometries[rgIndex];
+    const geometry = this._geometries[rgIndex];
+    if (!geometry) {
+      return;
+    }
+    const { colors, rmos, indicesBySourceMesh } = geometry;
     let anyMeshOpacityChanged = false;
     meshes.forEach(mesh => {
-      const { rgbRmo, opacityChanged } = this._materials
-        .refreshMeshColors(mesh); 
+      const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh); 
       indicesBySourceMesh.get(mesh).forEach(i => {
         colors.setXYZ(i, rgbRmo.rByte, rgbRmo.gByte, rgbRmo.bByte);
         rmos.setXYZ(i, rgbRmo.roughnessByte, rgbRmo.metalnessByte, rgbRmo.opacityByte);
@@ -348,7 +402,7 @@ export class RenderScene {
     if (anyMeshOpacityChanged) {
       this._geometryIndicesNeedSort.add(rgIndex);
     }  
-  }  
+  }   
 
   private sortGeometryIndicesByOpacity() {
     this._geometryIndicesNeedSort.forEach(i => {
@@ -379,6 +433,73 @@ export class RenderScene {
       indices.needsUpdate = true;
     });
     this._geometryIndicesNeedSort.clear();
+  }   
+
+  private destroyScene() {
+    this._scene = null;
+
+    this._geometries?.forEach(x => x.geometry.dispose());
+    this._geometries = null;
+  }
+  // #endregion
+
+  // #region private common materials
+  private getMaterialByColor(rgbRmo: ColorRgbRmo): MeshStandardMaterial {
+    const key = rgbRmo.toString();
+    if (this._materials.has(key)) {
+      return this._materials.get(key);
+    }
+    const material = MaterialBuilder.buildStandardMaterial(rgbRmo);     
+    this._materials.set(key, material);
+    return material;
+  }   
+
+  private refreshMeshColors(mesh: MeshBgSm): {rgbRmo: ColorRgbRmo; opacityChanged: boolean} {     
+    const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);       
+    if (!mesh.userData.isolated) {
+      ColorRgbRmo.deleteFromMesh(mesh);
+    }
+    const baseRgbRmo = ColorRgbRmo.getFromMesh(mesh);  
+
+    let newRgbRmo: ColorRgbRmo;
+    if (mesh.userData.highlighted) {  
+      newRgbRmo = new ColorRgbRmo(        
+        this._highlightColor.r,
+        this._highlightColor.g,
+        this._highlightColor.b,
+        baseRgbRmo.roughness,
+        baseRgbRmo.metalness,
+        baseRgbRmo.opacity,  
+      );
+    } else if (mesh.userData.selected) {  
+      newRgbRmo = new ColorRgbRmo(        
+        this._selectionColor.r,
+        this._selectionColor.g,
+        this._selectionColor.b,
+        baseRgbRmo.roughness,
+        baseRgbRmo.metalness,
+        baseRgbRmo.opacity,  
+      );
+    } else if (mesh.userData.isolated) { 
+      newRgbRmo = this._isolationColor;
+    } else {
+      newRgbRmo = baseRgbRmo;
+    }
+
+    ColorRgbRmo.setToMesh(mesh, newRgbRmo);
+
+    return {
+      rgbRmo: newRgbRmo,
+      opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
+    };
   } 
+
+  private destroyMaterials() {    
+    this._globalMaterial.dispose();
+    this._globalMaterial = null; 
+    
+    this._materials.forEach(v => v.dispose());
+    this._materials = null;
+  }
   // #endregion
 }

@@ -10,15 +10,15 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4, ColorRgbRmo } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4 } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
-import { Materials } from "./components/materials";
 import { CameraControls } from "./components/camera-controls";
 import { Lights } from "./components/lights";
 import { Axes } from "./components/axes";
 import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
+import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4 };
 
@@ -64,7 +64,6 @@ export class GltfViewer {
   private _renderer: WebGLRenderer;
   private _deferRender: number;
 
-  private _materials: Materials;
   private _cameraControls: CameraControls; 
   private _lights: Lights; 
   private _axes: Axes;
@@ -113,14 +112,13 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
 
-    this._materials = new Materials(this._options.isolationColor, this._options.isolationOpacity,
-      this._options.selectionColor, this._options.highlightColor);
     this._lights = new Lights(this._options.usePhysicalLights, 
       this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity); 
     this._pickingScene = new PickingScene();
-    this._renderScene = new RenderScene(this._materials);
-    this._simplifiedScene = new SimplifiedScene(this._materials);
-    this._axes = new Axes(this._materials);
+    this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity,
+      this._options.selectionColor, this._options.highlightColor);
+    this._simplifiedScene = new SimplifiedScene();
+    this._axes = new Axes();
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
@@ -154,9 +152,6 @@ export class GltfViewer {
 
     this._renderScene?.destroy();
     this._renderScene = null;   
-
-    this._materials?.destroy();
-    this._materials = null; 
 
     this._loadedMeshes?.forEach(x => {
       x.geometry.dispose();
@@ -195,13 +190,14 @@ export class GltfViewer {
         || this._options.isolationOpacity !== oldOptions.isolationOpacity
         || this._options.selectionColor !== oldOptions.selectionColor
         || this._options.highlightColor !== oldOptions.highlightColor) {      
-      this._materials.updateColors(this._options.isolationColor, this._options.isolationOpacity,
+      this._renderScene.updateCommonColors(this._options.isolationColor, this._options.isolationOpacity,
         this._options.selectionColor, this._options.highlightColor);
       colorsUpdated = true;
     }
 
     if (rendererReinitialized || lightsUpdated || colorsUpdated) {
-      this._materials.updateMaterials();
+      this._renderScene.updateSceneMaterials();
+      this._simplifiedScene.updateSceneMaterials();
       materialsUpdated = true;
     }
 
@@ -470,8 +466,14 @@ export class GltfViewer {
   private resizeRenderer() {
     const { width, height } = this._container.getBoundingClientRect();
     this._cameraControls?.resize(width, height);
-    this._renderer?.setSize(width, height, false);
-    this.render();   
+    if (this._renderer) {
+      this._renderer.setSize(width, height, false);
+      if (this._renderScene) {       
+        const ctx = this._renderer.getContext(); 
+        this._renderScene.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+      }
+      this.render();   
+    }
   }
 
   private async updateRenderSceneAsync(): Promise<void> {
