@@ -1,5 +1,5 @@
-import { Mesh, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
-  Uint32BufferAttribute, Float32BufferAttribute, Uint8BufferAttribute, Vector3 } from "three";
+import { Mesh, Vector3, Sprite, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
+  Uint32BufferAttribute, Float32BufferAttribute, Uint8BufferAttribute } from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
 // #region types
@@ -64,10 +64,16 @@ export interface RenderGeometry {
   indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
 }
 
-export interface MarkerInfo {
+export interface MeshMarkerInfo {
   type: MarkerType;
   active: boolean;
   mesh: MeshBgBm;
+}
+
+export interface SpriteMarkerInfo {
+  type: MarkerType;
+  active: boolean;
+  sprite: Sprite;
 }
 
 export interface LineInfo {

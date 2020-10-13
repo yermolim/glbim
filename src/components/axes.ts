@@ -9,9 +9,9 @@ import { MaterialBuilder } from "../helpers/material-builder";
 export class Axes extends Object3D {
   private static readonly _toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), - Math.PI/2);
 
+  private _size: number;
   private _camera: Camera;
   private _axisGeometry: LineGeometry;
-  private _size = 96;
   private _viewportBak = new Vector4();  
   
   private _axisMaterials: LineMaterial[] = new Array(3);
@@ -28,8 +28,10 @@ export class Axes extends Object3D {
   private yLabelN: Sprite;
   private zLabelN: Sprite;
 
-  constructor() {
+  constructor(size = 128) {
     super();
+
+    this._size = size;
 
     this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
     this._camera.position.set(0, 0, 2);

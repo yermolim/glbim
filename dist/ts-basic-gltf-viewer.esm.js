@@ -1,6 +1,6 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { first } from 'rxjs/operators';
-import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Quaternion, Object3D, Vector4, OrthographicCamera, Sprite, Mesh, SphereBufferGeometry, BoxBufferGeometry, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Raycaster, Triangle, WebGLRenderTarget, Vector2, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
+import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Quaternion, Object3D, Vector4, OrthographicCamera, Sprite, SphereBufferGeometry, Mesh, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Raycaster, Vector2, Triangle, WebGLRenderTarget, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { ResizeSensor } from 'css-element-queries';
@@ -343,15 +343,70 @@ class MaterialBuilder {
         const texture = new CanvasTexture(canvas);
         return new SpriteMaterial({ map: texture, toneMapped: false });
     }
+    static buildCircleSpriteMaterial(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = new Color(color).getStyle();
+        ctx.fill();
+        const texture = new CanvasTexture(canvas);
+        return new SpriteMaterial({ map: texture, toneMapped: false });
+    }
+    static buildSquareSpriteMaterial(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.fillStyle = new Color(color).getStyle();
+        ctx.fillRect(0, 0, size, size);
+        const texture = new CanvasTexture(canvas);
+        return new SpriteMaterial({ map: texture, toneMapped: false });
+    }
+    static buildTriangleSpriteMaterial(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.moveTo(0, size);
+        ctx.lineTo(size / 2, 0);
+        ctx.lineTo(size, size);
+        ctx.closePath();
+        ctx.fillStyle = new Color(color).getStyle();
+        ctx.fill();
+        const texture = new CanvasTexture(canvas);
+        return new SpriteMaterial({ map: texture, toneMapped: false });
+    }
+    static buildDiamondSpriteMaterial(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.moveTo(0, size / 2);
+        ctx.lineTo(size / 2, 0);
+        ctx.lineTo(size, size / 2);
+        ctx.lineTo(size / 2, size);
+        ctx.closePath();
+        ctx.fillStyle = new Color(color).getStyle();
+        ctx.fill();
+        const texture = new CanvasTexture(canvas);
+        return new SpriteMaterial({ map: texture, toneMapped: false });
+    }
 }
 
 class Axes extends Object3D {
-    constructor() {
+    constructor(size = 128) {
         super();
-        this._size = 96;
         this._viewportBak = new Vector4();
         this._axisMaterials = new Array(3);
         this._axisLabelMaterials = new Array(6);
+        this._size = size;
         this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
         this._camera.position.set(0, 0, 2);
         this.buildAxes();
@@ -533,31 +588,33 @@ class RenderScene {
         this._markerMaterials[0] = MaterialBuilder.buildBasicMaterial(0xFF00FF);
         this._markerMaterials[1] = MaterialBuilder.buildBasicMaterial(0x391285);
         this._markerMaterials[2] = MaterialBuilder.buildBasicMaterial(0x00FFFF);
+        this._markerGeometry = new SphereBufferGeometry(0.1, 16, 8);
         this._markers.set("temp", {
-            mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._markerMaterials[0]),
+            mesh: new Mesh(this._markerGeometry, this._markerMaterials[0]),
             active: false,
             type: "temp",
         });
         this._markers.set("start", {
-            mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._markerMaterials[1]),
+            mesh: new Mesh(this._markerGeometry, this._markerMaterials[1]),
             active: false,
             type: "start",
         });
         this._markers.set("end", {
-            mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._markerMaterials[2]),
+            mesh: new Mesh(this._markerGeometry, this._markerMaterials[2]),
             active: false,
             type: "end",
         });
     }
     destroyMarkers() {
-        var _a, _b;
-        (_a = this._markers) === null || _a === void 0 ? void 0 : _a.forEach(v => v.mesh.geometry.dispose());
+        var _a;
         this._markers = null;
-        (_b = this._markerMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose());
+        this._markerGeometry.dispose();
+        this._markerGeometry = null;
+        (_a = this._markerMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose());
         this._markerMaterials = null;
     }
     buildLines() {
-        this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 4);
+        this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 2);
         const lineGeometry = new LineGeometry();
         lineGeometry.setPositions([0, 0, 0, 0, 0, 0]);
         const distanceLine = new Line2(lineGeometry, this._lineMaterials[0]);
@@ -1051,6 +1108,25 @@ class PointSnapHelper {
     constructor() {
         this.raycaster = new Raycaster();
     }
+    static convertClientToCanvas(renderer, clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const pixelRatio = renderer.getPixelRatio();
+        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
+        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
+        return new Vector2(x, y);
+    }
+    static convertWorldToCanvas(camera, renderer, point) {
+        const nPoint = new Vector3().copy(point).project(camera);
+        if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
+            return null;
+        }
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+        const x = (nPoint.x + 1) * canvasWidth / 2;
+        const y = (nPoint.y - 1) * canvasHeight / -2;
+        return new Vector2(x, y);
+    }
     destroy() {
     }
     getPoint(camera, mesh, mousePoint) {
@@ -1131,35 +1207,16 @@ class PickingScene {
         }
     }
     getSourceMeshAt(camera, renderer, clientX, clientY) {
-        const position = this.convertClientToCanvas(renderer, clientX, clientY);
+        const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
         return this.getSourceMeshAtPosition(camera, renderer, position);
     }
     getSnapPointAt(camera, renderer, clientX, clientY) {
-        const position = this.convertClientToCanvas(renderer, clientX, clientY);
+        const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
         const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
         if (!mesh) {
             return null;
         }
         return this.getMeshSnapPointAtPosition(camera, renderer, position, this._pickingMeshById.get(mesh.uuid));
-    }
-    convertClientToCanvas(renderer, clientX, clientY) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const pixelRatio = renderer.getPixelRatio();
-        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
-        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
-        return new Vector2(x, y);
-    }
-    convertWorldToCanvas(camera, renderer, point) {
-        const nPoint = new Vector3().copy(point).project(camera);
-        if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
-            return null;
-        }
-        const rect = renderer.domElement.getBoundingClientRect();
-        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-        const x = (nPoint.x + 1) * canvasWidth / 2;
-        const y = (nPoint.y - 1) * canvasHeight / -2;
-        return new Vector2(x, y);
     }
     getSourceMeshAtPosition(camera, renderer, position) {
         const context = renderer.getContext();

@@ -1,4 +1,5 @@
-import { Raycaster, Camera, Vector2, Vector3, Triangle, Face3, BufferAttribute } from "three";
+import { Raycaster, Camera, WebGLRenderer, BufferAttribute,
+  Vector2, Vector3, Face3, Triangle } from "three";
 import { MeshBgAm } from "../common-types";
 
 export class PointSnapHelper {
@@ -6,6 +7,31 @@ export class PointSnapHelper {
 
   constructor() {
     this.raycaster = new Raycaster();
+  }  
+  
+  static convertClientToCanvas(renderer: WebGLRenderer, 
+    clientX: number, clientY: number): Vector2 {    
+    const rect = renderer.domElement.getBoundingClientRect();
+    const pixelRatio = renderer.getPixelRatio();
+    const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
+    const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0; 
+    return new Vector2(x, y);
+  }
+
+  static convertWorldToCanvas(camera: Camera, renderer: WebGLRenderer, 
+    point: Vector3): Vector2 {
+    const nPoint = new Vector3().copy(point).project(camera);
+    if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
+      // point is outside of canvas space, return null
+      return null;
+    }
+    
+    const rect = renderer.domElement.getBoundingClientRect();
+    const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+    const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+    const x = (nPoint.x + 1) * canvasWidth / 2;
+    const y = (nPoint.y - 1) * canvasHeight / -2;
+    return new Vector2(x, y);
   }
 
   destroy() {    

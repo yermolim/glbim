@@ -62,14 +62,14 @@ export class PickingScene {
 
   getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
     clientX: number, clientY: number): MeshBgSm { 
-    const position = this.convertClientToCanvas(renderer, clientX, clientY);
+    const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
     return this.getSourceMeshAtPosition(camera, renderer, position);
   }
 
   getSnapPointAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
     clientX: number, clientY: number): Vector3 {
 
-    const position = this.convertClientToCanvas(renderer, clientX, clientY);
+    const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
     const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
     if (!mesh) {
       return null;
@@ -77,31 +77,6 @@ export class PickingScene {
 
     return this.getMeshSnapPointAtPosition(camera, renderer, position,
       this._pickingMeshById.get(mesh.uuid));
-  }
-
-  convertClientToCanvas(renderer: WebGLRenderer, 
-    clientX: number, clientY: number): Vector2 {    
-    const rect = renderer.domElement.getBoundingClientRect();
-    const pixelRatio = renderer.getPixelRatio();
-    const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
-    const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0; 
-    return new Vector2(x, y);
-  }
-
-  convertWorldToCanvas(camera: Camera, renderer: WebGLRenderer, 
-    point: Vector3): Vector2 {
-    const nPoint = new Vector3().copy(point).project(camera);
-    if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
-      // point is outside of canvas space, return null
-      return null;
-    }
-    
-    const rect = renderer.domElement.getBoundingClientRect();
-    const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-    const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-    const x = (nPoint.x + 1) * canvasWidth / 2;
-    const y = (nPoint.y - 1) * canvasHeight / -2;
-    return new Vector2(x, y);
   }
 
   private getSourceMeshAtPosition(camera: PerspectiveCamera, 

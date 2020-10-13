@@ -7,7 +7,7 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
 import {MarkerType, LineType, MeshMergeType, MeshBgSm, 
-  RenderGeometry, ModelGeometryInfo, MarkerInfo, LineInfo } from "../common-types";
+  RenderGeometry, ModelGeometryInfo, MeshMarkerInfo, LineInfo } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
@@ -22,9 +22,10 @@ export class RenderScene {
   private _globalMaterial: MeshStandardMaterial;
   private _materials = new Map<string, MeshStandardMaterial>();
 
+  private _markerGeometry: BufferGeometry;
   private _markerMaterials: MeshBasicMaterial[] = [];
   private _lineMaterials: LineMaterial[] = [];
-  private _markers = new Map<MarkerType, MarkerInfo>();
+  private _markers = new Map<MarkerType, MeshMarkerInfo>();
   private _lines = new Map<LineType, LineInfo>();
   
   private _geometryIndexBySourceMesh = new Map<MeshBgSm, number>();
@@ -148,26 +149,29 @@ export class RenderScene {
     this._markerMaterials[1] = MaterialBuilder.buildBasicMaterial(0x391285);
     this._markerMaterials[2] = MaterialBuilder.buildBasicMaterial(0x00FFFF);
     
+    this._markerGeometry = new SphereBufferGeometry(0.1, 16, 8);
     this._markers.set("temp", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 16, 8), this._markerMaterials[0]),
+      mesh: new Mesh(this._markerGeometry, this._markerMaterials[0]),
       active: false,
       type: "temp",
     });
     this._markers.set("start", {
-      mesh: new Mesh(new SphereBufferGeometry(0.1, 4, 2), this._markerMaterials[1]),
+      mesh: new Mesh(this._markerGeometry, this._markerMaterials[1]),
       active: false,
       type: "start",
     });
     this._markers.set("end", {
-      mesh: new Mesh(new BoxBufferGeometry(0.2, 0.2, 0.2), this._markerMaterials[2]),
+      mesh: new Mesh(this._markerGeometry, this._markerMaterials[2]),
       active: false,
       type: "end",
     });
   }  
 
   private destroyMarkers() {
-    this._markers?.forEach(v => v.mesh.geometry.dispose());
     this._markers = null;
+
+    this._markerGeometry.dispose();
+    this._markerGeometry = null;
     
     this._markerMaterials?.forEach(x => x.dispose());
     this._markerMaterials = null;
@@ -176,7 +180,7 @@ export class RenderScene {
 
   // #region private lines
   private buildLines() { 
-    this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 4);
+    this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 2);
 
     const lineGeometry = new LineGeometry();
     lineGeometry.setPositions([0, 0, 0, 0, 0, 0]);
