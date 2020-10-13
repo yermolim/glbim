@@ -308,12 +308,15 @@ export class GltfViewer {
     this.findAndSelectMeshes(ids, true);
   };
 
-  getOpenedModels(): ModelOpenedInfo[] {
-    return this._openedModelsChange.getValue();
-  }
-
-  getSelectedItems(): Set<string> {
-    return this._selectionChange.getValue();
+  zoomToItems(ids: string[]) {
+    if (ids?.length) {
+      const { found } = this.findMeshesByIds(new Set<string>(ids));     
+      if (found.length) {
+        this.render(found);
+        return;
+      }
+    }
+    this.renderWholeScene();
   }
 
   toggleMeasureMode(value: boolean) {
@@ -328,8 +331,12 @@ export class GltfViewer {
     }
   }
 
-  zoomOutScene() {
-    this.renderWholeScene();
+  getOpenedModels(): ModelOpenedInfo[] {
+    return this._openedModelsChange.getValue();
+  }
+
+  getSelectedItems(): Set<string> {
+    return this._selectionChange.getValue();
   }
   // #endregion
 

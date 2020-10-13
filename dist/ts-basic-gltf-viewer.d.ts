@@ -125,10 +125,10 @@ export declare class GltfViewer {
 	colorItems(coloringInfos: ColoringInfo[]): void;
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
+	zoomToItems(ids: string[]): void;
+	toggleMeasureMode(value: boolean): void;
 	getOpenedModels(): ModelOpenedInfo[];
 	getSelectedItems(): Set<string>;
-	toggleMeasureMode(value: boolean): void;
-	zoomOutScene(): void;
 	private initObservables;
 	private closeSubjects;
 	private onCanvasPointerDown;
