@@ -7,10 +7,6 @@ export type MeshMergeType = "scene" | "model" | "model+" | null;
 
 export type FastRenderType = "ch" | "aabb" | "ombb" | null;
 
-export type MarkerType = "temp" | "start" | "end";
-
-export type LineType = "distance";
-
 export type MeshBgSm = Mesh<BufferGeometry, MeshStandardMaterial>;
 
 export type MeshBgBm = Mesh<BufferGeometry, MeshBasicMaterial>;
@@ -62,24 +58,6 @@ export interface RenderGeometry {
   rmos: Uint8BufferAttribute;
   indices: Uint32BufferAttribute;
   indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
-}
-
-export interface MeshMarkerInfo {
-  type: MarkerType;
-  active: boolean;
-  mesh: MeshBgBm;
-}
-
-export interface SpriteMarkerInfo {
-  type: MarkerType;
-  active: boolean;
-  sprite: Sprite;
-}
-
-export interface LineInfo {
-  type: LineType;
-  active: boolean;
-  line: Line2;
 }
 // #endregion
 

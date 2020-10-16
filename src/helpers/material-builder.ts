@@ -84,8 +84,22 @@ export class MaterialBuilder {
     return new LineBasicMaterial({color, linewidth: width});
   }
     
-  static buildLineMaterial(color: number, width: number): LineMaterial {
-    return new LineMaterial({color, linewidth: width});
+  static buildLineMaterial(color: number, width: number, dashed: boolean): LineMaterial {
+    const material = new LineMaterial({
+      color, 
+      linewidth: width,
+    });
+
+    if (dashed) {      
+      material.dashed = true;
+      material.dashScale = 0.5;
+      material.dashSize = 1;
+      material.gapSize = 1;
+      material.defines.USE_DASH = "";
+      material.needsUpdate = true;
+    }
+
+    return material;
   }  
 
   static buildAxisSpriteMaterial(size: number, color: number, text: string): SpriteMaterial {

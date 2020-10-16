@@ -51,6 +51,7 @@ export class Axes extends Object3D {
     renderer.getViewport(this._viewportBak);
     
     renderer.autoClear = false;
+    renderer.clearDepth();
     renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, 
       renderer.getContext().drawingBufferHeight - this._size, 
       this._size, this._size);
@@ -62,9 +63,9 @@ export class Axes extends Object3D {
   }
 
   private buildAxes() {
-    this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02);
-    this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02);
-    this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02);
+    this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02, false);
+    this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02, false);
+    this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02, false);
 
     this._axisLabelMaterials[0] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xFF3653, "X");
     this._axisLabelMaterials[1] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xA32235, "-X");

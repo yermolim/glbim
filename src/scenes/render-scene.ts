@@ -1,13 +1,9 @@
-import { Light, Scene, Mesh, Vector3, Color,
-  BufferGeometry, BoxBufferGeometry, SphereBufferGeometry,
-  Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, 
-  MeshBasicMaterial, MeshStandardMaterial } from "three";
-import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
-import { Line2 } from "three/examples/jsm/lines/Line2";
+import { Light, Scene, Mesh, Color, MeshStandardMaterial,
+  BufferGeometry, Uint32BufferAttribute, Uint8BufferAttribute, 
+  Float32BufferAttribute } from "three";
 
-import {MarkerType, LineType, MeshMergeType, MeshBgSm, 
-  RenderGeometry, ModelGeometryInfo, MeshMarkerInfo, LineInfo } from "../common-types";
+import { MeshMergeType, MeshBgSm, 
+  RenderGeometry, ModelGeometryInfo } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
@@ -21,12 +17,6 @@ export class RenderScene {
   private _geometries: RenderGeometry[] = [];
   private _globalMaterial: MeshStandardMaterial;
   private _materials = new Map<string, MeshStandardMaterial>();
-
-  private _markerGeometry: BufferGeometry;
-  private _markerMaterials: MeshBasicMaterial[] = [];
-  private _lineMaterials: LineMaterial[] = [];
-  private _markers = new Map<MarkerType, MeshMarkerInfo>();
-  private _lines = new Map<LineType, LineInfo>();
   
   private _geometryIndexBySourceMesh = new Map<MeshBgSm, number>();
   private _sourceMeshesByGeometryIndex = new Map<number, MeshBgSm[]>();
@@ -48,16 +38,11 @@ export class RenderScene {
 
     this.updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor);
     this._globalMaterial = MaterialBuilder.buildGlobalMaterial(); 
-
-    this.buildMarkers();
-    this.buildLines();
   }
 
   destroy() {    
     this.destroyScene();
     this.destroyMaterials();
-    this.destroyMarkers();
-    this.destroyLines();
   }
   
   async updateSceneAsync(lights: Light[], meshes: MeshBgSm[], models: ModelGeometryInfo[], 
@@ -70,10 +55,6 @@ export class RenderScene {
   updateSceneMaterials() {
     this._globalMaterial.needsUpdate = true;
     this._materials.forEach(v => v.needsUpdate = true);
-  }
-
-  updateResolution(rendererBufferWidth: number, rendererBufferHeight: number) {
-    this._lineMaterials.forEach(x => x.resolution.set(rendererBufferWidth, rendererBufferHeight));
   }
   
   updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
@@ -93,114 +74,7 @@ export class RenderScene {
     this._selectionColor = new Color(selectionColor);
     this._highlightColor = new Color(highlightColor);
   }
-
-  // #region markers
-  setMarker(type: MarkerType, position: Vector3) {
-    const marker = this._markers.get(type);
-    if (!marker.active) {
-      this.scene.add(marker.mesh);
-      marker.active = true;
-    }
-    marker.mesh.position.set(position.x, position.y, position.z);
-  } 
-
-  resetMarker(type: MarkerType) {
-    const marker = this._markers.get(type);
-    if (marker.active) {
-      this.scene.remove(marker.mesh);
-      marker.active = false;
-      marker.mesh.position.set(0, 0, 0);
-    }
-  }  
-
-  resetMarkers() {
-    [...this._markers.keys()].forEach(x => this.resetMarker(x));
-  }
-  // #endregion
-
-  // #region segments
-  setSegment(type: LineType, start: Vector3, end: Vector3) {
-    const lineInfo = this._lines.get(type);
-    if (!lineInfo.active) {
-      this.scene.add(lineInfo.line);
-      lineInfo.active = true;
-    }
-    lineInfo.line.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);
-    
-  }
-
-  resetSegment(type: LineType) {
-    const lineInfo = this._lines.get(type);
-    if (lineInfo.active) {
-      this.scene.remove(lineInfo.line);
-      lineInfo.active = false;
-      lineInfo.line.geometry.setPositions([0, 0, 0, 0, 0, 0]);
-    }
-  }
-
-  resetSegments() {    
-    [...this._lines.keys()].forEach(x => this.resetSegment(x));
-  }
-  // #endregion
-
-  // #region private markers
-  private buildMarkers() { 
-    this._markerMaterials[0] = MaterialBuilder.buildBasicMaterial(0xFF00FF);
-    this._markerMaterials[1] = MaterialBuilder.buildBasicMaterial(0x391285);
-    this._markerMaterials[2] = MaterialBuilder.buildBasicMaterial(0x00FFFF);
-    
-    this._markerGeometry = new SphereBufferGeometry(0.1, 16, 8);
-    this._markers.set("temp", {
-      mesh: new Mesh(this._markerGeometry, this._markerMaterials[0]),
-      active: false,
-      type: "temp",
-    });
-    this._markers.set("start", {
-      mesh: new Mesh(this._markerGeometry, this._markerMaterials[1]),
-      active: false,
-      type: "start",
-    });
-    this._markers.set("end", {
-      mesh: new Mesh(this._markerGeometry, this._markerMaterials[2]),
-      active: false,
-      type: "end",
-    });
-  }  
-
-  private destroyMarkers() {
-    this._markers = null;
-
-    this._markerGeometry.dispose();
-    this._markerGeometry = null;
-    
-    this._markerMaterials?.forEach(x => x.dispose());
-    this._markerMaterials = null;
-  }
-  // #endregion
-
-  // #region private lines
-  private buildLines() { 
-    this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 2);
-
-    const lineGeometry = new LineGeometry();
-    lineGeometry.setPositions([0, 0, 0, 0, 0, 0]);
-    const distanceLine = new Line2(lineGeometry, this._lineMaterials[0]);
-    distanceLine.frustumCulled = false;
-    this._lines.set("distance", {
-      line: distanceLine,
-      active: false,
-      type: "distance",
-    });
-  }
-
-  private destroyLines() {
-    this._lines?.forEach(v => v.line.geometry.dispose());
-    this._lines = null;
-    
-    this._lineMaterials?.forEach(x => x.dispose());
-    this._lineMaterials = null;
-  }
-  // #endregion
+  // // #endregion
 
   // #region private scene methods 
   private deleteScene() {   
@@ -210,8 +84,6 @@ export class RenderScene {
     this._sourceMeshesByGeometryIndex.clear(); 
     this._renderMeshBySourceMesh.clear();  
     this._geometryIndicesNeedSort.clear();  
-    this._markers.forEach(x => x.active = false);
-    this._lines.forEach(x => x.active = false);
     this._scene = null;
   }
 

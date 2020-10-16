@@ -7,7 +7,6 @@ import { PointSnapHelper } from "../helpers/point-snap-helper";
 export class PickingScene {
   private _scene: Scene;
   private _target: WebGLRenderTarget;
-  private _pointSnap: PointSnapHelper;
 
   private _lastPickingColor = 0;
 
@@ -23,7 +22,6 @@ export class PickingScene {
     this._scene = scene;
 
     this._target = new WebGLRenderTarget(1, 1);
-    this._pointSnap = new PointSnapHelper();
   }
 
   destroy() {
@@ -65,18 +63,14 @@ export class PickingScene {
     const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
     return this.getSourceMeshAtPosition(camera, renderer, position);
   }
-
-  getSnapPointAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
-    clientX: number, clientY: number): Vector3 {
-
+  
+  getPickingMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
+    clientX: number, clientY: number): MeshBgBm { 
     const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
-    const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
-    if (!mesh) {
-      return null;
-    }
-
-    return this.getMeshSnapPointAtPosition(camera, renderer, position,
-      this._pickingMeshById.get(mesh.uuid));
+    const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, position);
+    return sourceMesh
+      ? this._pickingMeshById.get(sourceMesh.uuid)
+      : null;
   }
 
   private getSourceMeshAtPosition(camera: PerspectiveCamera, 
@@ -102,16 +96,6 @@ export class PickingScene {
 
     const mesh = this._sourceMeshByPickingColor.get(hex);
     return mesh;
-  }
-
-  private getMeshSnapPointAtPosition(camera: Camera, renderer: WebGLRenderer, 
-    position: Vector2, mesh: MeshBgAm): Vector3 {
-    const context = renderer.getContext();  
-    
-    const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
-    const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
-    const point = this._pointSnap.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
-    return point;
   }
   
   private nextPickingColor(): number {

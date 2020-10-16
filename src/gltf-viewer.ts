@@ -12,13 +12,14 @@ import { ResizeSensor } from "css-element-queries";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
   MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4 } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
+import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { CameraControls } from "./components/camera-controls";
 import { Lights } from "./components/lights";
 import { Axes } from "./components/axes";
 import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
-import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
+import { HudScene } from "./scenes/hud-scene";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4 };
 
@@ -57,19 +58,16 @@ export class GltfViewer {
   private _containerResizeSensor: ResizeSensor;
   private _options: GltfViewerOptions;  
 
-  private _measureMode = false;
-  private _measurePoints: {start: Vector3; end: Vector3} = {start: null, end: null};
-
   // #region rendering related fields
   private _renderer: WebGLRenderer;
   private _deferRender: number;
 
   private _cameraControls: CameraControls; 
   private _lights: Lights; 
-  private _axes: Axes;
 
   private _renderScene: RenderScene; 
   private _simplifiedScene: SimplifiedScene; 
+
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
   // #endregion
 
@@ -84,6 +82,13 @@ export class GltfViewer {
   private _selectedMeshes: MeshBgSm[] = [];
   private _isolatedMeshes: MeshBgSm[] = [];
   private _coloredMeshes: MeshBgSm[] = [];
+  // #endregion  
+
+  // #region private hud
+  private _hudScene: HudScene; 
+  private _axes: Axes;  
+  
+  private _measureMode = false;
   // #endregion
 
   // #region loading models related fieds
@@ -118,10 +123,12 @@ export class GltfViewer {
     this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity,
       this._options.selectionColor, this._options.highlightColor);
     this._simplifiedScene = new SimplifiedScene();
-    this._axes = new Axes();
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
+    
+    this._hudScene = new HudScene(this._renderer);
+    this._axes = new Axes();
  
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
       this.resizeRenderer();
@@ -130,7 +137,9 @@ export class GltfViewer {
 
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
-    this.closeSubjects();     
+    this.closeSubjects();  
+
+    this._loader?.dracoLoader?.dispose();  
     
     this._containerResizeSensor?.detach();
     this._containerResizeSensor = null;
@@ -141,8 +150,8 @@ export class GltfViewer {
     this._axes?.destroy();
     this._axes = null;
 
-    this._renderer?.dispose();
-    this._loader?.dracoLoader?.dispose();
+    this._hudScene?.destroy();
+    this._hudScene = null;
 
     this._pickingScene?.destroy();
     this._pickingScene = null;
@@ -158,6 +167,8 @@ export class GltfViewer {
       x.material.dispose();
     });
     this._loadedMeshes = null;  
+
+    this._renderer?.dispose();
   }
 
   // #region public interaction 
@@ -320,7 +331,7 @@ export class GltfViewer {
       return;
     }
     if (this._measureMode) {
-      this.clearMeasurements();
+      this.clearMeasureMarkers();
       this._measureMode = false;
     } else {
       this._measureMode = true;
@@ -383,7 +394,7 @@ export class GltfViewer {
     }
 
     if (this._measureMode) {
-      this.setMeasureMarkerAtPoint(x, y);
+      this.setDistanceMarkerAtPoint(x, y);
     } else {
       if (this._pointerEventHelper.waitForDouble) {
         this.isolateSelectedMeshes();
@@ -414,7 +425,7 @@ export class GltfViewer {
       this.highlightMeshAtPoint(x, y);
 
       if (this._measureMode) {
-        this.setTempMarkerAtPoint(x, y);
+        this.setSnapMarkerAtPoint(x, y);
       }
     }, 30);
   };
@@ -468,10 +479,6 @@ export class GltfViewer {
     this._cameraControls?.resize(width, height);
     if (this._renderer) {
       this._renderer.setSize(width, height, false);
-      if (this._renderScene) {       
-        const ctx = this._renderer.getContext(); 
-        this._renderScene.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
-      }
       this.render();   
     }
   }
@@ -507,15 +514,21 @@ export class GltfViewer {
       if (!this._renderer) {
         return;
       }
+
       const start = performance.now();
+
       if (fast && this._simplifiedScene?.scene) {
         this._renderer.render(this._simplifiedScene.scene, this._cameraControls.camera);
       } else if (this._renderScene?.scene) {
         this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
       }
-      if (this._options.showAxesHelper) {
-        this._axes?.render(this._cameraControls.camera, this._renderer);
+      if (this._measureMode && this._hudScene) {
+        this._hudScene.render(this._cameraControls.camera, this._renderer);
       }
+      if (this._options.showAxesHelper && this._axes) {
+        this._axes.render(this._cameraControls.camera, this._renderer);
+      }
+      
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
     });
@@ -735,12 +748,6 @@ export class GltfViewer {
       ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
       : null;
   }
-
-  private getSnapPointAt(clientX: number, clientY: number): Vector3 {  
-    return this._renderer && this._pickingScene
-      ? this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, clientX, clientY)
-      : null;
-  }
   // #endregion
   
   // #region item selection/isolation   
@@ -910,76 +917,39 @@ export class GltfViewer {
   // #endregion
 
   // #region measurements 
-  private setTempMarkerAtPoint(clientX: number, clientY: number) {    
-    const point = this.getSnapPointAt(clientX, clientY);
-    if (point) {
-      this._renderScene.setMarker("temp", point);
-      this._snapPointChange.next(new Vec4(point.x, point.y, point.z, 0, true));
-    } else {
-      this._renderScene.resetMarker("temp");
-      this._snapPointChange.next(null);
-    }
+  private setSnapMarkerAtPoint(clientX: number, clientY: number) {    
+    if (!this._renderer || !this._pickingScene) {
+      return;
+    } 
+
+    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
+      this._renderer, clientX, clientY);
+    const snapPoint = this._hudScene.setSnapMarker(this._cameraControls.camera,
+      this._renderer, pickingMesh, clientX, clientY);
+
     this.render(); 
+    this._snapPointChange.next(snapPoint);
   }
 
-  private setMeasureMarkerAtPoint(x: number, y: number) {
-    const point = this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, x, y);
-
-    if (!point) {
-      if (this._measurePoints.start) {
-        this._measurePoints.start = null;
-      }
-      if (this._measurePoints.end) {
-        this._measurePoints.end = null;
-      }
-    } else {
-      if (this._measurePoints.end) {
-        this._measurePoints.start = this._measurePoints.end;
-        this._measurePoints.end = point;
-      } else if (this._measurePoints.start) {
-        this._measurePoints.end = point;
-      } else {
-        this._measurePoints.start = point;     
-      }
-    }
-
-    if (this._measurePoints.start) {
-      this._renderScene.setMarker("start", this._measurePoints.start);   
-    } else {
-      this._renderScene.resetMarker("start");
-    }
-
-    if (this._measurePoints.end) {
-      this._renderScene.setMarker("end", this._measurePoints.end);
-      this._renderScene.setSegment("distance", 
-        this._measurePoints.start, this._measurePoints.end);
-    } else {      
-      this._renderScene.resetMarker("end");
-      this._renderScene.resetSegment("distance");
-    }
+  private setDistanceMarkerAtPoint(clientX: number, clientY: number) { 
+    if (!this._renderer || !this._pickingScene) {
+      return;
+    } 
+    
+    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
+      this._renderer, clientX, clientY);
+    const distance = this._hudScene.setDistanceMarker(this._cameraControls.camera,
+      this._renderer, pickingMesh, clientX, clientY);
     
     this.render(); 
-    this.emitDistanceMeasureChange();
+    this._distanceMeasureChange.next(distance);
   }
 
-  private emitDistanceMeasureChange() {
-    if (this._measurePoints.start && this._measurePoints.end) {
-      this._distanceMeasureChange.next(new Distance(
-        this._measurePoints.start, this._measurePoints.end, true));
-    } else {
-      this._distanceMeasureChange.next(null);
-    }
-  }
-
-  private clearMeasurements() {
-    this._measurePoints.start = null;
-    this._measurePoints.end = null;
-    this._distanceMeasureChange.next(null);
-
-    this._renderScene.resetMarkers();
-    this._renderScene.resetSegments();
+  private clearMeasureMarkers() {
+    this._hudScene.resetMeasureMarkers();
 
     this.render();
+    this._distanceMeasureChange.next(null);
   }
   // #endregion
 }

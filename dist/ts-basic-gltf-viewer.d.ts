@@ -89,13 +89,10 @@ export declare class GltfViewer {
 	private _container;
 	private _containerResizeSensor;
 	private _options;
-	private _measureMode;
-	private _measurePoints;
 	private _renderer;
 	private _deferRender;
 	private _cameraControls;
 	private _lights;
-	private _axes;
 	private _renderScene;
 	private _simplifiedScene;
 	private _meshesNeedColorUpdate;
@@ -107,6 +104,9 @@ export declare class GltfViewer {
 	private _selectedMeshes;
 	private _isolatedMeshes;
 	private _coloredMeshes;
+	private _hudScene;
+	private _axes;
+	private _measureMode;
 	private _loader;
 	private _loadingInProgress;
 	private _loadingQueue;
@@ -156,7 +156,6 @@ export declare class GltfViewer {
 	private colorMeshes;
 	private removeColoring;
 	private getMeshAt;
-	private getSnapPointAt;
 	private runQueuedSelection;
 	private findAndSelectMeshes;
 	private findMeshesByIds;
@@ -172,10 +171,9 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
-	private setTempMarkerAtPoint;
-	private setMeasureMarkerAtPoint;
-	private emitDistanceMeasureChange;
-	private clearMeasurements;
+	private setSnapMarkerAtPoint;
+	private setDistanceMarkerAtPoint;
+	private clearMeasureMarkers;
 }
 
 export {};

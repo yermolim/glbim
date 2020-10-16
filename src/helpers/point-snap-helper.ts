@@ -18,26 +18,54 @@ export class PointSnapHelper {
     return new Vector2(x, y);
   }
 
-  static convertWorldToCanvas(camera: Camera, renderer: WebGLRenderer, 
+  static convertWorldToCanvasZeroTopLeft(camera: Camera, renderer: WebGLRenderer, 
     point: Vector3): Vector2 {
-    const nPoint = new Vector3().copy(point).project(camera);
-    if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
-      // point is outside of canvas space, return null
-      return null;
-    }
-    
+    const nPoint = new Vector3().copy(point).project(camera); 
+
     const rect = renderer.domElement.getBoundingClientRect();
     const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
     const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
     const x = (nPoint.x + 1) * canvasWidth / 2;
     const y = (nPoint.y - 1) * canvasHeight / -2;
+
+    return new Vector2(x, y);
+  }
+  
+  static convertWorldToCanvasZeroCenter(camera: Camera, renderer: WebGLRenderer, 
+    point: Vector3): Vector2 {
+    const nPoint = new Vector3().copy(point).project(camera);
+
+    // primitive hack to keep point in the right direction if it is outside of camera coverage
+    if (nPoint.z > 1) {
+      nPoint.x = - nPoint.x;
+      nPoint.y = - nPoint.y;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+    const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+    const x = nPoint.x * canvasWidth / 2;
+    const y = nPoint.y * canvasHeight / 2;
+
     return new Vector2(x, y);
   }
 
   destroy() {    
+  }  
+  
+  getMeshSnapPointAtPosition(camera: Camera, renderer: WebGLRenderer, 
+    position: Vector2, mesh: MeshBgAm): Vector3 {
+    if (!mesh) {
+      return null;
+    }
+
+    const context = renderer.getContext(); 
+    const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
+    const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;    
+    return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
   }
 
-  getPoint(camera: Camera, mesh: MeshBgAm, mousePoint: Vector2): Vector3 {
+  private getPoint(camera: Camera, mesh: MeshBgAm, mousePoint: Vector2): Vector3 {
     this.raycaster.setFromCamera(mousePoint, camera);
     const intersection = this.raycaster.intersectObject(mesh)[0];
     if (!intersection) {

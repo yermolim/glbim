@@ -1,6 +1,6 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { first } from 'rxjs/operators';
-import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Quaternion, Object3D, Vector4, OrthographicCamera, Sprite, SphereBufferGeometry, Mesh, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Raycaster, Vector2, Triangle, WebGLRenderTarget, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
+import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Quaternion, Object3D, Vector4, OrthographicCamera, Sprite, Scene, Mesh, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Raycaster, Vector2, Triangle, WebGLRenderTarget, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { ResizeSensor } from 'css-element-queries';
@@ -70,6 +70,77 @@ class GltfViewerOptions {
         }
     }
 }
+
+class ColorRgbRmo {
+    constructor(r, g, b, roughness, metalness, opacity) {
+        this.r = r;
+        this.g = g;
+        this.b = b;
+        this.roughness = roughness;
+        this.metalness = metalness;
+        this.opacity = opacity;
+    }
+    get rByte() {
+        return this.r * 255;
+    }
+    get gByte() {
+        return this.g * 255;
+    }
+    get bByte() {
+        return this.b * 255;
+    }
+    get roughnessByte() {
+        return this.roughness * 255;
+    }
+    get metalnessByte() {
+        return this.metalness * 255;
+    }
+    get opacityByte() {
+        return this.opacity * 255;
+    }
+    static createFromMaterial(material) {
+        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
+    }
+    static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
+        mesh[ColorRgbRmo.prop] = null;
+        if (deleteCustom) {
+            mesh[ColorRgbRmo.customProp] = null;
+        }
+        if (deleteDefault) {
+            mesh[ColorRgbRmo.defaultProp] = null;
+        }
+    }
+    static getDefaultFromMesh(mesh) {
+        if (!mesh[ColorRgbRmo.defaultProp]) {
+            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+        }
+        return mesh[ColorRgbRmo.defaultProp];
+    }
+    static getCustomFromMesh(mesh) {
+        return mesh[ColorRgbRmo.customProp];
+    }
+    static getFromMesh(mesh) {
+        if (mesh[ColorRgbRmo.prop]) {
+            return mesh[ColorRgbRmo.prop];
+        }
+        if (mesh[ColorRgbRmo.customProp]) {
+            return mesh[ColorRgbRmo.customProp];
+        }
+        return ColorRgbRmo.getDefaultFromMesh(mesh);
+    }
+    static setCustomToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.customProp] = rgbRmo;
+    }
+    static setToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.prop] = rgbRmo;
+    }
+    toString() {
+        return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
+    }
+}
+ColorRgbRmo.prop = "rgbrmo";
+ColorRgbRmo.customProp = "rgbrmoC";
+ColorRgbRmo.defaultProp = "rgbrmoD";
 
 class CameraControls {
     constructor(rendererCanvas, changeCallback) {
@@ -180,77 +251,6 @@ class Lights {
     }
 }
 
-class ColorRgbRmo {
-    constructor(r, g, b, roughness, metalness, opacity) {
-        this.r = r;
-        this.g = g;
-        this.b = b;
-        this.roughness = roughness;
-        this.metalness = metalness;
-        this.opacity = opacity;
-    }
-    get rByte() {
-        return this.r * 255;
-    }
-    get gByte() {
-        return this.g * 255;
-    }
-    get bByte() {
-        return this.b * 255;
-    }
-    get roughnessByte() {
-        return this.roughness * 255;
-    }
-    get metalnessByte() {
-        return this.metalness * 255;
-    }
-    get opacityByte() {
-        return this.opacity * 255;
-    }
-    static createFromMaterial(material) {
-        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
-    }
-    static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
-        mesh[ColorRgbRmo.prop] = null;
-        if (deleteCustom) {
-            mesh[ColorRgbRmo.customProp] = null;
-        }
-        if (deleteDefault) {
-            mesh[ColorRgbRmo.defaultProp] = null;
-        }
-    }
-    static getDefaultFromMesh(mesh) {
-        if (!mesh[ColorRgbRmo.defaultProp]) {
-            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
-        }
-        return mesh[ColorRgbRmo.defaultProp];
-    }
-    static getCustomFromMesh(mesh) {
-        return mesh[ColorRgbRmo.customProp];
-    }
-    static getFromMesh(mesh) {
-        if (mesh[ColorRgbRmo.prop]) {
-            return mesh[ColorRgbRmo.prop];
-        }
-        if (mesh[ColorRgbRmo.customProp]) {
-            return mesh[ColorRgbRmo.customProp];
-        }
-        return ColorRgbRmo.getDefaultFromMesh(mesh);
-    }
-    static setCustomToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.customProp] = rgbRmo;
-    }
-    static setToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.prop] = rgbRmo;
-    }
-    toString() {
-        return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
-    }
-}
-ColorRgbRmo.prop = "rgbrmo";
-ColorRgbRmo.customProp = "rgbrmoC";
-ColorRgbRmo.defaultProp = "rgbrmoD";
-
 class MaterialBuilder {
     static buildGlobalMaterial() {
         const material = new MeshPhysicalMaterial({
@@ -320,8 +320,20 @@ class MaterialBuilder {
     static buildLineBasicMaterial(color, width) {
         return new LineBasicMaterial({ color, linewidth: width });
     }
-    static buildLineMaterial(color, width) {
-        return new LineMaterial({ color, linewidth: width });
+    static buildLineMaterial(color, width, dashed) {
+        const material = new LineMaterial({
+            color,
+            linewidth: width,
+        });
+        if (dashed) {
+            material.dashed = true;
+            material.dashScale = 0.5;
+            material.dashSize = 1;
+            material.gapSize = 1;
+            material.defines.USE_DASH = "";
+            material.needsUpdate = true;
+        }
+        return material;
     }
     static buildAxisSpriteMaterial(size, color, text) {
         const canvas = document.createElement("canvas");
@@ -420,15 +432,16 @@ class Axes extends Object3D {
         this.updateMatrixWorld();
         renderer.getViewport(this._viewportBak);
         renderer.autoClear = false;
+        renderer.clearDepth();
         renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
         renderer.render(this, this._camera);
         renderer.setViewport(this._viewportBak.x, this._viewportBak.y, this._viewportBak.z, this._viewportBak.w);
         renderer.autoClear = true;
     }
     buildAxes() {
-        this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02);
-        this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02);
-        this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02);
+        this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02, false);
+        this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02, false);
+        this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02, false);
         this._axisLabelMaterials[0] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xFF3653, "X");
         this._axisLabelMaterials[1] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xA32235, "-X");
         this._axisLabelMaterials[2] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x8ADB00, "Y");
@@ -491,18 +504,12 @@ class RenderScene {
     constructor(isolationColor, isolationOpacity, selectionColor, highlightColor) {
         this._geometries = [];
         this._materials = new Map();
-        this._markerMaterials = [];
-        this._lineMaterials = [];
-        this._markers = new Map();
-        this._lines = new Map();
         this._geometryIndexBySourceMesh = new Map();
         this._sourceMeshesByGeometryIndex = new Map();
         this._renderMeshBySourceMesh = new Map();
         this._geometryIndicesNeedSort = new Set();
         this.updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor);
         this._globalMaterial = MaterialBuilder.buildGlobalMaterial();
-        this.buildMarkers();
-        this.buildLines();
     }
     get scene() {
         return this._scene;
@@ -516,8 +523,6 @@ class RenderScene {
     destroy() {
         this.destroyScene();
         this.destroyMaterials();
-        this.destroyMarkers();
-        this.destroyLines();
     }
     updateSceneAsync(lights, meshes, models, meshMergeType) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -528,9 +533,6 @@ class RenderScene {
     updateSceneMaterials() {
         this._globalMaterial.needsUpdate = true;
         this._materials.forEach(v => v.needsUpdate = true);
-    }
-    updateResolution(rendererBufferWidth, rendererBufferHeight) {
-        this._lineMaterials.forEach(x => x.resolution.set(rendererBufferWidth, rendererBufferHeight));
     }
     updateMeshColors(sourceMeshes) {
         if (this._currentMergeType) {
@@ -546,92 +548,6 @@ class RenderScene {
         this._selectionColor = new Color(selectionColor);
         this._highlightColor = new Color(highlightColor);
     }
-    setMarker(type, position) {
-        const marker = this._markers.get(type);
-        if (!marker.active) {
-            this.scene.add(marker.mesh);
-            marker.active = true;
-        }
-        marker.mesh.position.set(position.x, position.y, position.z);
-    }
-    resetMarker(type) {
-        const marker = this._markers.get(type);
-        if (marker.active) {
-            this.scene.remove(marker.mesh);
-            marker.active = false;
-            marker.mesh.position.set(0, 0, 0);
-        }
-    }
-    resetMarkers() {
-        [...this._markers.keys()].forEach(x => this.resetMarker(x));
-    }
-    setSegment(type, start, end) {
-        const lineInfo = this._lines.get(type);
-        if (!lineInfo.active) {
-            this.scene.add(lineInfo.line);
-            lineInfo.active = true;
-        }
-        lineInfo.line.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);
-    }
-    resetSegment(type) {
-        const lineInfo = this._lines.get(type);
-        if (lineInfo.active) {
-            this.scene.remove(lineInfo.line);
-            lineInfo.active = false;
-            lineInfo.line.geometry.setPositions([0, 0, 0, 0, 0, 0]);
-        }
-    }
-    resetSegments() {
-        [...this._lines.keys()].forEach(x => this.resetSegment(x));
-    }
-    buildMarkers() {
-        this._markerMaterials[0] = MaterialBuilder.buildBasicMaterial(0xFF00FF);
-        this._markerMaterials[1] = MaterialBuilder.buildBasicMaterial(0x391285);
-        this._markerMaterials[2] = MaterialBuilder.buildBasicMaterial(0x00FFFF);
-        this._markerGeometry = new SphereBufferGeometry(0.1, 16, 8);
-        this._markers.set("temp", {
-            mesh: new Mesh(this._markerGeometry, this._markerMaterials[0]),
-            active: false,
-            type: "temp",
-        });
-        this._markers.set("start", {
-            mesh: new Mesh(this._markerGeometry, this._markerMaterials[1]),
-            active: false,
-            type: "start",
-        });
-        this._markers.set("end", {
-            mesh: new Mesh(this._markerGeometry, this._markerMaterials[2]),
-            active: false,
-            type: "end",
-        });
-    }
-    destroyMarkers() {
-        var _a;
-        this._markers = null;
-        this._markerGeometry.dispose();
-        this._markerGeometry = null;
-        (_a = this._markerMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose());
-        this._markerMaterials = null;
-    }
-    buildLines() {
-        this._lineMaterials[0] = MaterialBuilder.buildLineMaterial(0x0000FF, 2);
-        const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions([0, 0, 0, 0, 0, 0]);
-        const distanceLine = new Line2(lineGeometry, this._lineMaterials[0]);
-        distanceLine.frustumCulled = false;
-        this._lines.set("distance", {
-            line: distanceLine,
-            active: false,
-            type: "distance",
-        });
-    }
-    destroyLines() {
-        var _a, _b;
-        (_a = this._lines) === null || _a === void 0 ? void 0 : _a.forEach(v => v.line.geometry.dispose());
-        this._lines = null;
-        (_b = this._lineMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose());
-        this._lineMaterials = null;
-    }
     deleteScene() {
         this._geometries.forEach(x => x.geometry.dispose());
         this._geometries.length = 0;
@@ -639,8 +555,6 @@ class RenderScene {
         this._sourceMeshesByGeometryIndex.clear();
         this._renderMeshBySourceMesh.clear();
         this._geometryIndicesNeedSort.clear();
-        this._markers.forEach(x => x.active = false);
-        this._lines.forEach(x => x.active = false);
         this._scene = null;
     }
     createSceneAsync(lights, meshes, models, meshMergeType) {
@@ -1115,11 +1029,8 @@ class PointSnapHelper {
         const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
         return new Vector2(x, y);
     }
-    static convertWorldToCanvas(camera, renderer, point) {
+    static convertWorldToCanvasZeroTopLeft(camera, renderer, point) {
         const nPoint = new Vector3().copy(point).project(camera);
-        if (nPoint.x > 1 || nPoint.y < -1 || nPoint.y > 1 || nPoint.y < -1) {
-            return null;
-        }
         const rect = renderer.domElement.getBoundingClientRect();
         const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
         const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
@@ -1127,7 +1038,29 @@ class PointSnapHelper {
         const y = (nPoint.y - 1) * canvasHeight / -2;
         return new Vector2(x, y);
     }
+    static convertWorldToCanvasZeroCenter(camera, renderer, point) {
+        const nPoint = new Vector3().copy(point).project(camera);
+        if (nPoint.z > 1) {
+            nPoint.x = -nPoint.x;
+            nPoint.y = -nPoint.y;
+        }
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+        const x = nPoint.x * canvasWidth / 2;
+        const y = nPoint.y * canvasHeight / 2;
+        return new Vector2(x, y);
+    }
     destroy() {
+    }
+    getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
+        if (!mesh) {
+            return null;
+        }
+        const context = renderer.getContext();
+        const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
+        const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
+        return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
     }
     getPoint(camera, mesh, mousePoint) {
         this.raycaster.setFromCamera(mousePoint, camera);
@@ -1176,7 +1109,6 @@ class PickingScene {
         scene.background = new Color(0);
         this._scene = scene;
         this._target = new WebGLRenderTarget(1, 1);
-        this._pointSnap = new PointSnapHelper();
     }
     destroy() {
         this._materials.forEach(x => x.dispose());
@@ -1210,13 +1142,12 @@ class PickingScene {
         const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
         return this.getSourceMeshAtPosition(camera, renderer, position);
     }
-    getSnapPointAt(camera, renderer, clientX, clientY) {
+    getPickingMeshAt(camera, renderer, clientX, clientY) {
         const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
-        const mesh = this.getSourceMeshAtPosition(camera, renderer, position);
-        if (!mesh) {
-            return null;
-        }
-        return this.getMeshSnapPointAtPosition(camera, renderer, position, this._pickingMeshById.get(mesh.uuid));
+        const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, position);
+        return sourceMesh
+            ? this._pickingMeshById.get(sourceMesh.uuid)
+            : null;
     }
     getSourceMeshAtPosition(camera, renderer, position) {
         const context = renderer.getContext();
@@ -1230,13 +1161,6 @@ class PickingScene {
         const hex = ((pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2])).toString(16);
         const mesh = this._sourceMeshByPickingColor.get(hex);
         return mesh;
-    }
-    getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
-        const context = renderer.getContext();
-        const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
-        const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
-        const point = this._pointSnap.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
-        return point;
     }
     nextPickingColor() {
         if (this._lastPickingColor === 16777215) {
@@ -1263,6 +1187,265 @@ class PickingScene {
     }
 }
 
+class HudScene {
+    constructor(renderer) {
+        this._lastResolution = new Vector2();
+        this._measurePoints = { start: null, end: null };
+        this._markerMaterials = [];
+        this._lineMaterials = [];
+        this._uniqueMarkers = new Map();
+        this._uniqueLineSegments = new Map();
+        this._pointSnap = new PointSnapHelper();
+        const scene = new Scene();
+        this._scene = scene;
+        this.buildLines();
+        this.buildMarkers();
+        const ctx = renderer.getContext();
+        this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+    }
+    destroy() {
+        this.destroyLines();
+        this.destroyMarkers();
+        this._scene = null;
+    }
+    render(mainCamera, renderer) {
+        const ctx = renderer.getContext();
+        this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+        this.updatePositions(mainCamera, renderer);
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(this._scene, this._camera);
+        renderer.autoClear = true;
+    }
+    setSnapMarker(camera, renderer, mesh, clientX, clientY) {
+        const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
+        const point = this._pointSnap.getMeshSnapPointAtPosition(camera, renderer, position, mesh);
+        return this.setSnapMarkerAtPoint(point);
+    }
+    setDistanceMarker(camera, renderer, mesh, clientX, clientY) {
+        const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
+        const point = this._pointSnap.getMeshSnapPointAtPosition(camera, renderer, position, mesh);
+        return this.setDistanceMarkerAtPoint(point);
+    }
+    resetMeasureMarkers() {
+        this._measurePoints.start = null;
+        this._measurePoints.end = null;
+        this.resetMarkers();
+        this.resetLineSegments();
+    }
+    setSnapMarkerAtPoint(point) {
+        if (point) {
+            this.setMarker("m_snap", point);
+            return new Vec4(point.x, point.y, point.z, 0, true);
+        }
+        else {
+            this.resetMarker("m_snap");
+            return null;
+        }
+    }
+    setDistanceMarkerAtPoint(point) {
+        if (!point) {
+            if (this._measurePoints.start) {
+                this._measurePoints.start = null;
+            }
+            if (this._measurePoints.end) {
+                this._measurePoints.end = null;
+            }
+        }
+        else {
+            if (this._measurePoints.end) {
+                this._measurePoints.start = this._measurePoints.end;
+                this._measurePoints.end = point;
+            }
+            else if (this._measurePoints.start) {
+                this._measurePoints.end = point;
+            }
+            else {
+                this._measurePoints.start = point;
+            }
+        }
+        if (this._measurePoints.start) {
+            this.setMarker("m_start", this._measurePoints.start);
+        }
+        else {
+            this.resetMarker("m_start");
+        }
+        if (this._measurePoints.end) {
+            this.setMarker("m_end", this._measurePoints.end);
+            this.setDistanceLines(true);
+        }
+        else {
+            this.resetMarker("m_end");
+            this.resetDistanceLines();
+        }
+        if (this._measurePoints.start && this._measurePoints.end) {
+            return new Distance(this._measurePoints.start, this._measurePoints.end, true);
+        }
+        else {
+            return null;
+        }
+    }
+    setDistanceLines(toZUp) {
+        const wStart = this._measurePoints.start;
+        const wEnd = this._measurePoints.end;
+        const distance = new Vector3().copy(wEnd).sub(wStart);
+        const xEnd = new Vector3(wStart.x + distance.x, wStart.y, wStart.z);
+        const yEnd = toZUp
+            ? new Vector3(xEnd.x, xEnd.y, xEnd.z + distance.z)
+            : new Vector3(xEnd.x, xEnd.y + distance.y, xEnd.z);
+        this.setLineSegment("m_dist_z", yEnd, wEnd);
+        this.setLineSegment("m_dist_y", xEnd, yEnd);
+        this.setLineSegment("m_dist_x", wStart, xEnd);
+        this.setLineSegment("m_dist_w", wStart, wEnd);
+    }
+    resetDistanceLines() {
+        this.resetLineSegment("m_dist_w");
+        this.resetLineSegment("m_dist_x");
+        this.resetLineSegment("m_dist_y");
+        this.resetLineSegment("m_dist_z");
+    }
+    updateResolution(rendererBufferWidth, rendererBufferHeight) {
+        if (rendererBufferWidth === this._lastResolution.x
+            && rendererBufferHeight === this._lastResolution.y) {
+            return;
+        }
+        this.updateCameraResolution(rendererBufferWidth, rendererBufferHeight);
+        this.updateLinesResolution(rendererBufferWidth, rendererBufferHeight);
+        this._lastResolution.set(rendererBufferWidth, rendererBufferHeight);
+    }
+    updatePositions(mainCamera, renderer) {
+        this.updateLineSegmentsPositions(mainCamera, renderer);
+        this.updateMarkersPositions(mainCamera, renderer);
+    }
+    updateCameraResolution(rendererBufferWidth, rendererBufferHeight) {
+        if (!this._camera) {
+            this._camera = new OrthographicCamera(rendererBufferWidth / -2, rendererBufferWidth / 2, rendererBufferHeight / 2, rendererBufferHeight / -2, 1, 10);
+            this._camera.position.setZ(10);
+        }
+        else {
+            this._camera.left = rendererBufferWidth / -2;
+            this._camera.right = rendererBufferWidth / 2;
+            this._camera.top = rendererBufferHeight / 2;
+            this._camera.bottom = rendererBufferHeight / -2;
+            this._camera.updateProjectionMatrix();
+        }
+    }
+    buildMarkers() {
+        this._uniqueMarkers.set("m_snap", this.buildRoundMarker(0xFF00FF, 8));
+        this._uniqueMarkers.set("m_start", this.buildRoundMarker(0x391285, 8));
+        this._uniqueMarkers.set("m_end", this.buildRoundMarker(0x00FFFF, 8));
+    }
+    destroyMarkers() {
+        var _a;
+        this._uniqueMarkers.forEach(v => this._scene.remove(v.sprite));
+        this._uniqueMarkers = null;
+        (_a = this._markerMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => { x.map.dispose(); x.dispose(); });
+        this._markerMaterials = null;
+    }
+    buildRoundMarker(color, diameterPx) {
+        const material = MaterialBuilder.buildCircleSpriteMaterial(64, color);
+        this._markerMaterials.push(material);
+        const sprite = new Sprite(material);
+        sprite.frustumCulled = false;
+        sprite.visible = false;
+        sprite.scale.set(diameterPx, diameterPx, 1);
+        sprite.position.set(0, 0, 2);
+        this._scene.add(sprite);
+        return {
+            sprite,
+            center3d: new Vector3(),
+        };
+    }
+    setMarker(type, position) {
+        const hudMarker = this._uniqueMarkers.get(type);
+        if (!hudMarker.sprite.visible) {
+            hudMarker.sprite.visible = true;
+        }
+        hudMarker.center3d.copy(position);
+    }
+    resetMarker(type) {
+        const hudMarker = this._uniqueMarkers.get(type);
+        if (hudMarker.sprite.visible) {
+            hudMarker.sprite.visible = false;
+            hudMarker.center3d.set(0, 0, 0);
+        }
+    }
+    resetMarkers() {
+        [...this._uniqueMarkers.keys()].forEach(x => this.resetMarker(x));
+    }
+    updateMarkersPositions(mainCamera, renderer) {
+        this._uniqueMarkers.forEach(v => {
+            if (v.sprite.visible) {
+                const positionProjected = PointSnapHelper.convertWorldToCanvasZeroCenter(mainCamera, renderer, v.center3d);
+                v.sprite.position.set(positionProjected.x, positionProjected.y, 2);
+            }
+        });
+    }
+    buildLines() {
+        this._uniqueLineSegments.set("m_dist_z", this.buildLineSegment(0x2c8FFF, 2, true));
+        this._uniqueLineSegments.set("m_dist_y", this.buildLineSegment(0x8adb00, 2, true));
+        this._uniqueLineSegments.set("m_dist_x", this.buildLineSegment(0xFF3653, 2, true));
+        this._uniqueLineSegments.set("m_dist_w", this.buildLineSegment(0x0000FF, 4));
+    }
+    destroyLines() {
+        var _a, _b;
+        (_a = this._uniqueLineSegments) === null || _a === void 0 ? void 0 : _a.forEach(v => {
+            this._scene.remove(v.segment);
+            v.segment.geometry.dispose();
+        });
+        this._uniqueLineSegments = null;
+        (_b = this._lineMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => x.dispose());
+        this._lineMaterials = null;
+    }
+    buildLineSegment(color, width, dashed = false) {
+        const material = MaterialBuilder.buildLineMaterial(color, width, dashed);
+        this._lineMaterials.push(material);
+        const geometry = new LineGeometry();
+        geometry.setPositions([0, 0, 1, 0, 0, 1]);
+        const segment = new Line2(geometry, material);
+        segment.frustumCulled = false;
+        segment.visible = false;
+        this._scene.add(segment);
+        return {
+            segment: segment,
+            start3d: new Vector3(),
+            end3d: new Vector3(),
+        };
+    }
+    setLineSegment(type, start, end) {
+        const hudLineSegment = this._uniqueLineSegments.get(type);
+        if (!hudLineSegment.segment.visible) {
+            hudLineSegment.segment.visible = true;
+        }
+        hudLineSegment.start3d.copy(start);
+        hudLineSegment.end3d.copy(end);
+    }
+    resetLineSegment(type) {
+        const hudLine = this._uniqueLineSegments.get(type);
+        if (hudLine.segment.visible) {
+            hudLine.segment.visible = false;
+            hudLine.start3d.set(0, 0, 0);
+            hudLine.end3d.set(0, 0, 0);
+        }
+    }
+    resetLineSegments() {
+        [...this._uniqueLineSegments.keys()].forEach(x => this.resetLineSegment(x));
+    }
+    updateLinesResolution(rendererBufferWidth, rendererBufferHeight) {
+        this._lineMaterials.forEach(x => x.resolution.set(rendererBufferWidth, rendererBufferHeight));
+    }
+    updateLineSegmentsPositions(mainCamera, renderer) {
+        this._uniqueLineSegments.forEach(v => {
+            if (v.segment.visible) {
+                const startProjected = PointSnapHelper.convertWorldToCanvasZeroCenter(mainCamera, renderer, v.start3d);
+                const endProjected = PointSnapHelper.convertWorldToCanvasZeroCenter(mainCamera, renderer, v.end3d);
+                v.segment.geometry.setPositions([startProjected.x, startProjected.y, 1, endProjected.x, endProjected.y, 1]);
+                v.segment.computeLineDistances();
+            }
+        });
+    }
+}
+
 var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -1286,8 +1469,6 @@ class GltfViewer {
         this._snapPointChange = new Subject();
         this._distanceMeasureChange = new Subject();
         this._subscriptions = [];
-        this._measureMode = false;
-        this._measurePoints = { start: null, end: null };
         this._meshesNeedColorUpdate = new Set();
         this._pointerEventHelper = PointerEventHelper.default;
         this._queuedColoring = null;
@@ -1296,6 +1477,7 @@ class GltfViewer {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._coloredMeshes = [];
+        this._measureMode = false;
         this._loadingInProgress = false;
         this._loadingQueue = [];
         this._loadedModels = new Set();
@@ -1317,7 +1499,7 @@ class GltfViewer {
                 return;
             }
             if (this._measureMode) {
-                this.setMeasureMarkerAtPoint(x, y);
+                this.setDistanceMarkerAtPoint(x, y);
             }
             else {
                 if (this._pointerEventHelper.waitForDouble) {
@@ -1346,7 +1528,7 @@ class GltfViewer {
                 const y = e.clientY;
                 this.highlightMeshAtPoint(x, y);
                 if (this._measureMode) {
-                    this.setTempMarkerAtPoint(x, y);
+                    this.setSnapMarkerAtPoint(x, y);
                 }
             }, 30);
         };
@@ -1361,25 +1543,27 @@ class GltfViewer {
         this._pickingScene = new PickingScene();
         this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
         this._simplifiedScene = new SimplifiedScene();
-        this._axes = new Axes();
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
+        this._hudScene = new HudScene(this._renderer);
+        this._axes = new Axes();
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
             this.resizeRenderer();
         });
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
-        (_a = this._containerResizeSensor) === null || _a === void 0 ? void 0 : _a.detach();
+        (_b = (_a = this._loader) === null || _a === void 0 ? void 0 : _a.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
+        (_c = this._containerResizeSensor) === null || _c === void 0 ? void 0 : _c.detach();
         this._containerResizeSensor = null;
-        (_b = this._cameraControls) === null || _b === void 0 ? void 0 : _b.destroy();
+        (_d = this._cameraControls) === null || _d === void 0 ? void 0 : _d.destroy();
         this._cameraControls = null;
-        (_c = this._axes) === null || _c === void 0 ? void 0 : _c.destroy();
+        (_e = this._axes) === null || _e === void 0 ? void 0 : _e.destroy();
         this._axes = null;
-        (_d = this._renderer) === null || _d === void 0 ? void 0 : _d.dispose();
-        (_f = (_e = this._loader) === null || _e === void 0 ? void 0 : _e.dracoLoader) === null || _f === void 0 ? void 0 : _f.dispose();
+        (_f = this._hudScene) === null || _f === void 0 ? void 0 : _f.destroy();
+        this._hudScene = null;
         (_g = this._pickingScene) === null || _g === void 0 ? void 0 : _g.destroy();
         this._pickingScene = null;
         (_h = this._simplifiedScene) === null || _h === void 0 ? void 0 : _h.destroy();
@@ -1391,6 +1575,7 @@ class GltfViewer {
             x.material.dispose();
         });
         this._loadedMeshes = null;
+        (_l = this._renderer) === null || _l === void 0 ? void 0 : _l.dispose();
     }
     updateOptionsAsync(options) {
         return __awaiter$2(this, void 0, void 0, function* () {
@@ -1534,7 +1719,7 @@ class GltfViewer {
             return;
         }
         if (this._measureMode) {
-            this.clearMeasurements();
+            this.clearMeasureMarkers();
             this._measureMode = false;
         }
         else {
@@ -1614,10 +1799,6 @@ class GltfViewer {
         (_a = this._cameraControls) === null || _a === void 0 ? void 0 : _a.resize(width, height);
         if (this._renderer) {
             this._renderer.setSize(width, height, false);
-            if (this._renderScene) {
-                const ctx = this._renderer.getContext();
-                this._renderScene.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
-            }
             this.render();
         }
     }
@@ -1645,7 +1826,7 @@ class GltfViewer {
     render(focusObjects = null, fast = false) {
         this.prepareToRender(focusObjects);
         requestAnimationFrame(() => {
-            var _a, _b, _c;
+            var _a, _b;
             if (!this._renderer) {
                 return;
             }
@@ -1656,8 +1837,11 @@ class GltfViewer {
             else if ((_b = this._renderScene) === null || _b === void 0 ? void 0 : _b.scene) {
                 this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
             }
-            if (this._options.showAxesHelper) {
-                (_c = this._axes) === null || _c === void 0 ? void 0 : _c.render(this._cameraControls.camera, this._renderer);
+            if (this._measureMode && this._hudScene) {
+                this._hudScene.render(this._cameraControls.camera, this._renderer);
+            }
+            if (this._options.showAxesHelper && this._axes) {
+                this._axes.render(this._cameraControls.camera, this._renderer);
             }
             const frameTime = performance.now() - start;
             this._lastFrameTime.next(frameTime);
@@ -1846,11 +2030,6 @@ class GltfViewer {
             ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
             : null;
     }
-    getSnapPointAt(clientX, clientY) {
-        return this._renderer && this._pickingScene
-            ? this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, clientX, clientY)
-            : null;
-    }
     runQueuedSelection() {
         if (this._queuedSelection) {
             const { ids, isolate } = this._queuedSelection;
@@ -1989,72 +2168,28 @@ class GltfViewer {
             this._highlightedMesh = null;
         }
     }
-    setTempMarkerAtPoint(clientX, clientY) {
-        const point = this.getSnapPointAt(clientX, clientY);
-        if (point) {
-            this._renderScene.setMarker("temp", point);
-            this._snapPointChange.next(new Vec4(point.x, point.y, point.z, 0, true));
+    setSnapMarkerAtPoint(clientX, clientY) {
+        if (!this._renderer || !this._pickingScene) {
+            return;
         }
-        else {
-            this._renderScene.resetMarker("temp");
-            this._snapPointChange.next(null);
-        }
+        const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY);
+        const snapPoint = this._hudScene.setSnapMarker(this._cameraControls.camera, this._renderer, pickingMesh, clientX, clientY);
         this.render();
+        this._snapPointChange.next(snapPoint);
     }
-    setMeasureMarkerAtPoint(x, y) {
-        const point = this._pickingScene.getSnapPointAt(this._cameraControls.camera, this._renderer, x, y);
-        if (!point) {
-            if (this._measurePoints.start) {
-                this._measurePoints.start = null;
-            }
-            if (this._measurePoints.end) {
-                this._measurePoints.end = null;
-            }
+    setDistanceMarkerAtPoint(clientX, clientY) {
+        if (!this._renderer || !this._pickingScene) {
+            return;
         }
-        else {
-            if (this._measurePoints.end) {
-                this._measurePoints.start = this._measurePoints.end;
-                this._measurePoints.end = point;
-            }
-            else if (this._measurePoints.start) {
-                this._measurePoints.end = point;
-            }
-            else {
-                this._measurePoints.start = point;
-            }
-        }
-        if (this._measurePoints.start) {
-            this._renderScene.setMarker("start", this._measurePoints.start);
-        }
-        else {
-            this._renderScene.resetMarker("start");
-        }
-        if (this._measurePoints.end) {
-            this._renderScene.setMarker("end", this._measurePoints.end);
-            this._renderScene.setSegment("distance", this._measurePoints.start, this._measurePoints.end);
-        }
-        else {
-            this._renderScene.resetMarker("end");
-            this._renderScene.resetSegment("distance");
-        }
+        const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY);
+        const distance = this._hudScene.setDistanceMarker(this._cameraControls.camera, this._renderer, pickingMesh, clientX, clientY);
         this.render();
-        this.emitDistanceMeasureChange();
+        this._distanceMeasureChange.next(distance);
     }
-    emitDistanceMeasureChange() {
-        if (this._measurePoints.start && this._measurePoints.end) {
-            this._distanceMeasureChange.next(new Distance(this._measurePoints.start, this._measurePoints.end, true));
-        }
-        else {
-            this._distanceMeasureChange.next(null);
-        }
-    }
-    clearMeasurements() {
-        this._measurePoints.start = null;
-        this._measurePoints.end = null;
+    clearMeasureMarkers() {
+        this._hudScene.resetMeasureMarkers();
+        this.render();
         this._distanceMeasureChange.next(null);
-        this._renderScene.resetMarkers();
-        this._renderScene.resetSegments();
-        this.render();
     }
 }
 
