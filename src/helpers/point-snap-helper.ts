@@ -1,12 +1,12 @@
 import { Raycaster, Camera, WebGLRenderer, BufferAttribute,
-  Vector2, Vector3, Face3, Triangle } from "three";
+  Vector2, Vector3, Face3, Triangle, Object3D } from "three";
 import { MeshBgAm } from "../common-types";
 
 export class PointSnapHelper {
-  raycaster: Raycaster;
+  private _raycaster: Raycaster;
 
   constructor() {
-    this.raycaster = new Raycaster();
+    this._raycaster = new Raycaster();
   }  
   
   static convertClientToCanvas(renderer: WebGLRenderer, 
@@ -66,8 +66,8 @@ export class PointSnapHelper {
   }
 
   private getPoint(camera: Camera, mesh: MeshBgAm, mousePoint: Vector2): Vector3 {
-    this.raycaster.setFromCamera(mousePoint, camera);
-    const intersection = this.raycaster.intersectObject(mesh)[0];
+    this._raycaster.setFromCamera(mousePoint, camera);
+    const intersection = this._raycaster.intersectObject(mesh)[0];
     if (!intersection) {
       return null;
     }

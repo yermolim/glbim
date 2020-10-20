@@ -38,17 +38,14 @@ export class HudScene {
   private _uniqueMarkers = new Map<HudMarkerType, HudSpriteMarker>();
   private _uniqueLineSegments = new Map<HudLineSegmentType, HudLineSegmentInfo>();
 
-  constructor(renderer: WebGLRenderer) { 
+  constructor() { 
     this._pointSnap = new PointSnapHelper();
 
     const scene = new Scene();
     this._scene = scene;
 
-    this.buildLines();
-    this.buildMarkers();
-
-    const ctx = renderer.getContext();
-    this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+    this.initLines();
+    this.initMarkers();
   }
 
   destroy() {
@@ -204,7 +201,7 @@ export class HudScene {
   // #endregion
 
   // #region markers
-  private buildMarkers() {     
+  private initMarkers() {     
     this._uniqueMarkers.set("m_snap", this.buildRoundMarker(0xFF00FF, 8));
     this._uniqueMarkers.set("m_start", this.buildRoundMarker(0x391285, 8));
     this._uniqueMarkers.set("m_end", this.buildRoundMarker(0x00FFFF, 8));
@@ -266,7 +263,7 @@ export class HudScene {
   // #endregion
 
   // #region lines
-  private buildLines() {     
+  private initLines() {     
     this._uniqueLineSegments.set("m_dist_z", this.buildLineSegment(0x2c8FFF, 2, true));
     this._uniqueLineSegments.set("m_dist_y", this.buildLineSegment(0x8adb00, 2, true));
     this._uniqueLineSegments.set("m_dist_x", this.buildLineSegment(0xFF3653, 2, true));

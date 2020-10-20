@@ -1,6 +1,6 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { first } from 'rxjs/operators';
-import { PerspectiveCamera, Box3, Vector3, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Quaternion, Object3D, Vector4, OrthographicCamera, Sprite, Scene, Mesh, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Raycaster, Vector2, Triangle, WebGLRenderTarget, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
+import { Box3, Vector3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, CanvasTexture, SpriteMaterial, Object3D, Vector2, Vector4, Raycaster, OrthographicCamera, Sprite, Scene, Mesh, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, Triangle, WebGLRenderTarget, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { ResizeSensor } from 'css-element-queries';
@@ -143,27 +143,28 @@ ColorRgbRmo.customProp = "rgbrmoC";
 ColorRgbRmo.defaultProp = "rgbrmoD";
 
 class CameraControls {
-    constructor(rendererCanvas, changeCallback) {
+    constructor(container, renderCallback) {
+        this._focusBox = new Box3();
+        this._rRadius = 0;
+        this._rPosFocus = new Vector3();
+        this._rPosRelCamTarget = new Vector3();
+        this._rPosRelCamTemp = new Vector3();
+        this._rEuler = new Euler();
+        this._rQcfSource = new Quaternion();
+        this._rQcfTarget = new Quaternion();
+        this._rQcfTemp = new Quaternion();
+        this._renderCb = renderCallback;
         const camera = new PerspectiveCamera(75, 1, 1, 10000);
-        const orbitControls = new OrbitControls(camera, rendererCanvas);
-        orbitControls.addEventListener("change", changeCallback);
         camera.position.set(0, 1000, 1000);
         camera.lookAt(0, 0, 0);
+        const orbitControls = new OrbitControls(camera, container);
+        orbitControls.addEventListener("change", this._renderCb);
         orbitControls.update();
-        this._changeCallback = changeCallback;
         this._camera = camera;
         this._orbitControls = orbitControls;
     }
     get camera() {
         return this._camera;
-    }
-    changeCanvas(rendererCanvas) {
-        this._orbitControls.dispose();
-        this._orbitControls = new OrbitControls(this.camera, rendererCanvas);
-        this._orbitControls.addEventListener("change", this._changeCallback);
-        if (this._lastFocusBox) {
-            this.focusCameraOnBox(this._lastFocusBox);
-        }
     }
     destroy() {
         this._orbitControls.dispose();
@@ -174,19 +175,24 @@ class CameraControls {
             this._camera.updateProjectionMatrix();
         }
     }
+    rotateAroundAxis(axis, animate, toZUp = true) {
+        this.prepareForRotationAroundAxis(axis, toZUp);
+        this.applyRotation(animate);
+    }
     focusCameraOnObjects(objects, offset = 1.2) {
         if (!(objects === null || objects === void 0 ? void 0 : objects.length)) {
+            if (!this._focusBox.isEmpty()) {
+                this.focusCameraOnBox(this._focusBox, offset);
+            }
             return;
         }
-        const box = new Box3();
+        this._focusBox.makeEmpty();
         for (const object of objects) {
-            box.expandByObject(object);
+            this._focusBox.expandByObject(object);
         }
-        this._lastFocusBox = box;
-        this.focusCameraOnBox(box);
+        this.focusCameraOnBox(this._focusBox, offset);
     }
-    focusCameraOnBox(box) {
-        const offset = 1.2;
+    focusCameraOnBox(box, offset) {
         const size = box.getSize(new Vector3());
         const center = box.getCenter(new Vector3());
         const maxSize = Math.max(size.x, size.y, size.z);
@@ -202,8 +208,98 @@ class CameraControls {
         this._camera.near = Math.min(distance / 100, 1);
         this._camera.far = Math.max(distance * 100, 10000);
         this._camera.updateProjectionMatrix();
-        this._camera.position.copy(this._orbitControls.target).sub(direction);
+        this._camera.position.copy(center).sub(direction);
         this._orbitControls.update();
+    }
+    prepareForRotationAroundAxis(axis, toZUp) {
+        switch (axis) {
+            case "x":
+                this._rPosRelCamTarget.set(1, 0, 0);
+                this._rEuler.set(0, Math.PI * 0.5, 0);
+                break;
+            case "y":
+                if (toZUp) {
+                    this._rPosRelCamTarget.set(0, 0, -1);
+                    this._rEuler.set(0, Math.PI, 0);
+                }
+                else {
+                    this._rPosRelCamTarget.set(0, 1, 0);
+                    this._rEuler.set(Math.PI * -0.5, 0, 0);
+                }
+                break;
+            case "z":
+                if (toZUp) {
+                    this._rPosRelCamTarget.set(0, 1, 0);
+                    this._rEuler.set(Math.PI * -0.5, 0, 0);
+                }
+                else {
+                    this._rPosRelCamTarget.set(0, 0, 1);
+                    this._rEuler.set(0, 0, 0);
+                }
+                break;
+            case "-x":
+                this._rPosRelCamTarget.set(-1, 0, 0);
+                this._rEuler.set(0, Math.PI * -0.5, 0);
+                break;
+            case "-y":
+                if (toZUp) {
+                    this._rPosRelCamTarget.set(0, 0, 1);
+                    this._rEuler.set(0, 0, 0);
+                }
+                else {
+                    this._rPosRelCamTarget.set(0, -1, 0);
+                    this._rEuler.set(Math.PI * 0.5, 0, 0);
+                }
+                break;
+            case "-z":
+                if (toZUp) {
+                    this._rPosRelCamTarget.set(0, -1, 0);
+                    this._rEuler.set(Math.PI * 0.5, 0, 0);
+                }
+                else {
+                    this._rPosRelCamTarget.set(0, 0, -1);
+                    this._rEuler.set(0, Math.PI, 0);
+                }
+                break;
+            default:
+                return;
+        }
+        this._rPosFocus.copy(this._orbitControls.target);
+        this._rRadius = this._camera.position.distanceTo(this._rPosFocus);
+        this._rPosRelCamTarget.multiplyScalar(this._rRadius);
+        this._rQcfSource.copy(this._camera.quaternion);
+        this._rQcfTarget.setFromEuler(this._rEuler);
+    }
+    applyRotation(animate) {
+        if (!animate) {
+            this._camera.position.copy(this._rPosFocus).add(this._rPosRelCamTarget);
+            this._orbitControls.target.copy(this._rPosFocus);
+            this._orbitControls.update();
+            this._renderCb();
+        }
+        else {
+            const rotationSpeed = 2 * Math.PI;
+            const animationStart = performance.now();
+            let timeDelta;
+            let step;
+            const renderRotationFrame = () => {
+                timeDelta = (performance.now() - animationStart) / 1000;
+                step = timeDelta * rotationSpeed || 0.01;
+                this._rQcfTemp.copy(this._rQcfSource).rotateTowards(this._rQcfTarget, step);
+                this._rPosRelCamTemp.set(0, 0, 1)
+                    .applyQuaternion(this._rQcfTemp)
+                    .multiplyScalar(this._rRadius);
+                this._camera.position.copy(this._rPosFocus)
+                    .add(this._rPosRelCamTemp);
+                this._orbitControls.target.copy(this._rPosFocus);
+                this._orbitControls.update();
+                this._renderCb();
+                if (this._rQcfTemp.angleTo(this._rQcfTarget)) {
+                    setTimeout(() => renderRotationFrame(), 0);
+                }
+            };
+            renderRotationFrame();
+        }
     }
 }
 
@@ -413,32 +509,82 @@ class MaterialBuilder {
 }
 
 class Axes extends Object3D {
-    constructor(size = 128) {
+    constructor(container, axisClickedCallback, placing = "top-right", size = 128) {
         super();
-        this._viewportBak = new Vector4();
+        this._clickPoint = new Vector2();
         this._axisMaterials = new Array(3);
         this._axisLabelMaterials = new Array(6);
+        this._axes = new Array(3);
+        this._labels = new Array(6);
+        this._viewportBak = new Vector4();
+        this.onDivPointerUp = (e) => {
+            const { clientX, clientY } = e;
+            const { left, top, width, height } = this._div.getBoundingClientRect();
+            this._clickPoint.set((clientX - left - width / 2) / (width / 2), -(clientY - top - height / 2) / (height / 2));
+            const label = this.getIntersectionLabel();
+            if (label) {
+                const axis = label.userData.axis;
+                if (this._axisCLickedCallback) {
+                    this._axisCLickedCallback(axis);
+                }
+            }
+        };
         this._size = size;
+        this._placing = placing;
+        this._raycaster = new Raycaster();
         this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
         this._camera.position.set(0, 0, 2);
-        this.buildAxes();
+        this._container = container;
+        this._axisCLickedCallback = axisClickedCallback;
+        this.initAxes();
+        this.initDiv();
+    }
+    get size() {
+        return this._size;
+    }
+    set size(size) {
+        this._size = size;
+        this.initDiv();
+    }
+    get placing() {
+        return this._placing;
+    }
+    set placing(placing) {
+        this._placing = placing;
+        this.initDiv();
     }
     destroy() {
+        this.destroyDiv();
         this.destroyAxes();
     }
-    render(mainCamera, renderer) {
+    render(mainCamera, renderer, toZUp = true) {
         this.quaternion.copy(mainCamera.quaternion).inverse();
-        this.quaternion.multiply(Axes._toZUp);
+        if (toZUp) {
+            this.quaternion.multiply(Axes._toZUp);
+        }
         this.updateMatrixWorld();
         renderer.getViewport(this._viewportBak);
         renderer.autoClear = false;
         renderer.clearDepth();
-        renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
+        switch (this._placing) {
+            case "top-left":
+                renderer.setViewport(0, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
+                break;
+            case "top-right":
+                renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
+                break;
+            case "bottom-left":
+                renderer.setViewport(0, 0, this._size, this._size);
+                break;
+            case "bottom-right":
+                renderer.setViewport(renderer.getContext().drawingBufferWidth - this._size, 0, this._size, this._size);
+                break;
+        }
         renderer.render(this, this._camera);
         renderer.setViewport(this._viewportBak.x, this._viewportBak.y, this._viewportBak.z, this._viewportBak.w);
         renderer.autoClear = true;
     }
-    buildAxes() {
+    initAxes() {
         this._axisMaterials[0] = MaterialBuilder.buildLineMaterial(0xFF3653, 0.02, false);
         this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02, false);
         this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02, false);
@@ -450,35 +596,50 @@ class Axes extends Object3D {
         this._axisLabelMaterials[5] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x1C5BA3, "-Z");
         this._axisGeometry = new LineGeometry();
         this._axisGeometry.setPositions([0, 0, 0, 0.8, 0, 0]);
-        this.xAxis = new Line2(this._axisGeometry, this._axisMaterials[0]);
-        this.yAxis = new Line2(this._axisGeometry, this._axisMaterials[1]);
-        this.zAxis = new Line2(this._axisGeometry, this._axisMaterials[2]);
-        this.yAxis.rotation.z = Math.PI / 2;
-        this.zAxis.rotation.y = -Math.PI / 2;
-        this.add(this.xAxis);
-        this.add(this.yAxis);
-        this.add(this.zAxis);
-        this.xLabel = new Sprite(this._axisLabelMaterials[0]);
-        this.xLabelN = new Sprite(this._axisLabelMaterials[1]);
-        this.yLabel = new Sprite(this._axisLabelMaterials[2]);
-        this.yLabelN = new Sprite(this._axisLabelMaterials[3]);
-        this.zLabel = new Sprite(this._axisLabelMaterials[4]);
-        this.zLabelN = new Sprite(this._axisLabelMaterials[5]);
-        this.xLabel.position.x = 1;
-        this.yLabel.position.y = 1;
-        this.zLabel.position.z = 1;
-        this.xLabelN.position.x = -1;
-        this.yLabelN.position.y = -1;
-        this.zLabelN.position.z = -1;
-        this.xLabelN.scale.setScalar(0.8);
-        this.yLabelN.scale.setScalar(0.8);
-        this.zLabelN.scale.setScalar(0.8);
-        this.add(this.xLabel);
-        this.add(this.yLabel);
-        this.add(this.zLabel);
-        this.add(this.xLabelN);
-        this.add(this.yLabelN);
-        this.add(this.zLabelN);
+        const xAxis = new Line2(this._axisGeometry, this._axisMaterials[0]);
+        const yAxis = new Line2(this._axisGeometry, this._axisMaterials[1]);
+        const zAxis = new Line2(this._axisGeometry, this._axisMaterials[2]);
+        yAxis.rotation.z = Math.PI / 2;
+        zAxis.rotation.y = -Math.PI / 2;
+        this.add(xAxis);
+        this.add(yAxis);
+        this.add(zAxis);
+        this._axes[0] = xAxis;
+        this._axes[1] = yAxis;
+        this._axes[2] = zAxis;
+        const xLabel = new Sprite(this._axisLabelMaterials[0]);
+        const yLabel = new Sprite(this._axisLabelMaterials[2]);
+        const zLabel = new Sprite(this._axisLabelMaterials[4]);
+        const xLabelN = new Sprite(this._axisLabelMaterials[1]);
+        const yLabelN = new Sprite(this._axisLabelMaterials[3]);
+        const zLabelN = new Sprite(this._axisLabelMaterials[5]);
+        xLabel.userData.axis = "x";
+        yLabel.userData.axis = "y";
+        zLabel.userData.axis = "z";
+        xLabelN.userData.axis = "-x";
+        yLabelN.userData.axis = "-y";
+        zLabelN.userData.axis = "-z";
+        xLabel.position.x = 1;
+        yLabel.position.y = 1;
+        zLabel.position.z = 1;
+        xLabelN.position.x = -1;
+        yLabelN.position.y = -1;
+        zLabelN.position.z = -1;
+        xLabelN.scale.setScalar(0.8);
+        yLabelN.scale.setScalar(0.8);
+        zLabelN.scale.setScalar(0.8);
+        this.add(xLabel);
+        this.add(yLabel);
+        this.add(zLabel);
+        this.add(xLabelN);
+        this.add(yLabelN);
+        this.add(zLabelN);
+        this._labels[0] = xLabel;
+        this._labels[1] = yLabel;
+        this._labels[2] = zLabel;
+        this._labels[3] = xLabelN;
+        this._labels[4] = yLabelN;
+        this._labels[5] = zLabelN;
     }
     destroyAxes() {
         var _a, _b;
@@ -487,6 +648,51 @@ class Axes extends Object3D {
         this._axisMaterials = null;
         (_b = this._axisLabelMaterials) === null || _b === void 0 ? void 0 : _b.forEach(x => { x.map.dispose(); x.dispose(); });
         this._axisLabelMaterials = null;
+    }
+    initDiv() {
+        this.destroyDiv();
+        const div = document.createElement("div");
+        div.style.position = "absolute";
+        div.style.height = this._size + "px";
+        div.style.width = this._size + "px";
+        switch (this._placing) {
+            case "top-left":
+                div.style.top = 0 + "px";
+                div.style.left = 0 + "px";
+                break;
+            case "top-right":
+                div.style.top = 0 + "px";
+                div.style.right = 0 + "px";
+                break;
+            case "bottom-left":
+                div.style.bottom = 0 + "px";
+                div.style.left = 0 + "px";
+                break;
+            case "bottom-right":
+                div.style.bottom = 0 + "px";
+                div.style.right = 0 + "px";
+                break;
+        }
+        div.addEventListener("pointerup", this.onDivPointerUp);
+        this._container.append(div);
+        this._div = div;
+    }
+    destroyDiv() {
+        if (this._div) {
+            this._div.removeEventListener("pointerup", this.onDivPointerUp);
+            this._div.remove();
+            this._div = null;
+        }
+    }
+    getIntersectionLabel() {
+        this._raycaster.setFromCamera(this._clickPoint, this._camera);
+        const intersection = this._raycaster.intersectObjects(this._labels)[0];
+        if (!intersection) {
+            return null;
+        }
+        else {
+            return intersection.object;
+        }
     }
 }
 Axes._toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
@@ -1020,7 +1226,7 @@ class SimplifiedScene {
 
 class PointSnapHelper {
     constructor() {
-        this.raycaster = new Raycaster();
+        this._raycaster = new Raycaster();
     }
     static convertClientToCanvas(renderer, clientX, clientY) {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -1063,8 +1269,8 @@ class PointSnapHelper {
         return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
     }
     getPoint(camera, mesh, mousePoint) {
-        this.raycaster.setFromCamera(mousePoint, camera);
-        const intersection = this.raycaster.intersectObject(mesh)[0];
+        this._raycaster.setFromCamera(mousePoint, camera);
+        const intersection = this._raycaster.intersectObject(mesh)[0];
         if (!intersection) {
             return null;
         }
@@ -1188,7 +1394,7 @@ class PickingScene {
 }
 
 class HudScene {
-    constructor(renderer) {
+    constructor() {
         this._lastResolution = new Vector2();
         this._measurePoints = { start: null, end: null };
         this._markerMaterials = [];
@@ -1198,10 +1404,8 @@ class HudScene {
         this._pointSnap = new PointSnapHelper();
         const scene = new Scene();
         this._scene = scene;
-        this.buildLines();
-        this.buildMarkers();
-        const ctx = renderer.getContext();
-        this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+        this.initLines();
+        this.initMarkers();
     }
     destroy() {
         this.destroyLines();
@@ -1330,7 +1534,7 @@ class HudScene {
             this._camera.updateProjectionMatrix();
         }
     }
-    buildMarkers() {
+    initMarkers() {
         this._uniqueMarkers.set("m_snap", this.buildRoundMarker(0xFF00FF, 8));
         this._uniqueMarkers.set("m_start", this.buildRoundMarker(0x391285, 8));
         this._uniqueMarkers.set("m_end", this.buildRoundMarker(0x00FFFF, 8));
@@ -1381,7 +1585,7 @@ class HudScene {
             }
         });
     }
-    buildLines() {
+    initLines() {
         this._uniqueLineSegments.set("m_dist_z", this.buildLineSegment(0x2c8FFF, 2, true));
         this._uniqueLineSegments.set("m_dist_y", this.buildLineSegment(0x8adb00, 2, true));
         this._uniqueLineSegments.set("m_dist_x", this.buildLineSegment(0xFF3653, 2, true));
@@ -1543,10 +1747,12 @@ class GltfViewer {
         this._pickingScene = new PickingScene();
         this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
         this._simplifiedScene = new SimplifiedScene();
+        this._hudScene = new HudScene();
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
-        this._hudScene = new HudScene(this._renderer);
-        this._axes = new Axes();
+        this._axes = new Axes(this._container, (axis) => {
+            this._cameraControls.rotateAroundAxis(axis, true);
+        });
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
             this.resizeRenderer();
         });
@@ -1555,6 +1761,7 @@ class GltfViewer {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
+        this.removeCanvasEventListeners();
         (_b = (_a = this._loader) === null || _a === void 0 ? void 0 : _a.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
         (_c = this._containerResizeSensor) === null || _c === void 0 ? void 0 : _c.detach();
         this._containerResizeSensor = null;
@@ -1766,8 +1973,14 @@ class GltfViewer {
             this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
         }
     }
+    removeCanvasEventListeners() {
+        this._renderer.domElement.removeEventListener("pointerdown", this.onCanvasPointerDown);
+        this._renderer.domElement.removeEventListener("pointerup", this.onCanvasPointerUp);
+        this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
+    }
     initRenderer() {
         if (this._renderer) {
+            this.removeCanvasEventListeners();
             this._renderer.domElement.remove();
             this._renderer.dispose();
             this._renderer.forceContextLoss();
@@ -1786,10 +1999,10 @@ class GltfViewer {
         this.resizeRenderer();
         this.addCanvasEventListeners();
         if (this._cameraControls) {
-            this._cameraControls.changeCanvas(this._renderer.domElement);
+            this._cameraControls.focusCameraOnObjects(null);
         }
         else {
-            this._cameraControls = new CameraControls(this._renderer.domElement, () => this.renderOnCameraMove());
+            this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove());
         }
         this._container.append(this._renderer.domElement);
     }

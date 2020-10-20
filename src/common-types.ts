@@ -12,6 +12,10 @@ export type MeshBgSm = Mesh<BufferGeometry, MeshStandardMaterial>;
 export type MeshBgBm = Mesh<BufferGeometry, MeshBasicMaterial>;
 
 export type MeshBgAm = Mesh<BufferGeometry, Material>;
+
+export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
 // #endregion
 
 // #region interfaces

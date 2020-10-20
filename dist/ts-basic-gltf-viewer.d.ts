@@ -134,6 +134,7 @@ export declare class GltfViewer {
 	private onCanvasPointerUp;
 	private onCanvasMouseMove;
 	private addCanvasEventListeners;
+	private removeCanvasEventListeners;
 	private initRenderer;
 	private resizeRenderer;
 	private updateRenderSceneAsync;

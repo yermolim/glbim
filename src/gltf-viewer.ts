@@ -54,7 +54,7 @@ export class GltfViewer {
   
   private _subscriptions: Subscription[] = [];
   
-  private _container: Element;
+  private _container: HTMLElement;
   private _containerResizeSensor: ResizeSensor;
   private _options: GltfViewerOptions;  
 
@@ -123,12 +123,14 @@ export class GltfViewer {
     this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity,
       this._options.selectionColor, this._options.highlightColor);
     this._simplifiedScene = new SimplifiedScene();
+    this._hudScene = new HudScene();
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
     
-    this._hudScene = new HudScene(this._renderer);
-    this._axes = new Axes();
+    this._axes = new Axes(this._container, (axis) => {
+      this._cameraControls.rotateAroundAxis(axis, true);
+    });
  
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
       this.resizeRenderer();
@@ -138,6 +140,7 @@ export class GltfViewer {
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
     this.closeSubjects();  
+    this.removeCanvasEventListeners();
 
     this._loader?.dracoLoader?.dispose();  
     
@@ -439,11 +442,18 @@ export class GltfViewer {
       this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
     }
   }
+
+  private removeCanvasEventListeners() {    
+    this._renderer.domElement.removeEventListener("pointerdown", this.onCanvasPointerDown);
+    this._renderer.domElement.removeEventListener("pointerup", this.onCanvasPointerUp);   
+    this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
+  }
   // #endregion
 
   // #region renderer
   private initRenderer() {    
     if (this._renderer) {
+      this.removeCanvasEventListeners();
       this._renderer.domElement.remove();
       this._renderer.dispose();
       this._renderer.forceContextLoss();
@@ -466,9 +476,9 @@ export class GltfViewer {
     this.addCanvasEventListeners();
 
     if (this._cameraControls) {      
-      this._cameraControls.changeCanvas(this._renderer.domElement);
+      this._cameraControls.focusCameraOnObjects(null);
     } else {
-      this._cameraControls = new CameraControls(this._renderer.domElement, () => this.renderOnCameraMove()); 
+      this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove()); 
     } 
     
     this._container.append(this._renderer.domElement);
@@ -528,7 +538,7 @@ export class GltfViewer {
       if (this._options.showAxesHelper && this._axes) {
         this._axes.render(this._cameraControls.camera, this._renderer);
       }
-      
+
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
     });
