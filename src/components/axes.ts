@@ -10,8 +10,9 @@ import { CornerName, AxisName } from "../common-types";
 export class Axes extends Object3D {
   private static readonly _toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), - Math.PI/2);
 
+  private _enabled: boolean;
   private _size: number;
-  private _placing: CornerName;
+  private _placement: CornerName;
 
   private _raycaster: Raycaster;
   private _camera: Camera;
@@ -35,26 +36,29 @@ export class Axes extends Object3D {
     return this._size;
   }
 
-  set size(size: number) {
-    this._size = size;
-    this.initDiv();
+  set size(value: number) {
+    this.updateOptions(this.enabled, this._placement, value);
   }
   
-  get placing(): CornerName {
-    return this._placing;
+  get placement(): CornerName {
+    return this._placement;
   }
 
-  set placing(placing: CornerName) {
-    this._placing = placing;
-    this.initDiv();
+  set placement(value: CornerName) {
+    this.updateOptions(this.enabled, value, this._size);
+  }
+    
+  get enabled(): boolean {
+    return this._enabled;
   }
 
-  constructor(container: HTMLElement, axisClickedCallback: (axis: AxisName) => any,  
-    placing: CornerName = "top-right", size = 128) {
+  set enabled(value: boolean) {
+    this.updateOptions(value, this._placement, this._size);
+  }
+
+  constructor(container: HTMLElement, axisClickedCallback: (axis: AxisName) => any,
+    enabled = true, placement: CornerName = "top-right", size = 128) {
     super();
-
-    this._size = size;
-    this._placing = placing;
 
     this._raycaster = new Raycaster();
     this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
@@ -64,6 +68,13 @@ export class Axes extends Object3D {
     this._axisCLickedCallback = axisClickedCallback;
 
     this.initAxes();
+    this.updateOptions(enabled, placement, size);
+  }
+
+  updateOptions(enabled: boolean, placement: CornerName, size: number) {    
+    this._enabled = enabled;
+    this._size = size;
+    this._placement = placement;
     this.initDiv();
   }
 
@@ -73,6 +84,10 @@ export class Axes extends Object3D {
   }
 
   render(mainCamera: Camera, renderer: WebGLRenderer, toZUp = true) {
+    if (!this.enabled) {
+      return;
+    }
+
     this.quaternion.copy(mainCamera.quaternion).inverse();
     if (toZUp) {
       this.quaternion.multiply(Axes._toZUp);
@@ -83,7 +98,7 @@ export class Axes extends Object3D {
     
     renderer.autoClear = false;
     renderer.clearDepth();
-    switch(this._placing) {
+    switch(this._placement) {
       case "top-left":
         renderer.setViewport(0, renderer.getContext().drawingBufferHeight - this._size, 
           this._size, this._size);
@@ -194,7 +209,7 @@ export class Axes extends Object3D {
     div.style.position = "absolute";
     div.style.height = this._size + "px";
     div.style.width = this._size + "px";
-    switch(this._placing) {      
+    switch(this._placement) {      
       case "top-left":
         div.style.top = 0 + "px";
         div.style.left = 0 + "px";
@@ -236,7 +251,11 @@ export class Axes extends Object3D {
     }
   }
 
-  private onDivPointerUp = (e: PointerEvent) => {    
+  private onDivPointerUp = (e: PointerEvent) => { 
+    if (!this.enabled) {
+      return;
+    }    
+    
     const { clientX, clientY } = e;
     const { left, top, width, height } = this._div.getBoundingClientRect();
 

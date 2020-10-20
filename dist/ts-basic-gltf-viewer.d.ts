@@ -7,6 +7,7 @@ import { Vector3 } from 'three';
 
 export declare type MeshMergeType = "scene" | "model" | "model+" | null;
 export declare type FastRenderType = "ch" | "aabb" | "ombb" | null;
+export declare type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export interface ModelFileInfo {
 	url: string;
 	guid: string;
@@ -59,7 +60,9 @@ export declare class GltfViewerOptions {
 	isolationOpacity: number;
 	meshMergeType: MeshMergeType;
 	fastRenderType: FastRenderType;
-	showAxesHelper: boolean;
+	axesHelperEnabled: boolean;
+	axesHelperPlacement: CornerName;
+	axesHelperSize: number;
 	constructor(item?: object);
 }
 export declare class GltfViewer {

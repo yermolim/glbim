@@ -1,4 +1,4 @@
-import { MeshMergeType, FastRenderType } from "./common-types";
+import { MeshMergeType, FastRenderType, CornerName } from "./common-types";
 
 export class GltfViewerOptions {
   useAntialiasing = false;
@@ -16,7 +16,9 @@ export class GltfViewerOptions {
   meshMergeType: MeshMergeType = null;
   fastRenderType: FastRenderType = null;
 
-  showAxesHelper = true;
+  axesHelperEnabled = true;
+  axesHelperPlacement: CornerName = "top-right";
+  axesHelperSize = 128;
   
   constructor(item: object = null) {
     if (item != null) {

@@ -64,7 +64,9 @@ class GltfViewerOptions {
         this.isolationOpacity = 0.2;
         this.meshMergeType = null;
         this.fastRenderType = null;
-        this.showAxesHelper = true;
+        this.axesHelperEnabled = true;
+        this.axesHelperPlacement = "top-right";
+        this.axesHelperSize = 128;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -509,7 +511,7 @@ class MaterialBuilder {
 }
 
 class Axes extends Object3D {
-    constructor(container, axisClickedCallback, placing = "top-right", size = 128) {
+    constructor(container, axisClickedCallback, enabled = true, placement = "top-right", size = 128) {
         super();
         this._clickPoint = new Vector2();
         this._axisMaterials = new Array(3);
@@ -518,6 +520,9 @@ class Axes extends Object3D {
         this._labels = new Array(6);
         this._viewportBak = new Vector4();
         this.onDivPointerUp = (e) => {
+            if (!this.enabled) {
+                return;
+            }
             const { clientX, clientY } = e;
             const { left, top, width, height } = this._div.getBoundingClientRect();
             this._clickPoint.set((clientX - left - width / 2) / (width / 2), -(clientY - top - height / 2) / (height / 2));
@@ -529,28 +534,36 @@ class Axes extends Object3D {
                 }
             }
         };
-        this._size = size;
-        this._placing = placing;
         this._raycaster = new Raycaster();
         this._camera = new OrthographicCamera(-2, 2, 2, -2, 0, 4);
         this._camera.position.set(0, 0, 2);
         this._container = container;
         this._axisCLickedCallback = axisClickedCallback;
         this.initAxes();
-        this.initDiv();
+        this.updateOptions(enabled, placement, size);
     }
     get size() {
         return this._size;
     }
-    set size(size) {
+    set size(value) {
+        this.updateOptions(this.enabled, this._placement, value);
+    }
+    get placement() {
+        return this._placement;
+    }
+    set placement(value) {
+        this.updateOptions(this.enabled, value, this._size);
+    }
+    get enabled() {
+        return this._enabled;
+    }
+    set enabled(value) {
+        this.updateOptions(value, this._placement, this._size);
+    }
+    updateOptions(enabled, placement, size) {
+        this._enabled = enabled;
         this._size = size;
-        this.initDiv();
-    }
-    get placing() {
-        return this._placing;
-    }
-    set placing(placing) {
-        this._placing = placing;
+        this._placement = placement;
         this.initDiv();
     }
     destroy() {
@@ -558,6 +571,9 @@ class Axes extends Object3D {
         this.destroyAxes();
     }
     render(mainCamera, renderer, toZUp = true) {
+        if (!this.enabled) {
+            return;
+        }
         this.quaternion.copy(mainCamera.quaternion).inverse();
         if (toZUp) {
             this.quaternion.multiply(Axes._toZUp);
@@ -566,7 +582,7 @@ class Axes extends Object3D {
         renderer.getViewport(this._viewportBak);
         renderer.autoClear = false;
         renderer.clearDepth();
-        switch (this._placing) {
+        switch (this._placement) {
             case "top-left":
                 renderer.setViewport(0, renderer.getContext().drawingBufferHeight - this._size, this._size, this._size);
                 break;
@@ -655,7 +671,7 @@ class Axes extends Object3D {
         div.style.position = "absolute";
         div.style.height = this._size + "px";
         div.style.width = this._size + "px";
-        switch (this._placing) {
+        switch (this._placement) {
             case "top-left":
                 div.style.top = 0 + "px";
                 div.style.left = 0 + "px";
@@ -1750,9 +1766,7 @@ class GltfViewer {
         this._hudScene = new HudScene();
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
-        this._axes = new Axes(this._container, (axis) => {
-            this._cameraControls.rotateAroundAxis(axis, true);
-        });
+        this._axes = new Axes(this._container, (axis) => this._cameraControls.rotateAroundAxis(axis, true), this._options.axesHelperEnabled, this._options.axesHelperPlacement, this._options.axesHelperSize);
         this._containerResizeSensor = new ResizeSensor(this._container, () => {
             this.resizeRenderer();
         });
@@ -1789,6 +1803,7 @@ class GltfViewer {
             const oldOptions = this._options;
             this._options = new GltfViewerOptions(options);
             let rendererReinitialized = false;
+            let axesHelperUpdated = false;
             let lightsUpdated = false;
             let colorsUpdated = false;
             let materialsUpdated = false;
@@ -1796,6 +1811,12 @@ class GltfViewer {
             if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
                 this.initRenderer();
                 rendererReinitialized = true;
+            }
+            if (this._options.axesHelperEnabled !== oldOptions.axesHelperEnabled
+                || this._options.axesHelperPlacement !== oldOptions.axesHelperPlacement
+                || this._options.axesHelperSize !== oldOptions.axesHelperSize) {
+                this._axes.updateOptions(this._options.axesHelperEnabled, this._options.axesHelperPlacement, this._options.axesHelperSize);
+                axesHelperUpdated = true;
             }
             if (this._options.usePhysicalLights !== oldOptions.usePhysicalLights
                 || this._options.ambientLightIntensity !== oldOptions.ambientLightIntensity
@@ -1822,8 +1843,8 @@ class GltfViewer {
                 yield this.updateRenderSceneAsync();
                 sceneUpdated = true;
             }
-            if (this._options.showAxesHelper !== oldOptions.showAxesHelper
-                && !(materialsUpdated || sceneUpdated)) {
+            if (!(materialsUpdated || sceneUpdated)
+                && axesHelperUpdated) {
                 this.render();
             }
             if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
@@ -2039,7 +2060,7 @@ class GltfViewer {
     render(focusObjects = null, fast = false) {
         this.prepareToRender(focusObjects);
         requestAnimationFrame(() => {
-            var _a, _b;
+            var _a, _b, _c;
             if (!this._renderer) {
                 return;
             }
@@ -2053,9 +2074,7 @@ class GltfViewer {
             if (this._measureMode && this._hudScene) {
                 this._hudScene.render(this._cameraControls.camera, this._renderer);
             }
-            if (this._options.showAxesHelper && this._axes) {
-                this._axes.render(this._cameraControls.camera, this._renderer);
-            }
+            (_c = this._axes) === null || _c === void 0 ? void 0 : _c.render(this._cameraControls.camera, this._renderer);
             const frameTime = performance.now() - start;
             this._lastFrameTime.next(frameTime);
         });

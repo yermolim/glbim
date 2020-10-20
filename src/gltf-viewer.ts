@@ -117,20 +117,29 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
 
-    this._lights = new Lights(this._options.usePhysicalLights, 
-      this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity); 
+    this._lights = new Lights(
+      this._options.usePhysicalLights, 
+      this._options.ambientLightIntensity, 
+      this._options.hemiLightIntensity, 
+      this._options.dirLightIntensity); 
+      
     this._pickingScene = new PickingScene();
-    this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity,
-      this._options.selectionColor, this._options.highlightColor);
+    this._renderScene = new RenderScene(
+      this._options.isolationColor, 
+      this._options.isolationOpacity,
+      this._options.selectionColor, 
+      this._options.highlightColor);
     this._simplifiedScene = new SimplifiedScene();
     this._hudScene = new HudScene();
 
     this.initLoader(dracoDecoderPath);
     this.initRenderer();
     
-    this._axes = new Axes(this._container, (axis) => {
-      this._cameraControls.rotateAroundAxis(axis, true);
-    });
+    this._axes = new Axes(this._container, 
+      (axis) => this._cameraControls.rotateAroundAxis(axis, true),
+      this._options.axesHelperEnabled,
+      this._options.axesHelperPlacement,
+      this._options.axesHelperSize);
  
     this._containerResizeSensor = new ResizeSensor(this._container, () => {
       this.resizeRenderer();
@@ -180,6 +189,7 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);
 
     let rendererReinitialized = false;
+    let axesHelperUpdated = false;
     let lightsUpdated = false;
     let colorsUpdated = false;
     let materialsUpdated = false;
@@ -188,6 +198,14 @@ export class GltfViewer {
     if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
       this.initRenderer();
       rendererReinitialized = true;
+    }
+
+    if (this._options.axesHelperEnabled !== oldOptions.axesHelperEnabled
+      || this._options.axesHelperPlacement !== oldOptions.axesHelperPlacement
+      || this._options.axesHelperSize !== oldOptions.axesHelperSize) {
+      this._axes.updateOptions(this._options.axesHelperEnabled,
+        this._options.axesHelperPlacement, this._options.axesHelperSize);
+      axesHelperUpdated = true;
     }
     
     if (this._options.usePhysicalLights !== oldOptions.usePhysicalLights
@@ -220,12 +238,11 @@ export class GltfViewer {
       await this.updateRenderSceneAsync();
       sceneUpdated = true;
     }
-
-    if (this._options.showAxesHelper !== oldOptions.showAxesHelper
-      && !(materialsUpdated || sceneUpdated)) {
-      this.render();
-    }
     
+    if (!(materialsUpdated || sceneUpdated) 
+        && axesHelperUpdated) {
+      this.render();
+    }    
 
     if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
       if (this._options.highlightingEnabled) {        
@@ -535,9 +552,7 @@ export class GltfViewer {
       if (this._measureMode && this._hudScene) {
         this._hudScene.render(this._cameraControls.camera, this._renderer);
       }
-      if (this._options.showAxesHelper && this._axes) {
-        this._axes.render(this._cameraControls.camera, this._renderer);
-      }
+      this._axes?.render(this._cameraControls.camera, this._renderer);
 
       const frameTime = performance.now() - start;
       this._lastFrameTime.next(frameTime);
