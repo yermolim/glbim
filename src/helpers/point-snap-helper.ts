@@ -1,5 +1,5 @@
 import { Raycaster, Camera, WebGLRenderer, BufferAttribute,
-  Vector2, Vector3, Face3, Triangle, Object3D } from "three";
+  Vector2, Vector3, Face3, Triangle, Object3D, Matrix4 } from "three";
 import { MeshBgAm } from "../common-types";
 
 export class PointSnapHelper {
@@ -33,7 +33,7 @@ export class PointSnapHelper {
   
   static convertWorldToCanvasZeroCenter(camera: Camera, renderer: WebGLRenderer, 
     point: Vector3): Vector2 {
-    const nPoint = new Vector3().copy(point).project(camera);
+    const nPoint = new Vector3().copy(point).project(camera);     
 
     // primitive hack to keep point in the right direction if it is outside of camera coverage
     if (nPoint.z > 1) {

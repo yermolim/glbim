@@ -20,6 +20,7 @@ import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
 import { HudScene } from "./scenes/hud-scene";
+import { PointSnapHelper } from "./helpers/point-snap-helper";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4 };
 
@@ -73,6 +74,7 @@ export class GltfViewer {
 
   // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
+  private _pointSnapHelper: PointSnapHelper;
   private _pickingScene: PickingScene;
 
   private _queuedColoring: ColoringInfo[] = null;
@@ -122,7 +124,9 @@ export class GltfViewer {
       this._options.ambientLightIntensity, 
       this._options.hemiLightIntensity, 
       this._options.dirLightIntensity); 
-      
+
+    this._pointSnapHelper = new PointSnapHelper();
+
     this._pickingScene = new PickingScene();
     this._renderScene = new RenderScene(
       this._options.isolationColor, 
@@ -158,6 +162,9 @@ export class GltfViewer {
     
     this._cameraControls?.destroy();
     this._cameraControls = null;
+
+    this._pointSnapHelper?.destroy();
+    this._pointSnapHelper = null;
 
     this._axes?.destroy();
     this._axes = null;
@@ -768,9 +775,10 @@ export class GltfViewer {
   // #endregion
 
   // #region item picking 
-  private getMeshAt(clientX: number, clientY: number): MeshBgSm {   
+  private getMeshAt(clientX: number, clientY: number): MeshBgSm {  
+    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY); 
     return this._renderer && this._pickingScene
-      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, clientX, clientY)
+      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, position)
       : null;
   }
   // #endregion
@@ -947,13 +955,15 @@ export class GltfViewer {
       return;
     } 
 
+    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
     const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
-      this._renderer, clientX, clientY);
-    const snapPoint = this._hudScene.setSnapMarker(this._cameraControls.camera,
-      this._renderer, pickingMesh, clientX, clientY);
+      this._renderer, position);
+    const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
+      this._renderer, position, pickingMesh);
 
-    this.render(); 
+    const snapPoint = this._hudScene.setMeasureSnapMarker(point);
     this._snapPointChange.next(snapPoint);
+    this.render(); 
   }
 
   private setDistanceMarkerAtPoint(clientX: number, clientY: number) { 
@@ -961,17 +971,19 @@ export class GltfViewer {
       return;
     } 
     
+    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
     const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
-      this._renderer, clientX, clientY);
-    const distance = this._hudScene.setDistanceMarker(this._cameraControls.camera,
-      this._renderer, pickingMesh, clientX, clientY);
-    
+      this._renderer, position);
+    const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
+      this._renderer, position, pickingMesh);
+
+    const distance = this._hudScene.setMeasureEndMarker(point);
+    this._distanceMeasureChange.next(distance);  
     this.render(); 
-    this._distanceMeasureChange.next(distance);
   }
 
   private clearMeasureMarkers() {
-    this._hudScene.resetMeasureMarkers();
+    this._hudScene.resetMeasures();
 
     this.render();
     this._distanceMeasureChange.next(null);

@@ -1,10 +1,11 @@
-import { Object3D, Sprite, Vector2, Vector3, Vector4, Quaternion, SpriteMaterial,
-  WebGLRenderer, Camera, OrthographicCamera, Raycaster } from "three";
+import { Object3D, Sprite, Vector2, Vector3, Vector4, Quaternion, Color,
+  SpriteMaterial, WebGLRenderer, Camera, OrthographicCamera, Raycaster } from "three";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
 import { MaterialBuilder } from "../helpers/material-builder";
+import { CanvasTextureBuilder } from "../helpers/canvas-texture-builder";
 import { CornerName, AxisName } from "../common-types";
 
 export class Axes extends Object3D {
@@ -128,12 +129,18 @@ export class Axes extends Object3D {
     this._axisMaterials[1] = MaterialBuilder.buildLineMaterial(0x8adb00, 0.02, false);
     this._axisMaterials[2] = MaterialBuilder.buildLineMaterial(0x2c8FFF, 0.02, false);
 
-    this._axisLabelMaterials[0] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xFF3653, "X");
-    this._axisLabelMaterials[1] = MaterialBuilder.buildAxisSpriteMaterial(64, 0xA32235, "-X");
-    this._axisLabelMaterials[2] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x8ADB00, "Y");
-    this._axisLabelMaterials[3] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x588C00, "-Y");
-    this._axisLabelMaterials[4] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x2C8FFF, "Z");
-    this._axisLabelMaterials[5] = MaterialBuilder.buildAxisSpriteMaterial(64, 0x1C5BA3, "-Z");
+    this._axisLabelMaterials[0] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0xFF3653, "X"));
+    this._axisLabelMaterials[1] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0xA32235, "-X"));
+    this._axisLabelMaterials[2] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0x8ADB00, "Y"));
+    this._axisLabelMaterials[3] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0x588C00, "-Y"));
+    this._axisLabelMaterials[4] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0x2C8FFF, "Z"));
+    this._axisLabelMaterials[5] = MaterialBuilder
+      .buildSpriteMaterial(CanvasTextureBuilder.buildAxisLabelTexture(64, 0x1C5BA3, "-Z"));
 
     this._axisGeometry = new LineGeometry();
     this._axisGeometry.setPositions([0, 0, 0, 0.8, 0, 0]);

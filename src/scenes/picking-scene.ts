@@ -1,8 +1,7 @@
-import { Scene, Mesh, Color, Vector2, Vector3, PerspectiveCamera, Camera,
+import { Scene, Mesh, Color, Vector2, PerspectiveCamera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
-import { MeshBgBm, MeshBgSm, MeshBgAm } from "../common-types";
-import { PointSnapHelper } from "../helpers/point-snap-helper";
+import { MeshBgBm, MeshBgSm } from "../common-types";
 
 export class PickingScene {
   private _scene: Scene;
@@ -59,15 +58,13 @@ export class PickingScene {
   }
 
   getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
-    clientX: number, clientY: number): MeshBgSm { 
-    const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
-    return this.getSourceMeshAtPosition(camera, renderer, position);
+    canvasPosition: Vector2): MeshBgSm { 
+    return this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
   }
   
   getPickingMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
-    clientX: number, clientY: number): MeshBgBm { 
-    const position = PointSnapHelper.convertClientToCanvas(renderer, clientX, clientY);
-    const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, position);
+    canvasPosition: Vector2): MeshBgBm { 
+    const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
     return sourceMesh
       ? this._pickingMeshById.get(sourceMesh.uuid)
       : null;

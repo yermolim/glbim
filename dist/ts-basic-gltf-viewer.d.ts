@@ -100,6 +100,7 @@ export declare class GltfViewer {
 	private _simplifiedScene;
 	private _meshesNeedColorUpdate;
 	private _pointerEventHelper;
+	private _pointSnapHelper;
 	private _pickingScene;
 	private _queuedColoring;
 	private _queuedSelection;

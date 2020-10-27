@@ -193,7 +193,7 @@ export class CameraControls {
 
         // repeat until intermediate quaternion won't be equal to the target one 
         if (this._rQcfTemp.angleTo(this._rQcfTarget)) {
-          setTimeout(() => renderRotationFrame(), 0);
+          window.requestAnimationFrame(() => renderRotationFrame());
         }
       };
       renderRotationFrame();

@@ -1,6 +1,7 @@
-import { Color, DoubleSide, NormalBlending, NoBlending, CanvasTexture,
+import { Color, DoubleSide, NormalBlending, NoBlending, 
+  Texture, Material,
   MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
-  MeshBasicMaterial, LineBasicMaterial, SpriteMaterial } from "three";
+  MeshBasicMaterial, LineBasicMaterial, SpriteMaterial, RawShaderMaterial } from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
@@ -102,94 +103,7 @@ export class MaterialBuilder {
     return material;
   }  
 
-  static buildAxisSpriteMaterial(size: number, color: number, text: string): SpriteMaterial {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-
-    ctx.beginPath();
-    ctx.arc(size/2, size/2, size/4, 0, 2*Math.PI);
-    ctx.closePath();
-    ctx.fillStyle = new Color(color).getStyle();
-    ctx.fill();
-
-    if (text) {
-      ctx.font = size/3 + "px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillStyle = "#000000";
-      ctx.fillText(text, size/2, size/2 - size/6);
-    }
-
-    const texture = new CanvasTexture(canvas);
-    return new SpriteMaterial({map: texture, toneMapped: false});
-  }
-  
-  static buildCircleSpriteMaterial(size: number, color: number): SpriteMaterial {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-
-    ctx.beginPath();
-    ctx.arc(size/2, size/2, size/2, 0, 2*Math.PI);
-    ctx.closePath();
-    ctx.fillStyle = new Color(color).getStyle();
-    ctx.fill();
-
-    const texture = new CanvasTexture(canvas);
-    return new SpriteMaterial({map: texture, toneMapped: false});
-  }
-  
-  static buildSquareSpriteMaterial(size: number, color: number): SpriteMaterial {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-
-    ctx.beginPath();
-    ctx.fillStyle = new Color(color).getStyle();
-    ctx.fillRect(0, 0, size, size);
-
-    const texture = new CanvasTexture(canvas);
-    return new SpriteMaterial({map: texture, toneMapped: false});
-  }
-    
-  static buildTriangleSpriteMaterial(size: number, color: number): SpriteMaterial {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-
-    ctx.beginPath();
-    ctx.moveTo(0, size);
-    ctx.lineTo(size/2, 0);
-    ctx.lineTo(size, size);
-    ctx.closePath();
-    ctx.fillStyle = new Color(color).getStyle();
-    ctx.fill();
-
-    const texture = new CanvasTexture(canvas);
-    return new SpriteMaterial({map: texture, toneMapped: false});
-  }
-
-  static buildDiamondSpriteMaterial(size: number, color: number): SpriteMaterial {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-
-    ctx.beginPath();
-    ctx.moveTo(0, size/2);
-    ctx.lineTo(size/2, 0);
-    ctx.lineTo(size, size/2);
-    ctx.lineTo(size/2, size);
-    ctx.closePath();
-    ctx.fillStyle = new Color(color).getStyle();
-    ctx.fill();
-
-    const texture = new CanvasTexture(canvas);
+  static buildSpriteMaterial(texture: Texture): SpriteMaterial {
     return new SpriteMaterial({map: texture, toneMapped: false});
   }
 }
