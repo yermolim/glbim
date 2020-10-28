@@ -96,15 +96,19 @@ export class SimplifiedScene {
     // splitting into chunks to UI remain responsible
     const hullChunkSize = 100;
     const hullChunk = (chunk: MeshBgSm[]) => {    
-      chunk.forEach(x => {        
-        const hull = new ConvexHull().setFromObject(x);
-        hull.faces.forEach(f => {
-          let edge = f.edge;
-          do {
-            hullPoints.push(edge.head().point);
-            edge = edge.next;
-          } while (edge !== f.edge);
-        });
+      chunk.forEach(x => {  
+        try {
+          const hull = new ConvexHull().setFromObject(x);
+          hull.faces.forEach(f => {
+            let edge = f.edge;
+            do {
+              hullPoints.push(edge.head().point);
+              edge = edge.next;
+            } while (edge !== f.edge);
+          });
+        } catch {
+          // console.log("convex hull computing failed for mesh: " + x.name);
+        }
       });
     };
     for (let i = 0; i < meshes.length; i += hullChunkSize) {

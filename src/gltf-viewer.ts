@@ -556,9 +556,7 @@ export class GltfViewer {
       } else if (this._renderScene?.scene) {
         this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
       }
-      if (this._measureMode && this._hudScene) {
-        this._hudScene.render(this._cameraControls.camera, this._renderer);
-      }
+      this._hudScene?.render(this._cameraControls.camera, this._renderer);
       this._axes?.render(this._cameraControls.camera, this._renderer);
 
       const frameTime = performance.now() - start;

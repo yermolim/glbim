@@ -1,16 +1,7 @@
-import { Scene, Vector2, Vector3, Mesh, Sprite, 
-  Material, SpriteMaterial,
+import { Scene, Vector2, Vector3, Matrix4, Object3D, Mesh, Sprite, 
+  Material, SpriteMaterial, CanvasTexture,
   Camera, OrthographicCamera, WebGLRenderer, 
-  InstancedBufferGeometry, 
-  CanvasTexture,
-  PlaneGeometry,
-  Float32BufferAttribute,
-  InstancedBufferAttribute,
-  Matrix4,
-  RawShaderMaterial,
-  PointsMaterial,
-  BufferGeometry,
-  IUniform} from "three";
+  InstancedBufferGeometry, InstancedBufferAttribute } from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { Line2 } from "three/examples/jsm/lines/Line2";
@@ -18,22 +9,31 @@ import { Line2 } from "three/examples/jsm/lines/Line2";
 import { Vec4, Distance } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { CanvasTextureBuilder } from "../helpers/canvas-texture-builder";
-import { PointSnapHelper } from "../helpers/point-snap-helper";
 
-type DmMarkerType = "m_snap" | "m_start" | "m_end";
+type HudElementType = "s_dm_snap" | "s_dm_start" | "s_dm_end" | "s_warn_0" |
+"l_dm_w" | "l_dm_x" | "l_dm_y" | "l_dm_z";
 
-type DmLineSegmentType = "m_dist_w" | "m_dist_x" | "m_dist_y" | "m_dist_z";
-
-interface IHudSettable {
+interface IHudElement {
+  object3d: Object3D;
+  destroy: () => void;
   set: (positions: Vector3[]) => void;
   reset: () => void;
 }
 
-class HudUniqueMarker implements IHudSettable {
-  sprite: Sprite;
+class HudUniqueMarker implements IHudElement {
+  private _sprite: Sprite;
+
+  get object3d(): Object3D {
+    return this._sprite;
+  }
 
   constructor(sprite: Sprite) {
-    this.sprite = sprite;
+    this._sprite = sprite;
+  }
+
+  destroy() {
+    this._sprite.geometry.dispose();
+    this._sprite = null;
   }
 
   set(positions: Vector3[]) {
@@ -42,25 +42,70 @@ class HudUniqueMarker implements IHudSettable {
       return;
     }
 
-    if (!this.sprite.visible) {
-      this.sprite.visible = true;
+    if (!this._sprite.visible) {
+      this._sprite.visible = true;
     }
-    this.sprite.position.copy(positions[0]);
+    this._sprite.position.copy(positions[0]);
   } 
 
   reset() {
-    if (this.sprite.visible) {
-      this.sprite.visible = false;
-      this.sprite.position.set(0, 0, 0);
+    if (this._sprite.visible) {
+      this._sprite.visible = false;
+      this._sprite.position.set(0, 0, 0);
     }
   }  
 }
 
-class HudLineSegment implements IHudSettable {
-  segment: Line2;
+class HudInstancedMarker implements IHudElement {
+  private _sprite: Sprite;
+
+  get object3d(): Object3D {
+    return this._sprite;
+  }
+
+  constructor(sprite: Sprite) {
+    this._sprite = sprite;
+  }
+
+  destroy() {
+    this._sprite.geometry.dispose();
+    this._sprite = null;
+  }
+
+  set(positions: Vector3[]) {
+    const instancePosition = this._sprite.geometry.getAttribute("positionOffset");
+    const maxPositionCount = instancePosition.count;
+    if (!positions?.length) {
+      this.reset();
+      return;
+    } else if (positions.length > maxPositionCount) {
+      positions = positions.slice(0, maxPositionCount);
+    }    
+    this._sprite.geometry["instanceCount"] = positions.length;
+    positions.forEach((p, i) => {
+      instancePosition.setXYZ(i, p.x, p.y, p.z);
+    });
+  } 
+
+  reset() {
+    this._sprite.geometry["instanceCount"] = 0;
+  }  
+}
+
+class HudLineSegment implements IHudElement {
+  private _segment: Line2;
+
+  get object3d(): Object3D {
+    return this._segment;
+  }
 
   constructor(segment: Line2) {
-    this.segment = segment;
+    this._segment = segment;
+  }
+
+  destroy() {
+    this._segment.geometry.dispose();
+    this._segment = null;
   }
 
   set(positions: Vector3[]) {
@@ -70,16 +115,16 @@ class HudLineSegment implements IHudSettable {
     }
     
     const [start, end] = positions;
-    if (!this.segment.visible) {
-      this.segment.visible = true;
+    if (!this._segment.visible) {
+      this._segment.visible = true;
     }
-    this.segment.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);    
+    this._segment.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);    
   }
 
   reset() {
-    if (this.segment.visible) {
-      this.segment.visible = false;
-      this.segment.geometry.setPositions(new Array(6).fill(0));
+    if (this._segment.visible) {
+      this._segment.visible = false;
+      this._segment.geometry.setPositions(new Array(6).fill(0));
     }
   }
 }
@@ -96,23 +141,23 @@ export class HudScene {
 
   private _measurePoints: {start: Vector3; end: Vector3} = {start: null, end: null};
   
-  private _markerMaterials: SpriteMaterial[] = [];
+  private _spriteMaterials: SpriteMaterial[] = [];
   private _lineMaterials: LineMaterial[] = [];
 
-  private _uniqueMarkers = new Map<DmMarkerType, HudUniqueMarker>();
-  private _uniqueLineSegments = new Map<DmLineSegmentType, HudLineSegment>();
+  private _hudElements = new Map<HudElementType, IHudElement>();
 
   constructor() { 
     const scene = new Scene();
     this._scene = scene;
 
     this.initLines();
-    this.initMarkers();
+    this.initSprites();
   }
 
   destroy() {
-    this.destroyLines();
-    this.destroyMarkers();
+    this.destroyHudElements();
+    this.destroyLineMaterials();
+    this.destroySpriteMaterials();
 
     this._scene = null;
   }
@@ -134,10 +179,10 @@ export class HudScene {
   // #region distance measurements 
   setMeasureSnapMarker(point: Vector3): Vec4 {
     if (point) {
-      this._uniqueMarkers.get("m_snap").set([point]);
+      this._hudElements.get("s_dm_snap").set([point]);
       return new Vec4(point.x, point.y, point.z, 0, true);
     } else {
-      this._uniqueMarkers.get("m_snap").reset();
+      this._hudElements.get("s_dm_snap").reset();
       return null;
     }
   }
@@ -162,16 +207,16 @@ export class HudScene {
     }
 
     if (this._measurePoints.start) {
-      this._uniqueMarkers.get("m_start").set([this._measurePoints.start]);   
+      this._hudElements.get("s_dm_start").set([this._measurePoints.start]);   
     } else {
-      this._uniqueMarkers.get("m_start").reset(); 
+      this._hudElements.get("s_dm_start").reset(); 
     }
 
     if (this._measurePoints.end) {
-      this._uniqueMarkers.get("m_end").set([this._measurePoints.end]);  
+      this._hudElements.get("s_dm_end").set([this._measurePoints.end]);  
       this.setMeasureLines(true);
     } else {      
-      this._uniqueMarkers.get("m_end").reset(); 
+      this._hudElements.get("s_dm_end").reset(); 
       this.resetMeasureLines();
     }
     
@@ -191,9 +236,9 @@ export class HudScene {
   }  
   
   private resetMeasureMarkers() {   
-    this._uniqueMarkers.get("m_snap").reset(); 
-    this._uniqueMarkers.get("m_start").reset(); 
-    this._uniqueMarkers.get("m_end").reset(); 
+    this._hudElements.get("s_dm_snap").reset(); 
+    this._hudElements.get("s_dm_start").reset(); 
+    this._hudElements.get("s_dm_end").reset(); 
   }
 
   private setMeasureLines(toZUp: boolean) {  
@@ -207,17 +252,17 @@ export class HudScene {
       ? new Vector3(xEnd.x, xEnd.y, xEnd.z + distance.z)
       : new Vector3(xEnd.x, xEnd.y + distance.y, xEnd.z);
 
-    this._uniqueLineSegments.get("m_dist_z").set([yEnd, wEnd]);
-    this._uniqueLineSegments.get("m_dist_y").set([xEnd, yEnd]);
-    this._uniqueLineSegments.get("m_dist_x").set([wStart, xEnd]);
-    this._uniqueLineSegments.get("m_dist_w").set([wStart, wEnd]);
+    this._hudElements.get("l_dm_z").set([yEnd, wEnd]);
+    this._hudElements.get("l_dm_y").set([xEnd, yEnd]);
+    this._hudElements.get("l_dm_x").set([wStart, xEnd]);
+    this._hudElements.get("l_dm_w").set([wStart, wEnd]);
   }
 
   private resetMeasureLines() {    
-    this._uniqueLineSegments.get("m_dist_z").reset();
-    this._uniqueLineSegments.get("m_dist_y").reset();
-    this._uniqueLineSegments.get("m_dist_x").reset();
-    this._uniqueLineSegments.get("m_dist_w").reset();
+    this._hudElements.get("l_dm_z").reset();
+    this._hudElements.get("l_dm_y").reset();
+    this._hudElements.get("l_dm_x").reset();
+    this._hudElements.get("l_dm_w").reset();
   }
   // #endregion
 
@@ -262,24 +307,46 @@ export class HudScene {
       point.y = - point.y;
     }
   };
+
+  private destroyHudElements() {    
+    this._hudElements.forEach(v => {
+      if (v?.object3d) {
+        this._scene.remove(v.object3d);
+        v.destroy();
+      }
+    });
+    this._hudElements = null;
+  }
   // #endregion
 
-  // #region markers
-  private initMarkers() {     
-    this._uniqueMarkers.set("m_start", this.buildRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, 3));
-    this._uniqueMarkers.set("m_end", this.buildRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, 3));
-    this._uniqueMarkers.set("m_snap", this.buildRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 3));
+  // #region sprites
+  private initSprites() {     
+    this._hudElements.set("s_dm_start", 
+      this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, 3));
+    this._hudElements.set("s_dm_end", 
+      this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, 3));
+    this._hudElements.set("s_dm_snap", 
+      this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 3));
+
+    // this._hudElements.set("s_warn_0", 
+    //   this.buildInstancedMarker(CanvasTextureBuilder.buildWarningMarkersTexture(), 16, 1, true, 1000));
+
+    // TEMP
+    // const warn0 = this._hudElements.get("s_warn_0");
+    // warn0.set([
+    //   new Vector3(191.436, 565.367, 8.763),
+    //   new Vector3(209.942, 559.872, 9.238),
+    //   new Vector3(218.496, 560.040, 5.882),
+    // ]);
+    // console.log(warn0);    
   }  
 
-  private destroyMarkers() {
-    this._uniqueMarkers.forEach(v => this._scene.remove(v.sprite));
-    this._uniqueMarkers = null;
-    
-    this._markerMaterials?.forEach(x => { x.map.dispose(); x.dispose(); });
-    this._markerMaterials = null;
+  private destroySpriteMaterials() {    
+    this._spriteMaterials?.forEach(x => { x.map.dispose(); x.dispose(); });
+    this._spriteMaterials = null;
   }
   
-  private buildRoundMarker(texture: CanvasTexture, sizePx: number, zIndex: number): HudUniqueMarker {
+  private buildUniqueRoundMarker(texture: CanvasTexture, sizePx: number, zIndex: number): HudUniqueMarker {
     const material = MaterialBuilder.buildSpriteMaterial(texture); 
     material.onBeforeCompile = shader => {    
       shader.uniforms = Object.assign({}, shader.uniforms,
@@ -319,34 +386,111 @@ export class HudScene {
       );
     };
     material.needsUpdate = true;    
-    this._markerMaterials.push(material); 
+    this._spriteMaterials.push(material); 
 
     const sprite = new Sprite(material); 
     sprite.visible = false;  
     sprite.scale.set(sizePx, sizePx, 1); 
-    sprite.position.set(0, 0, 2); 
+    sprite.position.set(0, 0, 0); 
     sprite.frustumCulled = false;
     this._scene.add(sprite);
 
     return new HudUniqueMarker(sprite);
   }
+
+  private buildInstancedMarker(texture: CanvasTexture, sizePx: number, zIndex: number, keepVisible: boolean,
+    maxInstances = 1000): HudInstancedMarker {
+    const material = MaterialBuilder.buildSpriteMaterial(texture);
+    material.onBeforeCompile = shader => {    
+      shader.uniforms = Object.assign({}, shader.uniforms, { 
+        hudMatrix: { value: this._hudProjectionMatrix },
+        resolution: { value: this._hudResolution },
+      });
+      shader.vertexShader = shader.vertexShader.replace("void main() {", `
+        uniform vec2 resolution;
+        uniform mat4 hudMatrix;
+        attribute vec3 positionOffset;
+
+        vec3 applyMatrix4(vec3 vec, mat4 mat) {
+          vec3 result = vec3(0.0);
+          float w = 1.0 / (mat[0].w * vec.x + mat[1].w * vec.y + mat[2].w * vec.z + mat[3].w);
+          result .x = (mat[0].x * vec.x + mat[1].x * vec.y + mat[2].x * vec.z + mat[3].x) * w;
+          result .y = (mat[0].y * vec.x + mat[1].y * vec.y + mat[2].y * vec.z + mat[3].y) * w;
+          result .z = (mat[0].z * vec.x + mat[1].z * vec.y + mat[2].z * vec.z + mat[3].z) * w;
+          return result;			
+        }
+
+        void main() {
+      `);
+      shader.vertexShader = shader.vertexShader.replace(
+        "vec4 mvPosition = modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );", "");
+
+      shader.vertexShader = shader.vertexShader.replace(
+        "#ifndef USE_SIZEATTENUATION",
+        ` 
+          vec3 hudPosition = applyMatrix4(positionOffset, hudMatrix);
+          if (hudPosition.z > 1.0) {
+            hudPosition.x = -hudPosition.x;
+            hudPosition.y = -hudPosition.y;
+          }
+          hudPosition.z = ${(zIndex - this._cameraZ).toFixed()}.0;
+        `
+        + 
+        (keepVisible 
+          ? `
+            vec2 halfRes = resolution * 0.5;
+            if (hudPosition.x > halfRes.x) {
+              hudPosition.x = halfRes.x - scale.x * 0.5;
+            } else if (hudPosition.x < -halfRes.x) {
+              hudPosition.x = -halfRes.x + scale.x * 0.5;
+            }
+            if (hudPosition.y > halfRes.y) {
+              hudPosition.y = halfRes.y - scale.y * 0.5;
+            } else if (hudPosition.y < -halfRes.y) {
+              hudPosition.y = -halfRes.y + scale.y * 0.5;
+            }
+          `
+          : "")
+        +        
+        `
+          vec4 mvPosition = mat4(
+            modelViewMatrix[0], 
+            modelViewMatrix[1], 
+            modelViewMatrix[2], 
+            vec4(hudPosition, 1)
+          ) * vec4( 0.0, 0.0, 0.0, 1.0 );
+
+          #ifndef USE_SIZEATTENUATION
+        `
+      );
+
+      // console.log(shader.fragmentShader);
+      // shader.fragmentShader += "%";
+    };
+    this._spriteMaterials.push(material); 
+
+    const sprite = new Sprite(material); 
+    sprite.geometry["isInstancedBufferGeometry"] = true;
+    sprite.geometry["instanceCount"] = 0;
+    sprite.geometry.setAttribute("positionOffset", new InstancedBufferAttribute(new Float32Array(3 * maxInstances), 3));
+    sprite.scale.set(sizePx, sizePx, 1);  
+    sprite.position.set(0, 0, 0); 
+    sprite.frustumCulled = false;
+    this._scene.add(sprite);
+
+    return new HudInstancedMarker(sprite);
+  }
   // #endregion
 
   // #region lines
   private initLines() {     
-    this._uniqueLineSegments.set("m_dist_z", this.buildLineSegment(0x2c8FFF, 2, 1, true));
-    this._uniqueLineSegments.set("m_dist_y", this.buildLineSegment(0x8adb00, 2, 1, true));
-    this._uniqueLineSegments.set("m_dist_x", this.buildLineSegment(0xFF3653, 2, 1, true));
-    this._uniqueLineSegments.set("m_dist_w", this.buildLineSegment(0x0000FF, 4, 2));
+    this._hudElements.set("l_dm_z", this.buildLineSegment(0x2c8FFF, 2, 1, true));
+    this._hudElements.set("l_dm_y", this.buildLineSegment(0x8adb00, 2, 1, true));
+    this._hudElements.set("l_dm_x", this.buildLineSegment(0xFF3653, 2, 1, true));
+    this._hudElements.set("l_dm_w", this.buildLineSegment(0x0000FF, 4, 2));
   }
 
-  private destroyLines() {
-    this._uniqueLineSegments?.forEach(v => { 
-      this._scene.remove(v.segment);
-      v.segment.geometry.dispose(); 
-    });
-    this._uniqueLineSegments = null;
-    
+  private destroyLineMaterials() {    
     this._lineMaterials?.forEach(x => x.dispose());
     this._lineMaterials = null;
   }
