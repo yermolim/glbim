@@ -959,7 +959,7 @@ export class GltfViewer {
     const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
       this._renderer, position, pickingMesh);
 
-    const snapPoint = this._hudScene.setMeasureSnapMarker(point);
+    const snapPoint = this._hudScene.distanceMeasurer.setSnapMarker(point);
     this._snapPointChange.next(snapPoint);
     this.render(); 
   }
@@ -975,13 +975,13 @@ export class GltfViewer {
     const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
       this._renderer, position, pickingMesh);
 
-    const distance = this._hudScene.setMeasureEndMarker(point);
+    const distance = this._hudScene.distanceMeasurer.setEndMarker(point);
     this._distanceMeasureChange.next(distance);  
     this.render(); 
   }
 
   private clearMeasureMarkers() {
-    this._hudScene.resetMeasures();
+    this._hudScene.distanceMeasurer.reset();
 
     this.render();
     this._distanceMeasureChange.next(null);

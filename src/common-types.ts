@@ -1,6 +1,5 @@
-import { Mesh, Vector3, Sprite, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
+import { Mesh, Vector3, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
   Uint32BufferAttribute, Float32BufferAttribute, Uint8BufferAttribute } from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2";
 
 // #region types
 export type MeshMergeType = "scene" | "model" | "model+" | null;

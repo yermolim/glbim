@@ -1430,171 +1430,24 @@ class HudLineSegment {
         }
     }
 }
-class HudScene {
-    constructor() {
-        this._cameraZ = 10;
+class HudTool {
+    constructor(hudScene, hudResolution, hudProjectionMatrix) {
+        this._hudElements = new Map();
         this._hudResolution = new Vector2();
-        this._hudScale = new Matrix4();
         this._hudProjectionMatrix = new Matrix4();
-        this._measurePoints = { start: null, end: null };
         this._spriteMaterials = [];
         this._lineMaterials = [];
-        this._hudElements = new Map();
-        this.projectToHud = (point) => {
-            point.applyMatrix4(this._hudProjectionMatrix);
-            if (point.z > 1) {
-                point.x = -point.x;
-                point.y = -point.y;
-            }
-        };
-        const scene = new Scene();
-        this._scene = scene;
-        this.initLines();
-        this.initSprites();
+        this._hudScene = hudScene;
+        this._hudResolution = hudResolution;
+        this._hudProjectionMatrix = hudProjectionMatrix;
     }
     destroy() {
         this.destroyHudElements();
         this.destroyLineMaterials();
         this.destroySpriteMaterials();
-        this._scene = null;
     }
-    render(mainCamera, renderer) {
-        const ctx = renderer.getContext();
-        this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
-        this.updateHudProjectionMatrix(mainCamera, renderer);
-        renderer.autoClear = false;
-        renderer.clearDepth();
-        renderer.render(this._scene, this._camera);
-        renderer.autoClear = true;
-    }
-    setMeasureSnapMarker(point) {
-        if (point) {
-            this._hudElements.get("s_dm_snap").set([point]);
-            return new Vec4(point.x, point.y, point.z, 0, true);
-        }
-        else {
-            this._hudElements.get("s_dm_snap").reset();
-            return null;
-        }
-    }
-    setMeasureEndMarker(point) {
-        if (!point) {
-            if (this._measurePoints.start) {
-                this._measurePoints.start = null;
-            }
-            if (this._measurePoints.end) {
-                this._measurePoints.end = null;
-            }
-        }
-        else {
-            if (this._measurePoints.end) {
-                this._measurePoints.start = this._measurePoints.end;
-                this._measurePoints.end = point;
-            }
-            else if (this._measurePoints.start) {
-                this._measurePoints.end = point;
-            }
-            else {
-                this._measurePoints.start = point;
-            }
-        }
-        if (this._measurePoints.start) {
-            this._hudElements.get("s_dm_start").set([this._measurePoints.start]);
-        }
-        else {
-            this._hudElements.get("s_dm_start").reset();
-        }
-        if (this._measurePoints.end) {
-            this._hudElements.get("s_dm_end").set([this._measurePoints.end]);
-            this.setMeasureLines(true);
-        }
-        else {
-            this._hudElements.get("s_dm_end").reset();
-            this.resetMeasureLines();
-        }
-        if (this._measurePoints.start && this._measurePoints.end) {
-            return new Distance(this._measurePoints.start, this._measurePoints.end, true);
-        }
-        else {
-            return null;
-        }
-    }
-    resetMeasures() {
-        this._measurePoints.start = null;
-        this._measurePoints.end = null;
-        this.resetMeasureMarkers();
-        this.resetMeasureLines();
-    }
-    resetMeasureMarkers() {
-        this._hudElements.get("s_dm_snap").reset();
-        this._hudElements.get("s_dm_start").reset();
-        this._hudElements.get("s_dm_end").reset();
-    }
-    setMeasureLines(toZUp) {
-        const wStart = this._measurePoints.start;
-        const wEnd = this._measurePoints.end;
-        const distance = new Vector3().copy(wEnd).sub(wStart);
-        const xEnd = new Vector3(wStart.x + distance.x, wStart.y, wStart.z);
-        const yEnd = toZUp
-            ? new Vector3(xEnd.x, xEnd.y, xEnd.z + distance.z)
-            : new Vector3(xEnd.x, xEnd.y + distance.y, xEnd.z);
-        this._hudElements.get("l_dm_z").set([yEnd, wEnd]);
-        this._hudElements.get("l_dm_y").set([xEnd, yEnd]);
-        this._hudElements.get("l_dm_x").set([wStart, xEnd]);
-        this._hudElements.get("l_dm_w").set([wStart, wEnd]);
-    }
-    resetMeasureLines() {
-        this._hudElements.get("l_dm_z").reset();
-        this._hudElements.get("l_dm_y").reset();
-        this._hudElements.get("l_dm_x").reset();
-        this._hudElements.get("l_dm_w").reset();
-    }
-    updateResolution(rendererBufferWidth, rendererBufferHeight) {
-        if (rendererBufferWidth === this._hudResolution.x
-            && rendererBufferHeight === this._hudResolution.y) {
-            return;
-        }
-        this.updateCameraResolution(rendererBufferWidth, rendererBufferHeight);
-        this.updateLinesResolution(rendererBufferWidth, rendererBufferHeight);
-        this._hudResolution.set(rendererBufferWidth, rendererBufferHeight);
-    }
-    updateCameraResolution(rendererBufferWidth, rendererBufferHeight) {
-        if (!this._camera) {
-            this._camera = new OrthographicCamera(rendererBufferWidth / -2, rendererBufferWidth / 2, rendererBufferHeight / 2, rendererBufferHeight / -2, 1, 10);
-            this._camera.position.setZ(this._cameraZ);
-        }
-        else {
-            this._camera.left = rendererBufferWidth / -2;
-            this._camera.right = rendererBufferWidth / 2;
-            this._camera.top = rendererBufferHeight / 2;
-            this._camera.bottom = rendererBufferHeight / -2;
-            this._camera.updateProjectionMatrix();
-        }
-    }
-    updateHudProjectionMatrix(camera, renderer) {
-        this._hudScale.makeScale(this._hudResolution.x / 2, this._hudResolution.y / 2, 1);
-        this._hudProjectionMatrix.copy(this._hudScale)
-            .multiply(camera.projectionMatrix)
-            .multiply(camera.matrixWorldInverse);
-    }
-    destroyHudElements() {
-        this._hudElements.forEach(v => {
-            if (v === null || v === void 0 ? void 0 : v.object3d) {
-                this._scene.remove(v.object3d);
-                v.destroy();
-            }
-        });
-        this._hudElements = null;
-    }
-    initSprites() {
-        this._hudElements.set("s_dm_start", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, 3));
-        this._hudElements.set("s_dm_end", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, 3));
-        this._hudElements.set("s_dm_snap", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 3));
-    }
-    destroySpriteMaterials() {
-        var _a;
-        (_a = this._spriteMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => { x.map.dispose(); x.dispose(); });
-        this._spriteMaterials = null;
+    update() {
+        this.updateLinesResolution();
     }
     buildUniqueRoundMarker(texture, sizePx, zIndex) {
         const material = MaterialBuilder.buildSpriteMaterial(texture);
@@ -1621,7 +1474,7 @@ class HudScene {
             hudPosition.x = -hudPosition.x;
             hudPosition.y = -hudPosition.y;
           }
-          hudPosition.z = ${(zIndex - this._cameraZ).toFixed()}.0;
+          hudPosition.z = ${(zIndex - HudScene.cameraZ).toFixed()}.0;
 
           vec4 mvPosition = mat4(
             modelViewMatrix[0], 
@@ -1638,7 +1491,7 @@ class HudScene {
         sprite.scale.set(sizePx, sizePx, 1);
         sprite.position.set(0, 0, 0);
         sprite.frustumCulled = false;
-        this._scene.add(sprite);
+        this._hudScene.add(sprite);
         return new HudUniqueMarker(sprite);
     }
     buildInstancedMarker(texture, sizePx, zIndex, keepVisible, maxInstances = 1000) {
@@ -1671,7 +1524,7 @@ class HudScene {
             hudPosition.x = -hudPosition.x;
             hudPosition.y = -hudPosition.y;
           }
-          hudPosition.z = ${(zIndex - this._cameraZ).toFixed()}.0;
+          hudPosition.z = ${(zIndex - HudScene.cameraZ).toFixed()}.0;
         `
                 +
                     (keepVisible
@@ -1709,19 +1562,8 @@ class HudScene {
         sprite.scale.set(sizePx, sizePx, 1);
         sprite.position.set(0, 0, 0);
         sprite.frustumCulled = false;
-        this._scene.add(sprite);
+        this._hudScene.add(sprite);
         return new HudInstancedMarker(sprite);
-    }
-    initLines() {
-        this._hudElements.set("l_dm_z", this.buildLineSegment(0x2c8FFF, 2, 1, true));
-        this._hudElements.set("l_dm_y", this.buildLineSegment(0x8adb00, 2, 1, true));
-        this._hudElements.set("l_dm_x", this.buildLineSegment(0xFF3653, 2, 1, true));
-        this._hudElements.set("l_dm_w", this.buildLineSegment(0x0000FF, 4, 2));
-    }
-    destroyLineMaterials() {
-        var _a;
-        (_a = this._lineMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose());
-        this._lineMaterials = null;
     }
     buildLineSegment(color, width, zIndex, dashed = false) {
         const material = MaterialBuilder.buildLineMaterial(color, width, dashed);
@@ -1768,13 +1610,209 @@ class HudScene {
         const segment = new Line2(geometry, material);
         segment.frustumCulled = false;
         segment.visible = false;
-        this._scene.add(segment);
+        this._hudScene.add(segment);
         return new HudLineSegment(segment);
     }
-    updateLinesResolution(rendererBufferWidth, rendererBufferHeight) {
-        this._lineMaterials.forEach(x => x.resolution.set(rendererBufferWidth, rendererBufferHeight));
+    updateLinesResolution() {
+        this._lineMaterials.forEach(x => x.resolution.copy(this._hudResolution));
+    }
+    destroyHudElements() {
+        this._hudElements.forEach(v => {
+            if (v === null || v === void 0 ? void 0 : v.object3d) {
+                this._hudScene.remove(v.object3d);
+                v.destroy();
+            }
+        });
+        this._hudElements = null;
+    }
+    destroySpriteMaterials() {
+        var _a;
+        (_a = this._spriteMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => { x.map.dispose(); x.dispose(); });
+        this._spriteMaterials = null;
+    }
+    destroyLineMaterials() {
+        var _a;
+        (_a = this._lineMaterials) === null || _a === void 0 ? void 0 : _a.forEach(x => x.dispose());
+        this._lineMaterials = null;
     }
 }
+class HudDistanceMeasurer extends HudTool {
+    constructor(hudScene, hudResolution, hudProjectionMatrix) {
+        super(hudScene, hudResolution, hudProjectionMatrix);
+        this._measurePoints = { start: null, end: null };
+        this.initLines();
+        this.initSprites();
+    }
+    setSnapMarker(point) {
+        if (point) {
+            this._hudElements.get("s_dm_snap").set([point]);
+            return new Vec4(point.x, point.y, point.z, 0, true);
+        }
+        else {
+            this._hudElements.get("s_dm_snap").reset();
+            return null;
+        }
+    }
+    setEndMarker(point) {
+        if (!point) {
+            if (this._measurePoints.start) {
+                this._measurePoints.start = null;
+            }
+            if (this._measurePoints.end) {
+                this._measurePoints.end = null;
+            }
+        }
+        else {
+            if (this._measurePoints.end) {
+                this._measurePoints.start = this._measurePoints.end;
+                this._measurePoints.end = point;
+            }
+            else if (this._measurePoints.start) {
+                this._measurePoints.end = point;
+            }
+            else {
+                this._measurePoints.start = point;
+            }
+        }
+        if (this._measurePoints.start) {
+            this._hudElements.get("s_dm_start").set([this._measurePoints.start]);
+        }
+        else {
+            this._hudElements.get("s_dm_start").reset();
+        }
+        if (this._measurePoints.end) {
+            this._hudElements.get("s_dm_end").set([this._measurePoints.end]);
+            this.setLines(true);
+        }
+        else {
+            this._hudElements.get("s_dm_end").reset();
+            this.resetLines();
+        }
+        if (this._measurePoints.start && this._measurePoints.end) {
+            return new Distance(this._measurePoints.start, this._measurePoints.end, true);
+        }
+        else {
+            return null;
+        }
+    }
+    reset() {
+        this._measurePoints.start = null;
+        this._measurePoints.end = null;
+        this.resetarkers();
+        this.resetLines();
+    }
+    initSprites() {
+        this._hudElements.set("s_dm_start", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, 3));
+        this._hudElements.set("s_dm_end", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, 3));
+        this._hudElements.set("s_dm_snap", this.buildUniqueRoundMarker(CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 3));
+    }
+    initLines() {
+        this._hudElements.set("l_dm_z", this.buildLineSegment(0x2c8FFF, 2, 1, true));
+        this._hudElements.set("l_dm_y", this.buildLineSegment(0x8adb00, 2, 1, true));
+        this._hudElements.set("l_dm_x", this.buildLineSegment(0xFF3653, 2, 1, true));
+        this._hudElements.set("l_dm_w", this.buildLineSegment(0x0000FF, 4, 2));
+    }
+    resetarkers() {
+        this._hudElements.get("s_dm_snap").reset();
+        this._hudElements.get("s_dm_start").reset();
+        this._hudElements.get("s_dm_end").reset();
+    }
+    setLines(toZUp) {
+        const wStart = this._measurePoints.start;
+        const wEnd = this._measurePoints.end;
+        const distance = new Vector3().copy(wEnd).sub(wStart);
+        const xEnd = new Vector3(wStart.x + distance.x, wStart.y, wStart.z);
+        const yEnd = toZUp
+            ? new Vector3(xEnd.x, xEnd.y, xEnd.z + distance.z)
+            : new Vector3(xEnd.x, xEnd.y + distance.y, xEnd.z);
+        this._hudElements.get("l_dm_z").set([yEnd, wEnd]);
+        this._hudElements.get("l_dm_y").set([xEnd, yEnd]);
+        this._hudElements.get("l_dm_x").set([wStart, xEnd]);
+        this._hudElements.get("l_dm_w").set([wStart, wEnd]);
+    }
+    resetLines() {
+        this._hudElements.get("l_dm_z").reset();
+        this._hudElements.get("l_dm_y").reset();
+        this._hudElements.get("l_dm_x").reset();
+        this._hudElements.get("l_dm_w").reset();
+    }
+}
+class HudWarnings extends HudTool {
+    constructor(hudScene, hudResolution, hudProjectionMatrix) {
+        super(hudScene, hudResolution, hudProjectionMatrix);
+        this.initSprites();
+    }
+    initSprites() {
+    }
+}
+class HudScene {
+    constructor() {
+        this._scene = new Scene();
+        this._hudResolution = new Vector2();
+        this._hudScale = new Matrix4();
+        this._hudProjectionMatrix = new Matrix4();
+        this.projectToHud = (point) => {
+            point.applyMatrix4(this._hudProjectionMatrix);
+            if (point.z > 1) {
+                point.x = -point.x;
+                point.y = -point.y;
+            }
+        };
+        this._distanceMeasurer = new HudDistanceMeasurer(this._scene, this._hudResolution, this._hudProjectionMatrix);
+        this._warnings = new HudWarnings(this._scene, this._hudResolution, this._hudProjectionMatrix);
+    }
+    get distanceMeasurer() {
+        return this._distanceMeasurer;
+    }
+    get warnings() {
+        return this._warnings;
+    }
+    destroy() {
+        this._distanceMeasurer.destroy();
+        this._distanceMeasurer = null;
+        this._warnings.destroy();
+        this._warnings = null;
+        this._scene = null;
+    }
+    render(mainCamera, renderer) {
+        const ctx = renderer.getContext();
+        this.updateResolution(ctx.drawingBufferWidth, ctx.drawingBufferHeight);
+        this.updateHudProjectionMatrix(mainCamera);
+        this._distanceMeasurer.update();
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(this._scene, this._camera);
+        renderer.autoClear = true;
+    }
+    updateResolution(rendererBufferWidth, rendererBufferHeight) {
+        if (rendererBufferWidth === this._hudResolution.x
+            && rendererBufferHeight === this._hudResolution.y) {
+            return;
+        }
+        this._hudResolution.set(rendererBufferWidth, rendererBufferHeight);
+        this.updateCameraResolution();
+    }
+    updateCameraResolution() {
+        if (!this._camera) {
+            this._camera = new OrthographicCamera(this._hudResolution.x / -2, this._hudResolution.x / 2, this._hudResolution.y / 2, this._hudResolution.y / -2, 1, 10);
+            this._camera.position.setZ(HudScene.cameraZ);
+        }
+        else {
+            this._camera.left = this._hudResolution.x / -2;
+            this._camera.right = this._hudResolution.x / 2;
+            this._camera.top = this._hudResolution.y / 2;
+            this._camera.bottom = this._hudResolution.y / -2;
+            this._camera.updateProjectionMatrix();
+        }
+    }
+    updateHudProjectionMatrix(camera) {
+        this._hudScale.makeScale(this._hudResolution.x / 2, this._hudResolution.y / 2, 1);
+        this._hudProjectionMatrix.copy(this._hudScale)
+            .multiply(camera.projectionMatrix)
+            .multiply(camera.matrixWorldInverse);
+    }
+}
+HudScene.cameraZ = 10;
 
 class PointSnapHelper {
     constructor() {
@@ -2599,7 +2637,7 @@ class GltfViewer {
         const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
         const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera, this._renderer, position);
         const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera, this._renderer, position, pickingMesh);
-        const snapPoint = this._hudScene.setMeasureSnapMarker(point);
+        const snapPoint = this._hudScene.distanceMeasurer.setSnapMarker(point);
         this._snapPointChange.next(snapPoint);
         this.render();
     }
@@ -2610,12 +2648,12 @@ class GltfViewer {
         const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
         const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera, this._renderer, position);
         const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera, this._renderer, position, pickingMesh);
-        const distance = this._hudScene.setMeasureEndMarker(point);
+        const distance = this._hudScene.distanceMeasurer.setEndMarker(point);
         this._distanceMeasureChange.next(distance);
         this.render();
     }
     clearMeasureMarkers() {
-        this._hudScene.resetMeasures();
+        this._hudScene.distanceMeasurer.reset();
         this.render();
         this._distanceMeasureChange.next(null);
     }
