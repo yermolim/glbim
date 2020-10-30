@@ -62,6 +62,14 @@ export interface RenderGeometry {
   indices: Uint32BufferAttribute;
   indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
 }
+
+export interface WarningInfo {
+  id: string;
+  meshId: string;
+  description: string;
+  importance: 0 | 1 | 2 | 3;
+  position: Vector3;
+}
 // #endregion
 
 // #region small helper classes

@@ -14,11 +14,29 @@ export class PointSnapHelper {
     const rect = renderer.domElement.getBoundingClientRect();
     const pixelRatio = renderer.getPixelRatio();
     const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
-    const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0; 
+    const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
+
     return new Vector2(x, y);
+  }  
+
+  static convertClientToCanvasZeroCenter(renderer: WebGLRenderer, 
+    clientX: number, clientY: number): Vector2 {    
+    const rect = renderer.domElement.getBoundingClientRect();
+    const pixelRatio = renderer.getPixelRatio();
+    const canvasRatioW = (renderer.domElement.width / rect.width) * pixelRatio || 0;
+    const canvasRatioH = (renderer.domElement.height / rect.height) * pixelRatio || 0;
+    const x = (clientX - rect.left) * canvasRatioW;
+    const y = (clientY - rect.top) * canvasRatioH; 
+    
+    const canvasWidth = rect.width * canvasRatioW;
+    const canvasHeight = rect.height * canvasRatioH;    
+    const xC =  x - canvasWidth / 2;
+    const yC =  canvasHeight / 2 - y;
+
+    return new Vector2(xC, yC);
   }
 
-  static convertWorldToCanvasZeroTopLeft(camera: Camera, renderer: WebGLRenderer, 
+  static convertWorldToCanvas(camera: Camera, renderer: WebGLRenderer, 
     point: Vector3): Vector2 {
     const nPoint = new Vector3().copy(point).project(camera); 
 

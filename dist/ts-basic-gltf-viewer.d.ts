@@ -110,6 +110,7 @@ export declare class GltfViewer {
 	private _coloredMeshes;
 	private _hudScene;
 	private _axes;
+	private _snapMode;
 	private _measureMode;
 	private _loader;
 	private _loadingInProgress;

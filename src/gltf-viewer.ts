@@ -2,7 +2,7 @@ import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from
 import { first } from "rxjs/operators";
 
 import { WebGLRenderer, NoToneMapping, sRGBEncoding,
-  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry, SphereBufferGeometry, MeshBasicMaterial, Vector3 } from "three";
+  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -10,7 +10,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4 } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4, WarningInfo } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { CameraControls } from "./components/camera-controls";
@@ -90,6 +90,7 @@ export class GltfViewer {
   private _hudScene: HudScene; 
   private _axes: Axes;  
   
+  private _snapMode = false;
   private _measureMode = false;
   // #endregion
 
@@ -959,7 +960,7 @@ export class GltfViewer {
     const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
       this._renderer, position, pickingMesh);
 
-    const snapPoint = this._hudScene.distanceMeasurer.setSnapMarker(point);
+    const snapPoint = this._hudScene.pointSnap.setSnapMarker(point);
     this._snapPointChange.next(snapPoint);
     this.render(); 
   }
@@ -981,6 +982,7 @@ export class GltfViewer {
   }
 
   private clearMeasureMarkers() {
+    this._hudScene.pointSnap.reset();
     this._hudScene.distanceMeasurer.reset();
 
     this.render();
