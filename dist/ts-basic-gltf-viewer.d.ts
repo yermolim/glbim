@@ -33,19 +33,46 @@ export interface ColoringInfo {
 	opacity: number;
 	ids: string[];
 }
-export declare class Vec4 {
+export interface WarningInfo {
+	id: string;
+	meshId: string;
+	description: string;
+	importance: 0 | 1 | 2 | 3;
+	position: Vector3;
+}
+export interface SnapPoint {
+	meshId: string;
+	position: Vec4DoubleCS;
+}
+declare class Vec4 {
 	x: number;
 	y: number;
 	z: number;
 	w: number;
-	constructor(x: number, y: number, z: number, w?: number, toZup?: boolean);
+	constructor(x: number, y: number, z: number, w?: number);
 	static getDistance(start: Vec4, end: Vec4): Vec4;
+}
+declare class Vec4DoubleCS {
+	private _x;
+	private _y;
+	private _z;
+	private _w;
+	get x(): number;
+	get w(): number;
+	get y_Yup(): number;
+	get z_Yup(): number;
+	get y_Zup(): number;
+	get z_Zup(): number;
+	constructor(isZup?: boolean, x?: number, y?: number, z?: number, w?: number);
+	static fromVector3(vec: Vector3, isZup?: boolean): Vec4DoubleCS;
+	toVector3(isZup?: boolean): Vector3;
+	toVec4(isZup?: boolean): Vec4;
 }
 export declare class Distance {
 	start: Vec4;
 	end: Vec4;
 	distance: Vec4;
-	constructor(start: Vector3, end: Vector3, toZup: boolean);
+	constructor(start: Vec4 | Vector3, end: Vec4 | Vector3);
 }
 export declare class GltfViewerOptions {
 	useAntialiasing: boolean;
@@ -75,7 +102,8 @@ export declare class GltfViewer {
 	selectionChange$: Observable<Set<string>>;
 	manualSelectionChange$: Observable<Set<string>>;
 	lastFrameTime$: Observable<number>;
-	snapPointChange$: Observable<Vec4>;
+	snapPointChange$: Observable<SnapPoint>;
+	snapPointSelectionChange$: Observable<SnapPoint[]>;
 	distanceMeasureChange$: Observable<Distance>;
 	private _optionsChange;
 	private _loadingStateChange;
@@ -86,8 +114,6 @@ export declare class GltfViewer {
 	private _selectionChange;
 	private _manualSelectionChange;
 	private _lastFrameTime;
-	private _snapPointChange;
-	private _distanceMeasureChange;
 	private _subscriptions;
 	private _container;
 	private _containerResizeSensor;
@@ -110,7 +136,6 @@ export declare class GltfViewer {
 	private _coloredMeshes;
 	private _hudScene;
 	private _axes;
-	private _snapMode;
 	private _measureMode;
 	private _loader;
 	private _loadingInProgress;
@@ -162,6 +187,7 @@ export declare class GltfViewer {
 	private colorMeshes;
 	private removeColoring;
 	private getMeshAt;
+	private getSnapPointAt;
 	private runQueuedSelection;
 	private findAndSelectMeshes;
 	private findMeshesByIds;
@@ -177,9 +203,13 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
+	private initHud;
 	private setSnapMarkerAtPoint;
 	private setDistanceMarkerAtPoint;
-	private clearMeasureMarkers;
 }
+
+export {
+	Vec4DoubleCS as Vec4,
+};
 
 export {};

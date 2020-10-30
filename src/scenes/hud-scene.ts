@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
+import { Subject, BehaviorSubject, Observable } from "rxjs";
+
 import { Scene, Vector2, Vector3, Vector4, Matrix4, Object3D, 
   Sprite, SpriteMaterial, CanvasTexture, InstancedBufferAttribute,
   Camera, OrthographicCamera, WebGLRenderer } from "three";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
-import { Vec4, Distance, WarningInfo } from "../common-types";
+import { Vec4DoubleCS, Distance, WarningInfo, SnapPoint } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { CanvasTextureBuilder } from "../helpers/canvas-texture-builder";
 
@@ -360,7 +362,10 @@ class HudTool {
   protected _toolZIndex: number;
   protected _cameraZIndex: number;
 
+  protected _subjects: Subject<any>[] = [];
+
   private _hudElements = new Map<string, IHudElement>();
+
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4,
     toolZIndex: number, cameraZIndex: number) { 
@@ -374,6 +379,7 @@ class HudTool {
 
   destroy() {
     this.destroyHudElements();
+    this._subjects.forEach(x => x.complete());
   }
 
   update() {
@@ -421,23 +427,52 @@ class HudTool {
   }
 }
 
-class HudPointSnap extends HudTool {  
+class HudPointSnap extends HudTool { 
+  snapPointChange$: Observable<SnapPoint>;
+  snapPointSelectionChange$: Observable<SnapPoint[]>;
+  
+  private _snapPointChange = new Subject<SnapPoint>();  
+  private _snapPointSelectionChange: BehaviorSubject<SnapPoint[]>;
+
+  private _selectedPoints = new Map<string, Vector3>();
+  
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
     toolZIndex: number, cameraZIndex: number) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
-    this.initSprites();
-    
+    this._snapPointChange = new Subject<SnapPoint>();
+    this._snapPointSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
+    this._subjects.push(this._snapPointChange, this._snapPointSelectionChange);    
+    this.snapPointChange$ = this._snapPointChange.asObservable();
+    this.snapPointSelectionChange$ = this._snapPointSelectionChange.asObservable();
+
+    this.initSprites();    
   }
     
-  setSnapMarker(point: Vector3): Vec4 {
-    if (point) {
-      this.getHudElement("s_snap").set([point]);
-      return new Vec4(point.x, point.y, point.z, 0, true);
+  setSnapMarker(snapPoint: SnapPoint) {
+    if (snapPoint) {
+      this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
+      this._snapPointChange.next(snapPoint);
     } else {
       this.getHudElement("s_snap").reset();
-      return null;
+      this._snapPointChange.next(null);
     }
+  }
+
+  addSelectedPoint(point: SnapPoint) {
+
+  }
+
+  removeSelectedPoint(point: SnapPoint) {
+
+  }
+
+  setSelectedPoints(points: SnapPoint[]) {
+    
+  }
+
+  resetSelectedPoints() {
+
   }
   
   reset() {
@@ -445,8 +480,12 @@ class HudPointSnap extends HudTool {
   } 
   
   private initSprites() {
+    this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution,
+      CanvasTextureBuilder.buildCircleTexture(64, 0xFF0000), 8, 
+      this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
     this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, 
-      CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, this._toolZIndex, this._cameraZIndex), "s_snap");
+      CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 
+      this._toolZIndex, this._cameraZIndex), "s_snap");
   }  
     
   private resetSprites() {   
@@ -454,18 +493,26 @@ class HudPointSnap extends HudTool {
   }
 }
 
-class HudDistanceMeasurer extends HudTool {
+class HudDistanceMeasurer extends HudTool {  
+  distanceMeasureChange$: Observable<Distance>;
+
+  private _distanceMeasureChange: Subject<Distance>;  
+
   private _measurePoints: {start: Vector3; end: Vector3} = {start: null, end: null};
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
     toolZIndex: number, cameraZIndex: number) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
+    this._distanceMeasureChange = new Subject<Distance>(); 
+    this._subjects.push(this._distanceMeasureChange);
+    this.distanceMeasureChange$ = this._distanceMeasureChange.asObservable();
+
     this.initLines();
     this.initSprites();
   }
 
-  setEndMarker(point: Vector3): Distance {
+  setEndMarker(point: Vector3) {
     if (!point) {
       if (this._measurePoints.start) {
         this._measurePoints.start = null;
@@ -499,9 +546,12 @@ class HudDistanceMeasurer extends HudTool {
     }
     
     if (this._measurePoints.start && this._measurePoints.end) {
-      return new Distance(this._measurePoints.start, this._measurePoints.end, true);
+      const start = Vec4DoubleCS.fromVector3(this._measurePoints.start);
+      const end = Vec4DoubleCS.fromVector3(this._measurePoints.end);
+      const distance = new Distance(start.toVec4(true), end.toVec4(true));
+      this._distanceMeasureChange.next(distance);
     } else {
-      return null;
+      this._distanceMeasureChange.next(null); 
     }
   }
   

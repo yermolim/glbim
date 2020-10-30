@@ -70,6 +70,11 @@ export interface WarningInfo {
   importance: 0 | 1 | 2 | 3;
   position: Vector3;
 }
+
+export interface SnapPoint {
+  meshId: string;
+  position: Vec4DoubleCS;
+}
 // #endregion
 
 // #region small helper classes
@@ -97,15 +102,10 @@ export class Vec4 {
   z: number;
   w: number;
   
-  constructor(x: number, y: number, z: number, w = 0, toZup = false) {
+  constructor(x: number, y: number, z: number, w = 0) {
     this.x = x;
-    if (toZup) {
-      this.y = -z;
-      this.z = y;
-    } else {
-      this.y = y;
-      this.z = z;
-    }
+    this.y = y;
+    this.z = z;
     this.w = w;
   }  
 
@@ -118,14 +118,73 @@ export class Vec4 {
   }
 }
 
+export class Vec4DoubleCS {
+  private _x: number;
+  private _y: number;
+  private _z: number;
+  private _w: number;
+  
+  get x(): number {
+    return this._x;
+  }
+  get w(): number {
+    return this._w;
+  }
+  
+  get y_Yup(): number {
+    return this._y;
+  }
+  get z_Yup(): number {
+    return this._z;
+  }
+
+  get y_Zup(): number {
+    return -this._z;
+  }
+  get z_Zup(): number {
+    return this._y;
+  }
+  
+  constructor(isZup = false, x = 0, y = 0, z = 0, w = 0) {
+    this._x = x;
+    this._w = w;
+
+    if (isZup) {      
+      this._y = z;
+      this._z = -y;
+    } else {      
+      this._y = y;
+      this._z = z;
+    }
+  } 
+
+  static fromVector3(vec: Vector3, isZup = false): Vec4DoubleCS {
+    return vec 
+      ? new Vec4DoubleCS(isZup, vec.x, vec.y, vec.z)
+      : new Vec4DoubleCS(isZup);
+  }
+
+  toVector3(isZup = false): Vector3 {
+    return !isZup
+      ? new Vector3(this._x, this._y, this._z)
+      : new Vector3(this.x, -this._z, this._y);
+  }
+
+  toVec4(isZup = false): Vec4 {
+    return !isZup
+      ? new Vec4(this._x, this._y, this._z, this._w)
+      : new Vec4(this._x, -this._z, this._y, this._w);
+  }
+}
+
 export class Distance {  
   start: Vec4;
   end: Vec4;
   distance: Vec4; 
   
-  constructor (start: Vector3, end: Vector3, toZup: boolean) {
-    this.start = new Vec4(start.x, start.y, start.z, 0, toZup);
-    this.end = new Vec4(end.x, end.y, end.z, 0, toZup);
+  constructor (start: Vec4 | Vector3, end: Vec4 | Vector3) {
+    this.start = new Vec4(start.x, start.y, start.z);
+    this.end = new Vec4(end.x, end.y, end.z);
     this.distance = Vec4.getDistance(this.start, this.end);
   }
 }

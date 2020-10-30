@@ -36,7 +36,8 @@ export class PickingScene {
     const colorString = pickingMeshMaterial.color.getHex().toString(16);
     
     const pickingMesh = new Mesh(sourceMesh.geometry, pickingMeshMaterial);
-    pickingMesh.userData.originalUuid = sourceMesh.uuid;
+    pickingMesh.userData.sourceId = sourceMesh.userData.id;
+    pickingMesh.userData.sourceUuid = sourceMesh.uuid;
     pickingMesh.userData.color = colorString;
     pickingMesh.position.copy(sourceMesh.position);
     pickingMesh.rotation.copy(sourceMesh.rotation);

@@ -2,7 +2,7 @@ import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from
 import { first } from "rxjs/operators";
 
 import { WebGLRenderer, NoToneMapping, sRGBEncoding,
-  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry } from "three";
+  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry, Vector3 } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
@@ -10,7 +10,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ResizeSensor } from "css-element-queries";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4, WarningInfo } from "./common-types";
+  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4DoubleCS, SnapPoint, WarningInfo } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { CameraControls } from "./components/camera-controls";
@@ -22,7 +22,7 @@ import { PickingScene } from "./scenes/picking-scene";
 import { HudScene } from "./scenes/hud-scene";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
-export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4 };
+export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4DoubleCS as Vec4, SnapPoint, WarningInfo };
 
 export class GltfViewer {
   // #region public observables
@@ -35,7 +35,8 @@ export class GltfViewer {
   selectionChange$: Observable<Set<string>>;
   manualSelectionChange$: Observable<Set<string>>; 
   lastFrameTime$: Observable<number>;
-  snapPointChange$: Observable<Vec4>;
+  snapPointChange$: Observable<SnapPoint>;
+  snapPointSelectionChange$: Observable<SnapPoint[]>;
   distanceMeasureChange$: Observable<Distance>;
   // #endregion  
   
@@ -49,8 +50,6 @@ export class GltfViewer {
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
-  private _snapPointChange = new Subject<Vec4>();  
-  private _distanceMeasureChange = new Subject<Distance>();  
   // #endregion
   
   private _subscriptions: Subscription[] = [];
@@ -90,7 +89,6 @@ export class GltfViewer {
   private _hudScene: HudScene; 
   private _axes: Axes;  
   
-  private _snapMode = false;
   private _measureMode = false;
   // #endregion
 
@@ -127,17 +125,19 @@ export class GltfViewer {
       this._options.dirLightIntensity); 
 
     this._pointSnapHelper = new PointSnapHelper();
-
     this._pickingScene = new PickingScene();
+
     this._renderScene = new RenderScene(
       this._options.isolationColor, 
       this._options.isolationOpacity,
       this._options.selectionColor, 
       this._options.highlightColor);
     this._simplifiedScene = new SimplifiedScene();
-    this._hudScene = new HudScene();
+
+    this.initHud();
 
     this.initLoader(dracoDecoderPath);
+
     this.initRenderer();
     
     this._axes = new Axes(this._container, 
@@ -359,7 +359,9 @@ export class GltfViewer {
       return;
     }
     if (this._measureMode) {
-      this.clearMeasureMarkers();
+      this._hudScene.pointSnap.reset();
+      this._hudScene.distanceMeasurer.reset();
+      this.render();
       this._measureMode = false;
     } else {
       this._measureMode = true;
@@ -386,8 +388,6 @@ export class GltfViewer {
     this.selectionChange$ = this._selectionChange.asObservable();
     this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
     this.lastFrameTime$ = this._lastFrameTime.asObservable();
-    this.snapPointChange$ = this._snapPointChange.asObservable();
-    this.distanceMeasureChange$ = this._distanceMeasureChange.asObservable();
   }
 
   private closeSubjects() {
@@ -400,8 +400,6 @@ export class GltfViewer {
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
     this._lastFrameTime.complete();
-    this._snapPointChange.complete();
-    this._distanceMeasureChange.complete();
   }
   // #endregion
 
@@ -773,12 +771,29 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region item picking 
+  // #region picking 
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {  
     const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY); 
     return this._renderer && this._pickingScene
       ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, position)
       : null;
+  }
+  
+  private getSnapPointAt(clientX: number, clientY: number): SnapPoint {
+    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
+    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
+      this._renderer, position);
+
+    const point = pickingMesh
+      ? this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
+        this._renderer, position, pickingMesh)
+      : null;
+
+    const snapPoint = point
+      ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) } 
+      : null;
+
+    return snapPoint;
   }
   // #endregion
   
@@ -948,45 +963,30 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region measurements 
+  // #region hud methods
+  private initHud() {
+    this._hudScene = new HudScene();
+    this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
+    this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+    this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
+  }
+
   private setSnapMarkerAtPoint(clientX: number, clientY: number) {    
     if (!this._renderer || !this._pickingScene) {
       return;
     } 
-
-    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
-    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
-      this._renderer, position);
-    const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
-      this._renderer, position, pickingMesh);
-
-    const snapPoint = this._hudScene.pointSnap.setSnapMarker(point);
-    this._snapPointChange.next(snapPoint);
+    const snapPoint = this.getSnapPointAt(clientX, clientY);    
+    this._hudScene.pointSnap.setSnapMarker(snapPoint);
     this.render(); 
   }
 
   private setDistanceMarkerAtPoint(clientX: number, clientY: number) { 
     if (!this._renderer || !this._pickingScene) {
       return;
-    } 
-    
-    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
-    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
-      this._renderer, position);
-    const point = this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
-      this._renderer, position, pickingMesh);
-
-    const distance = this._hudScene.distanceMeasurer.setEndMarker(point);
-    this._distanceMeasureChange.next(distance);  
+    }       
+    const snapPoint = this.getSnapPointAt(clientX, clientY); 
+    this._hudScene.distanceMeasurer.setEndMarker(snapPoint?.position.toVector3()); 
     this.render(); 
-  }
-
-  private clearMeasureMarkers() {
-    this._hudScene.pointSnap.reset();
-    this._hudScene.distanceMeasurer.reset();
-
-    this.render();
-    this._distanceMeasureChange.next(null);
-  }
+  }  
   // #endregion
 }
