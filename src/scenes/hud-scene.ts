@@ -2,7 +2,7 @@
 import { Subject, BehaviorSubject, Observable } from "rxjs";
 
 import { Scene, Vector2, Vector3, Vector4, Matrix4, Object3D, 
-  Sprite, SpriteMaterial, CanvasTexture, InstancedBufferAttribute,
+  Sprite, CanvasTexture, InstancedBufferAttribute,
   Camera, OrthographicCamera, WebGLRenderer } from "three";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { Line2 } from "three/examples/jsm/lines/Line2";

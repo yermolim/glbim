@@ -1,9 +1,9 @@
-import { Subject, BehaviorSubject, AsyncSubject } from 'rxjs';
+import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
+import { Vector3, Mesh, BufferGeometry, MeshStandardMaterial, Box3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Object3D, Vector2, Vector4, Raycaster, OrthographicCamera, Sprite, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderTarget, Matrix4, InstancedBufferAttribute, Triangle, WebGLRenderer, sRGBEncoding, NoToneMapping } from 'three';
+import { ResizeSensor } from 'css-element-queries';
 import { first } from 'rxjs/operators';
-import { Vector3, Box3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Object3D, Vector2, Vector4, Raycaster, OrthographicCamera, Sprite, Scene, Mesh, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, BufferGeometry, WebGLRenderTarget, Matrix4, InstancedBufferAttribute, Triangle, WebGLRenderer, sRGBEncoding, NoToneMapping, MeshStandardMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { ResizeSensor } from 'css-element-queries';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry';
 import { Line2 } from 'three/examples/jsm/lines/Line2';
@@ -184,6 +184,241 @@ class ColorRgbRmo {
 ColorRgbRmo.prop = "rgbrmo";
 ColorRgbRmo.customProp = "rgbrmoC";
 ColorRgbRmo.defaultProp = "rgbrmoD";
+
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+class ModelLoader {
+    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null) {
+        this._loadingStateChange = new BehaviorSubject(false);
+        this._modelLoadingStart = new Subject();
+        this._modelLoadingEnd = new Subject();
+        this._modelLoadingProgress = new Subject();
+        this._openedModelsChange = new BehaviorSubject([]);
+        this._loadingInProgress = false;
+        this._loadingQueue = [];
+        this._loadedModels = new Set();
+        this._loadedModelsByGuid = new Map();
+        this._loadedMeshes = new Set();
+        this._loadedMeshesById = new Map();
+        this._loadedModelsArray = [];
+        this._loadedMeshesArray = [];
+        this.onQueueLoaded = onQueueLoaded;
+        this.onModelLoaded = onModelLoaded;
+        this.onModelUnloaded = onModelUnloaded;
+        this.onMeshLoaded = onMeshLoaded;
+        this.onMeshUnloaded = onMeshUnloaded;
+        this.loadingStateChange$ = this._loadingStateChange.asObservable();
+        this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
+        this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
+        this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
+        this.openedModelsChange$ = this._openedModelsChange.asObservable();
+        const loader = new GLTFLoader();
+        if (dracoDecoderPath) {
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath(dracoDecoderPath);
+            dracoLoader.preload();
+            loader.setDRACOLoader(dracoLoader);
+        }
+        this._loader = loader;
+    }
+    get loadedModelsArray() {
+        return this._loadedModelsArray;
+    }
+    get loadedMeshesArray() {
+        return this._loadedMeshesArray;
+    }
+    get openedModelInfos() {
+        return this._openedModelsChange.getValue();
+    }
+    get loadingInProgress() {
+        return this._loadingInProgress;
+    }
+    destroy() {
+        var _a, _b;
+        this._loadingStateChange.complete();
+        this._modelLoadingStart.complete();
+        this._modelLoadingProgress.complete();
+        this._modelLoadingEnd.complete();
+        this._openedModelsChange.complete();
+        (_a = this._loadedMeshes) === null || _a === void 0 ? void 0 : _a.forEach(x => {
+            x.geometry.dispose();
+            x.material.dispose();
+        });
+        (_b = this._loader.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
+        this._loader = null;
+    }
+    openModelsAsync(modelInfos) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
+                return [];
+            }
+            const promises = [];
+            modelInfos.forEach(x => {
+                const resultSubject = new AsyncSubject();
+                this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () {
+                    const { url, guid, name } = x;
+                    const result = !this._loadedModelsByGuid.has(guid)
+                        ? yield this.loadModel(url, guid, name)
+                        : { url, guid };
+                    resultSubject.next(result);
+                    resultSubject.complete();
+                }));
+                promises.push(resultSubject.pipe(first()).toPromise());
+            });
+            this.processLoadingQueueAsync();
+            const overallResult = yield Promise.all(promises);
+            return overallResult;
+        });
+    }
+    ;
+    closeModelsAsync(modelGuids) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!(modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length)) {
+                return;
+            }
+            const promises = [];
+            modelGuids.forEach(x => {
+                const resultSubject = new AsyncSubject();
+                this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () {
+                    this.removeModelFromLoaded(x);
+                    resultSubject.next(true);
+                    resultSubject.complete();
+                }));
+                promises.push(resultSubject.pipe(first()).toPromise());
+            });
+            this.processLoadingQueueAsync();
+            yield Promise.all(promises);
+        });
+    }
+    ;
+    getLoadedMeshesById(id) {
+        return this._loadedMeshesById.get(id);
+    }
+    processLoadingQueueAsync() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this._loader
+                || this._loadingInProgress
+                || !this._loadingQueue.length) {
+                return;
+            }
+            this._loadingInProgress = true;
+            this._loadingStateChange.next(true);
+            while (this._loadingQueue.length > 0) {
+                const action = this._loadingQueue.shift();
+                yield action();
+            }
+            this.updateModelsDataArrays();
+            if (this.onQueueLoaded) {
+                yield this.onQueueLoaded();
+            }
+            this.emitOpenedModelsChanged();
+            this._loadingStateChange.next(false);
+            this._loadingInProgress = false;
+            yield this.processLoadingQueueAsync();
+        });
+    }
+    loadModel(url, guid, name) {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.onModelLoadingStart(url, guid);
+            let error;
+            try {
+                const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
+                this.addModelToLoaded(model, guid, name);
+            }
+            catch (loadingError) {
+                error = loadingError;
+            }
+            const result = { url, guid, error };
+            this.onModelLoadingEnd(result);
+            return result;
+        });
+    }
+    onModelLoadingStart(url, guid) {
+        this._modelLoadingStart.next({ url, guid });
+    }
+    onModelLoadingProgress(progress, url, guid) {
+        const currentProgress = Math.round(progress.loaded / progress.total * 100);
+        this._modelLoadingProgress.next({ url, guid, progress: currentProgress });
+    }
+    onModelLoadingEnd(info) {
+        const { url, guid } = info;
+        this._modelLoadingProgress.next({ url, guid, progress: 0 });
+        this._modelLoadingEnd.next(info);
+    }
+    addModelToLoaded(gltf, modelGuid, modelName) {
+        const name = modelName || modelGuid;
+        const scene = gltf.scene;
+        scene.userData.guid = modelGuid;
+        scene.name = name;
+        const meshes = [];
+        const handles = new Set();
+        scene.traverse(x => {
+            if (x instanceof Mesh
+                && x.geometry instanceof BufferGeometry
+                && x.material instanceof MeshStandardMaterial) {
+                const id = `${modelGuid}|${x.name}`;
+                x.userData.id = id;
+                x.userData.modelGuid = modelGuid;
+                this._loadedMeshes.add(x);
+                if (this._loadedMeshesById.has(id)) {
+                    this._loadedMeshesById.get(id).push(x);
+                }
+                else {
+                    this._loadedMeshesById.set(id, [x]);
+                }
+                meshes.push(x);
+                handles.add(x.name);
+                if (this.onMeshLoaded) {
+                    this.onMeshLoaded(x);
+                }
+            }
+        });
+        const modelInfo = { name, meshes, handles };
+        this._loadedModels.add(modelInfo);
+        this._loadedModelsByGuid.set(modelGuid, modelInfo);
+        if (this.onModelLoaded) {
+            this.onModelLoaded(modelGuid);
+        }
+    }
+    removeModelFromLoaded(modelGuid) {
+        if (!this._loadedModelsByGuid.has(modelGuid)) {
+            return;
+        }
+        const modelData = this._loadedModelsByGuid.get(modelGuid);
+        modelData.meshes.forEach(x => {
+            var _a;
+            this._loadedMeshes.delete(x);
+            this._loadedMeshesById.delete(x.userData.id);
+            if (this.onMeshUnloaded) {
+                this.onMeshUnloaded(x);
+            }
+            (_a = x.geometry) === null || _a === void 0 ? void 0 : _a.dispose();
+        });
+        this._loadedModels.delete(modelData);
+        this._loadedModelsByGuid.delete(modelGuid);
+        if (this.onModelUnloaded) {
+            this.onModelUnloaded(modelGuid);
+        }
+    }
+    updateModelsDataArrays() {
+        this._loadedMeshesArray = [...this._loadedMeshes];
+        this._loadedModelsArray = [...this._loadedModels];
+    }
+    emitOpenedModelsChanged() {
+        const modelOpenedInfos = [];
+        for (const [modelGuid, model] of this._loadedModelsByGuid) {
+            modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
+        }
+        this._openedModelsChange.next(modelOpenedInfos);
+    }
+}
 
 class CameraControls {
     constructor(container, renderCallback) {
@@ -766,7 +1001,7 @@ class Axes extends Object3D {
 }
 Axes._toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
 
-var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -800,7 +1035,7 @@ class RenderScene {
         this.destroyMaterials();
     }
     updateSceneAsync(lights, meshes, models, meshMergeType) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             this.deleteScene();
             yield this.createSceneAsync(lights, meshes, models, meshMergeType);
         });
@@ -833,7 +1068,7 @@ class RenderScene {
         this._scene = null;
     }
     createSceneAsync(lights, meshes, models, meshMergeType) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             const scene = new Scene();
             scene.add(...lights);
             if (meshMergeType) {
@@ -873,7 +1108,7 @@ class RenderScene {
         });
     }
     groupModelMeshesByMergeType(meshes, models, meshMergeType) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             let grouppedMeshes;
             switch (meshMergeType) {
                 case "scene":
@@ -904,7 +1139,7 @@ class RenderScene {
         });
     }
     buildRenderGeometryAsync(meshes) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             let positionsLen = 0;
             let indicesLen = 0;
             meshes.forEach(x => {
@@ -1091,7 +1326,7 @@ class RenderScene {
     }
 }
 
-var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -1137,7 +1372,7 @@ class SimplifiedScene {
         this._scene = null;
     }
     updateSceneAsync(lights, meshes, fastRenderType) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             this._scene = null;
             const scene = new Scene();
             scene.add(...lights);
@@ -1169,7 +1404,7 @@ class SimplifiedScene {
         this._simpleMaterial.needsUpdate = true;
     }
     buildHullGeometryAsync(meshes) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
                 return null;
             }
@@ -1230,7 +1465,7 @@ class SimplifiedScene {
         });
     }
     buildBoxGeometryAsync(meshes) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
                 return null;
             }
@@ -2093,7 +2328,7 @@ class PointSnapHelper {
     }
 }
 
-var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$3 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -2105,16 +2340,12 @@ var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _argu
 class GltfViewer {
     constructor(containerId, dracoDecoderPath, options) {
         this._optionsChange = new BehaviorSubject(null);
-        this._loadingStateChange = new BehaviorSubject(false);
-        this._modelLoadingStart = new Subject();
-        this._modelLoadingEnd = new Subject();
-        this._modelLoadingProgress = new Subject();
-        this._openedModelsChange = new BehaviorSubject([]);
         this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
         this._lastFrameTime = new BehaviorSubject(0);
         this._subscriptions = [];
         this._meshesNeedColorUpdate = new Set();
+        this._measureMode = false;
         this._pointerEventHelper = PointerEventHelper.default;
         this._queuedColoring = null;
         this._queuedSelection = null;
@@ -2122,15 +2353,6 @@ class GltfViewer {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._coloredMeshes = [];
-        this._measureMode = false;
-        this._loadingInProgress = false;
-        this._loadingQueue = [];
-        this._loadedModels = new Set();
-        this._loadedModelsByGuid = new Map();
-        this._loadedModelsArray = [];
-        this._loadedMeshes = new Set();
-        this._loadedMeshesById = new Map();
-        this._loadedMeshesArray = [];
         this.onCanvasPointerDown = (e) => {
             this._pointerEventHelper.downX = e.clientX;
             this._pointerEventHelper.downY = e.clientY;
@@ -2198,36 +2420,33 @@ class GltfViewer {
         });
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
         this.removeCanvasEventListeners();
-        (_b = (_a = this._loader) === null || _a === void 0 ? void 0 : _a.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
-        (_c = this._containerResizeSensor) === null || _c === void 0 ? void 0 : _c.detach();
+        (_a = this._containerResizeSensor) === null || _a === void 0 ? void 0 : _a.detach();
         this._containerResizeSensor = null;
-        (_d = this._cameraControls) === null || _d === void 0 ? void 0 : _d.destroy();
+        (_b = this._cameraControls) === null || _b === void 0 ? void 0 : _b.destroy();
         this._cameraControls = null;
-        (_e = this._pointSnapHelper) === null || _e === void 0 ? void 0 : _e.destroy();
+        (_c = this._pointSnapHelper) === null || _c === void 0 ? void 0 : _c.destroy();
         this._pointSnapHelper = null;
-        (_f = this._axes) === null || _f === void 0 ? void 0 : _f.destroy();
+        (_d = this._axes) === null || _d === void 0 ? void 0 : _d.destroy();
         this._axes = null;
-        (_g = this._hudScene) === null || _g === void 0 ? void 0 : _g.destroy();
+        (_e = this._hudScene) === null || _e === void 0 ? void 0 : _e.destroy();
         this._hudScene = null;
-        (_h = this._pickingScene) === null || _h === void 0 ? void 0 : _h.destroy();
+        (_f = this._pickingScene) === null || _f === void 0 ? void 0 : _f.destroy();
         this._pickingScene = null;
-        (_j = this._simplifiedScene) === null || _j === void 0 ? void 0 : _j.destroy();
+        (_g = this._simplifiedScene) === null || _g === void 0 ? void 0 : _g.destroy();
         this._simplifiedScene = null;
-        (_k = this._renderScene) === null || _k === void 0 ? void 0 : _k.destroy();
+        (_h = this._renderScene) === null || _h === void 0 ? void 0 : _h.destroy();
         this._renderScene = null;
-        (_l = this._loadedMeshes) === null || _l === void 0 ? void 0 : _l.forEach(x => {
-            x.geometry.dispose();
-            x.material.dispose();
-        });
-        this._loadedMeshes = null;
-        (_m = this._renderer) === null || _m === void 0 ? void 0 : _m.dispose();
+        (_j = this._loader) === null || _j === void 0 ? void 0 : _j.destroy();
+        this._loader = null;
+        (_k = this._renderer) === null || _k === void 0 ? void 0 : _k.dispose();
+        this._renderer = null;
     }
     updateOptionsAsync(options) {
-        return __awaiter$2(this, void 0, void 0, function* () {
+        return __awaiter$3(this, void 0, void 0, function* () {
             const oldOptions = this._options;
             this._options = new GltfViewerOptions(options);
             let rendererReinitialized = false;
@@ -2288,51 +2507,19 @@ class GltfViewer {
         });
     }
     openModelsAsync(modelInfos) {
-        return __awaiter$2(this, void 0, void 0, function* () {
-            if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
-                return [];
-            }
-            const promises = [];
-            modelInfos.forEach(x => {
-                const resultSubject = new AsyncSubject();
-                this._loadingQueue.push(() => __awaiter$2(this, void 0, void 0, function* () {
-                    const { url, guid, name } = x;
-                    const result = !this._loadedModelsByGuid.has(guid)
-                        ? yield this.loadModel(url, guid, name)
-                        : { url, guid };
-                    resultSubject.next(result);
-                    resultSubject.complete();
-                }));
-                promises.push(resultSubject.pipe(first()).toPromise());
-            });
-            this.processLoadingQueueAsync();
-            const overallResult = yield Promise.all(promises);
-            return overallResult;
+        return __awaiter$3(this, void 0, void 0, function* () {
+            return this._loader.openModelsAsync(modelInfos);
         });
     }
     ;
     closeModelsAsync(modelGuids) {
-        return __awaiter$2(this, void 0, void 0, function* () {
-            if (!(modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length)) {
-                return;
-            }
-            const promises = [];
-            modelGuids.forEach(x => {
-                const resultSubject = new AsyncSubject();
-                this._loadingQueue.push(() => __awaiter$2(this, void 0, void 0, function* () {
-                    this.removeModelFromLoaded(x);
-                    resultSubject.next(true);
-                    resultSubject.complete();
-                }));
-                promises.push(resultSubject.pipe(first()).toPromise());
-            });
-            this.processLoadingQueueAsync();
-            yield Promise.all(promises);
+        return __awaiter$3(this, void 0, void 0, function* () {
+            return this._loader.closeModelsAsync(modelGuids);
         });
     }
     ;
     colorItems(coloringInfos) {
-        if (this._loadingInProgress) {
+        if (this._loader.loadingInProgress) {
             this._queuedColoring = coloringInfos;
             return;
         }
@@ -2342,7 +2529,7 @@ class GltfViewer {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
         }
-        if (this._loadingInProgress) {
+        if (this._loader.loadingInProgress) {
             this._queuedSelection = { ids, isolate: false };
             return;
         }
@@ -2353,7 +2540,7 @@ class GltfViewer {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
         }
-        if (this._loadingInProgress) {
+        if (this._loader.loadingInProgress) {
             this._queuedSelection = { ids, isolate: true };
             return;
         }
@@ -2385,29 +2572,19 @@ class GltfViewer {
         }
     }
     getOpenedModels() {
-        return this._openedModelsChange.getValue();
+        return this._loader.openedModelInfos;
     }
     getSelectedItems() {
         return this._selectionChange.getValue();
     }
     initObservables() {
         this.optionsChange$ = this._optionsChange.asObservable();
-        this.loadingStateChange$ = this._loadingStateChange.asObservable();
-        this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
-        this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
-        this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
-        this.openedModelsChange$ = this._openedModelsChange.asObservable();
         this.selectionChange$ = this._selectionChange.asObservable();
         this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
     }
     closeSubjects() {
         this._optionsChange.complete();
-        this._loadingStateChange.complete();
-        this._modelLoadingStart.complete();
-        this._modelLoadingProgress.complete();
-        this._modelLoadingEnd.complete();
-        this._openedModelsChange.complete();
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
         this._lastFrameTime.complete();
@@ -2424,6 +2601,27 @@ class GltfViewer {
         this._renderer.domElement.removeEventListener("pointerdown", this.onCanvasPointerDown);
         this._renderer.domElement.removeEventListener("pointerup", this.onCanvasPointerUp);
         this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
+    }
+    initLoader(dracoDecoderPath) {
+        this._loader = new ModelLoader(dracoDecoderPath, () => __awaiter$3(this, void 0, void 0, function* () {
+            this.runQueuedColoring();
+            this.runQueuedSelection();
+            yield this.updateRenderSceneAsync();
+        }), (guid) => { }, (guid) => {
+            this._highlightedMesh = null;
+            this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== guid);
+            this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== guid);
+            this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== guid);
+        }, (mesh) => {
+            this._pickingScene.add(mesh);
+        }, (mesh) => {
+            this._pickingScene.remove(mesh);
+        });
+        this.loadingStateChange$ = this._loader.loadingStateChange$;
+        this.modelLoadingStart$ = this._loader.modelLoadingStart$;
+        this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
+        this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
+        this.openedModelsChange$ = this._loader.openedModelsChange$;
     }
     initRenderer() {
         if (this._renderer) {
@@ -2463,10 +2661,10 @@ class GltfViewer {
         }
     }
     updateRenderSceneAsync() {
-        return __awaiter$2(this, void 0, void 0, function* () {
-            yield this._renderScene.updateSceneAsync(this._lights.getLights(), this._loadedMeshesArray, this._loadedModelsArray, this._options.meshMergeType);
+        return __awaiter$3(this, void 0, void 0, function* () {
+            yield this._renderScene.updateSceneAsync(this._lights.getLights(), this._loader.loadedMeshesArray, this._loader.loadedModelsArray, this._options.meshMergeType);
             if (this._options.fastRenderType) {
-                yield this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), this._loadedMeshesArray, this._options.fastRenderType);
+                yield this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), this._loader.loadedMeshesArray, this._options.fastRenderType);
             }
             else {
                 this._simplifiedScene.clearScene();
@@ -2504,7 +2702,7 @@ class GltfViewer {
         });
     }
     renderWholeScene() {
-        this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
+        this.render(this._loader.loadedMeshesArray.length ? [this._renderScene.scene] : null);
     }
     renderOnCameraMove() {
         if (this._options.fastRenderType) {
@@ -2522,127 +2720,6 @@ class GltfViewer {
             this.render();
         }
     }
-    initLoader(dracoDecoderPath) {
-        const loader = new GLTFLoader();
-        if (dracoDecoderPath) {
-            const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath(dracoDecoderPath);
-            dracoLoader.preload();
-            loader.setDRACOLoader(dracoLoader);
-        }
-        this._loader = loader;
-    }
-    processLoadingQueueAsync() {
-        return __awaiter$2(this, void 0, void 0, function* () {
-            if (!this._loader
-                || this._loadingInProgress
-                || !this._loadingQueue.length) {
-                return;
-            }
-            this._loadingInProgress = true;
-            this._loadingStateChange.next(true);
-            while (this._loadingQueue.length > 0) {
-                const action = this._loadingQueue.shift();
-                yield action();
-            }
-            this.updateModelsDataArrays();
-            this.runQueuedColoring();
-            this.runQueuedSelection();
-            yield this.updateRenderSceneAsync();
-            this.emitOpenedModelsChanged();
-            this._loadingStateChange.next(false);
-            this._loadingInProgress = false;
-            yield this.processLoadingQueueAsync();
-        });
-    }
-    loadModel(url, guid, name) {
-        return __awaiter$2(this, void 0, void 0, function* () {
-            this.onModelLoadingStart(url, guid);
-            let error;
-            try {
-                const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
-                this.addModelToLoaded(model, guid, name);
-            }
-            catch (loadingError) {
-                error = loadingError;
-            }
-            const result = { url, guid, error };
-            this.onModelLoadingEnd(result);
-            return result;
-        });
-    }
-    onModelLoadingStart(url, guid) {
-        this._modelLoadingStart.next({ url, guid });
-    }
-    onModelLoadingProgress(progress, url, guid) {
-        const currentProgress = Math.round(progress.loaded / progress.total * 100);
-        this._modelLoadingProgress.next({ url, guid, progress: currentProgress });
-    }
-    onModelLoadingEnd(info) {
-        const { url, guid } = info;
-        this._modelLoadingProgress.next({ url, guid, progress: 0 });
-        this._modelLoadingEnd.next(info);
-    }
-    addModelToLoaded(gltf, modelGuid, modelName) {
-        const name = modelName || modelGuid;
-        const scene = gltf.scene;
-        scene.userData.guid = modelGuid;
-        scene.name = name;
-        const meshes = [];
-        const handles = new Set();
-        scene.traverse(x => {
-            if (x instanceof Mesh
-                && x.geometry instanceof BufferGeometry
-                && x.material instanceof MeshStandardMaterial) {
-                const id = `${modelGuid}|${x.name}`;
-                x.userData.id = id;
-                x.userData.modelGuid = modelGuid;
-                this._pickingScene.add(x);
-                this._loadedMeshes.add(x);
-                if (this._loadedMeshesById.has(id)) {
-                    this._loadedMeshesById.get(id).push(x);
-                }
-                else {
-                    this._loadedMeshesById.set(id, [x]);
-                }
-                meshes.push(x);
-                handles.add(x.name);
-            }
-        });
-        const modelInfo = { name, meshes, handles };
-        this._loadedModels.add(modelInfo);
-        this._loadedModelsByGuid.set(modelGuid, modelInfo);
-    }
-    removeModelFromLoaded(modelGuid) {
-        if (!this._loadedModelsByGuid.has(modelGuid)) {
-            return;
-        }
-        const modelData = this._loadedModelsByGuid.get(modelGuid);
-        modelData.meshes.forEach(x => {
-            var _a;
-            this._loadedMeshes.delete(x);
-            this._loadedMeshesById.delete(x.userData.id);
-            this._pickingScene.remove(x);
-            (_a = x.geometry) === null || _a === void 0 ? void 0 : _a.dispose();
-        });
-        this._highlightedMesh = null;
-        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-        this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-        this._loadedModels.delete(modelData);
-        this._loadedModelsByGuid.delete(modelGuid);
-    }
-    updateModelsDataArrays() {
-        this._loadedMeshesArray = [...this._loadedMeshes];
-        this._loadedModelsArray = [...this._loadedModels];
-    }
-    emitOpenedModelsChanged() {
-        const modelOpenedInfos = [];
-        for (const [modelGuid, model] of this._loadedModelsByGuid) {
-            modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
-        }
-        this._openedModelsChange.next(modelOpenedInfos);
-    }
     runQueuedColoring() {
         if (this._queuedColoring) {
             this.resetSelectionAndColorMeshes(this._queuedColoring);
@@ -2659,7 +2736,7 @@ class GltfViewer {
                 const color = new Color(info.color);
                 const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
                 info.ids.forEach(x => {
-                    const meshes = this._loadedMeshesById.get(x);
+                    const meshes = this._loader.getLoadedMeshesById(x);
                     if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
                         meshes.forEach(mesh => {
                             mesh.userData.colored = true;
@@ -2714,8 +2791,9 @@ class GltfViewer {
         const found = [];
         const notFound = new Set();
         ids.forEach(x => {
-            if (this._loadedMeshesById.has(x)) {
-                found.push(...this._loadedMeshesById.get(x));
+            const meshes = this._loader.getLoadedMeshesById(x);
+            if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
+                found.push(...meshes);
             }
             else {
                 notFound.add(x);
@@ -2792,7 +2870,7 @@ class GltfViewer {
         if (!this._selectedMeshes.length) {
             return;
         }
-        this._loadedMeshesArray.forEach(x => {
+        this._loader.loadedMeshesArray.forEach(x => {
             if (!x.userData.selected) {
                 x.userData.isolated = true;
                 this._meshesNeedColorUpdate.add(x);

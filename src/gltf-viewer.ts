@@ -1,11 +1,6 @@
-import { Observable, Subscription, Subject, BehaviorSubject, AsyncSubject } from "rxjs";
-import { first } from "rxjs/operators";
+import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
 
-import { WebGLRenderer, NoToneMapping, sRGBEncoding,
-  Object3D, Mesh, Color, MeshStandardMaterial, BufferGeometry, Vector3 } from "three";
-// eslint-disable-next-line import/named
-import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { WebGLRenderer, NoToneMapping, sRGBEncoding, Object3D, Mesh, Color } from "three";
 
 import { ResizeSensor } from "css-element-queries";
 
@@ -13,6 +8,7 @@ import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, 
   MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4DoubleCS, SnapPoint, WarningInfo } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
+import { ModelLoader } from "./components/model-loader";
 import { CameraControls } from "./components/camera-controls";
 import { Lights } from "./components/lights";
 import { Axes } from "./components/axes";
@@ -42,11 +38,6 @@ export class GltfViewer {
   
   // #region private rx subjects
   private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
-  private _loadingStateChange = new BehaviorSubject<boolean>(false);
-  private _modelLoadingStart = new Subject<ModelLoadedInfo>();
-  private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
-  private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
-  private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);  
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
@@ -56,9 +47,10 @@ export class GltfViewer {
   
   private _container: HTMLElement;
   private _containerResizeSensor: ResizeSensor;
-  private _options: GltfViewerOptions;  
 
-  // #region rendering related fields
+  private _options: GltfViewerOptions;  
+  private _loader: ModelLoader;  
+
   private _renderer: WebGLRenderer;
   private _deferRender: number;
 
@@ -67,9 +59,12 @@ export class GltfViewer {
 
   private _renderScene: RenderScene; 
   private _simplifiedScene: SimplifiedScene; 
+  private _hudScene: HudScene; 
+  private _axes: Axes;  
 
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
-  // #endregion
+
+  private _measureMode = false;
 
   // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
@@ -84,28 +79,6 @@ export class GltfViewer {
   private _isolatedMeshes: MeshBgSm[] = [];
   private _coloredMeshes: MeshBgSm[] = [];
   // #endregion  
-
-  // #region private hud
-  private _hudScene: HudScene; 
-  private _axes: Axes;  
-  
-  private _measureMode = false;
-  // #endregion
-
-  // #region loading models related fieds
-  private _loader: GLTFLoader;  
-
-  private _loadingInProgress = false;
-  private _loadingQueue: (() => Promise<void>)[] = [];
-
-  private _loadedModels = new Set<ModelGeometryInfo>();
-  private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
-  private _loadedModelsArray: ModelGeometryInfo[] = [];
-
-  private _loadedMeshes = new Set<MeshBgSm>();
-  private _loadedMeshesById = new Map<string, MeshBgSm[]>();
-  private _loadedMeshesArray: MeshBgSm[] = [];
-  // #endregion
 
   constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) {
     this.initObservables();
@@ -155,8 +128,6 @@ export class GltfViewer {
     this._subscriptions.forEach(x => x.unsubscribe()); 
     this.closeSubjects();  
     this.removeCanvasEventListeners();
-
-    this._loader?.dracoLoader?.dispose();  
     
     this._containerResizeSensor?.detach();
     this._containerResizeSensor = null;
@@ -182,13 +153,11 @@ export class GltfViewer {
     this._renderScene?.destroy();
     this._renderScene = null;   
 
-    this._loadedMeshes?.forEach(x => {
-      x.geometry.dispose();
-      x.material.dispose();
-    });
-    this._loadedMeshes = null;  
+    this._loader?.destroy();
+    this._loader = null;
 
     this._renderer?.dispose();
+    this._renderer = null;
   }
 
   // #region public interaction 
@@ -265,51 +234,15 @@ export class GltfViewer {
   }
 
   async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
-    if (!modelInfos?.length) {
-      return [];
-    }
-
-    const promises: Promise<ModelLoadedInfo>[] = [];
-    modelInfos.forEach(x => {
-      const resultSubject = new AsyncSubject<ModelLoadedInfo>();
-      this._loadingQueue.push(async () => {        
-        const { url, guid, name } = x;      
-        const result = !this._loadedModelsByGuid.has(guid)
-          ? await this.loadModel(url, guid, name)
-          : { url, guid };
-        resultSubject.next(result);
-        resultSubject.complete();
-      });
-      promises.push(resultSubject.pipe(first()).toPromise());
-    });
-    this.processLoadingQueueAsync();
-
-    const overallResult = await Promise.all(promises);
-    return overallResult;
+    return this._loader.openModelsAsync(modelInfos);
   };
 
   async closeModelsAsync(modelGuids: string[]): Promise<void> {
-    if (!modelGuids?.length) {
-      return;
-    }
-
-    const promises: Promise<boolean>[] = [];
-    modelGuids.forEach(x => {      
-      const resultSubject = new AsyncSubject<boolean>();
-      this._loadingQueue.push(async () => {
-        this.removeModelFromLoaded(x);
-        resultSubject.next(true);
-        resultSubject.complete();
-      });
-      promises.push(resultSubject.pipe(first()).toPromise());
-    });    
-    this.processLoadingQueueAsync();
-    
-    await Promise.all(promises);
+    return this._loader.closeModelsAsync(modelGuids);
   };
 
   colorItems(coloringInfos: ColoringInfo[]) {
-    if (this._loadingInProgress) {
+    if (this._loader.loadingInProgress) {
       this._queuedColoring = coloringInfos;
       return;
     }
@@ -322,7 +255,7 @@ export class GltfViewer {
       return;
     }
 
-    if (this._loadingInProgress) {
+    if (this._loader.loadingInProgress) {
       this._queuedSelection = {ids, isolate: false};
       return;
     }
@@ -335,7 +268,7 @@ export class GltfViewer {
       return;
     }
 
-    if (this._loadingInProgress) {
+    if (this._loader.loadingInProgress) {
       this._queuedSelection = {ids, isolate: true};
       return;
     }
@@ -369,7 +302,7 @@ export class GltfViewer {
   }
 
   getOpenedModels(): ModelOpenedInfo[] {
-    return this._openedModelsChange.getValue();
+    return this._loader.openedModelInfos;
   }
 
   getSelectedItems(): Set<string> {
@@ -380,23 +313,13 @@ export class GltfViewer {
   // #region rx
   private initObservables() {
     this.optionsChange$ = this._optionsChange.asObservable();
-    this.loadingStateChange$ = this._loadingStateChange.asObservable();
-    this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
-    this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
-    this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
-    this.openedModelsChange$ = this._openedModelsChange.asObservable();
     this.selectionChange$ = this._selectionChange.asObservable();
     this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
     this.lastFrameTime$ = this._lastFrameTime.asObservable();
   }
 
   private closeSubjects() {
-    this._optionsChange.complete();
-    this._loadingStateChange.complete();
-    this._modelLoadingStart.complete();
-    this._modelLoadingProgress.complete();
-    this._modelLoadingEnd.complete();
-    this._openedModelsChange.complete();   
+    this._optionsChange.complete(); 
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
     this._lastFrameTime.complete();
@@ -473,6 +396,35 @@ export class GltfViewer {
   }
   // #endregion
 
+  private initLoader(dracoDecoderPath: string) {
+    this._loader = new  ModelLoader(dracoDecoderPath,
+      async () => {
+        this.runQueuedColoring();
+        this.runQueuedSelection();
+        await this.updateRenderSceneAsync();
+      },
+      (guid: string) => {},
+      (guid: string) => {
+        this._highlightedMesh = null;
+        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== guid);
+        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== guid);
+        this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== guid);
+      },
+      (mesh: MeshBgSm) => {        
+        this._pickingScene.add(mesh);
+      },
+      (mesh: MeshBgSm) => {
+        this._pickingScene.remove(mesh);
+      },
+    );
+
+    this.loadingStateChange$ = this._loader.loadingStateChange$;
+    this.modelLoadingStart$ = this._loader.modelLoadingStart$;
+    this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
+    this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
+    this.openedModelsChange$ = this._loader.openedModelsChange$;  
+  }
+
   // #region renderer
   private initRenderer() {    
     if (this._renderer) {
@@ -517,11 +469,13 @@ export class GltfViewer {
   }
 
   private async updateRenderSceneAsync(): Promise<void> {
-    await this._renderScene.updateSceneAsync(this._lights.getLights(), this._loadedMeshesArray, this._loadedModelsArray,
+    await this._renderScene.updateSceneAsync(this._lights.getLights(), 
+      this._loader.loadedMeshesArray, this._loader.loadedModelsArray,
       this._options.meshMergeType);
       
     if (this._options.fastRenderType) {
-      await this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), this._loadedMeshesArray, 
+      await this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), 
+        this._loader.loadedMeshesArray, 
         this._options.fastRenderType);
     } else {
       this._simplifiedScene.clearScene();
@@ -564,7 +518,7 @@ export class GltfViewer {
   }  
 
   private renderWholeScene() {    
-    this.render(this._loadedMeshesArray.length ? [this._renderScene.scene] : null);
+    this.render(this._loader.loadedMeshesArray.length ? [this._renderScene.scene] : null);
   }
 
   private renderOnCameraMove() {
@@ -581,147 +535,6 @@ export class GltfViewer {
     } else {
       this.render();
     }
-  }
-  // #endregion
-
-  // #region loading models
-  private initLoader(dracoDecoderPath: string) {
-    const loader = new GLTFLoader();
-    if (dracoDecoderPath) {
-      const dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath(dracoDecoderPath);
-      dracoLoader.preload();
-      loader.setDRACOLoader(dracoLoader);
-    }
-    this._loader = loader;
-  }
-
-  private async processLoadingQueueAsync(): Promise<void> {
-    if (!this._loader 
-        || this._loadingInProgress 
-        || !this._loadingQueue.length) {
-      return;
-    }
-
-    this._loadingInProgress = true;  
-    this._loadingStateChange.next(true);
-
-    while (this._loadingQueue.length > 0) {
-      const action = this._loadingQueue.shift();
-      await action();
-    } 
-    
-    this.updateModelsDataArrays();    
-    this.runQueuedColoring();
-    this.runQueuedSelection();
-    await this.updateRenderSceneAsync();
-
-    this.emitOpenedModelsChanged();
-    this._loadingStateChange.next(false);
-    this._loadingInProgress = false;
-
-    // run loop once more to check queue update while awaiting this.updateRenderSceneAsync()
-    await this.processLoadingQueueAsync(); 
-  }
-
-  private async loadModel(url: string, guid: string, name: string): Promise<ModelLoadedInfo> {
-    this.onModelLoadingStart(url, guid); 
-    let error: Error;
-    try {
-      const model = await this._loader.loadAsync(url,
-        (progress) => this.onModelLoadingProgress(progress, url, guid));
-      this.addModelToLoaded(model, guid, name);
-    } catch (loadingError) {
-      error = loadingError;
-    }
-    const result = { url, guid, error };
-    this.onModelLoadingEnd(result);
-    return result;
-  }  
-
-  private onModelLoadingStart(url: string, guid: string) {
-    this._modelLoadingStart.next({url, guid});
-  }  
-
-  private onModelLoadingProgress(progress: ProgressEvent, url: string, guid: string) {   
-    const currentProgress = Math.round(progress.loaded / progress.total * 100);
-    this._modelLoadingProgress.next({ url, guid, progress: currentProgress });
-  }
-  
-  private onModelLoadingEnd(info: ModelLoadedInfo) {
-    const { url, guid } = info;
-    this._modelLoadingProgress.next({ url, guid, progress: 0});
-    this._modelLoadingEnd.next(info);
-  }
-
-  private addModelToLoaded(gltf: GLTF, modelGuid: string, modelName: string) {
-    const name = modelName || modelGuid;
-    const scene = gltf.scene;
-    scene.userData.guid = modelGuid;
-    scene.name = name;
-
-    const meshes: MeshBgSm[] = [];
-    const handles = new Set<string>();
-    scene.traverse(x => {
-      if (x instanceof Mesh
-          && x.geometry instanceof BufferGeometry
-          && x.material instanceof MeshStandardMaterial) {
-
-        const id = `${modelGuid}|${x.name}`;
-        x.userData.id = id;
-        x.userData.modelGuid = modelGuid;
-
-        this._pickingScene.add(x);
-        this._loadedMeshes.add(x);
-        if (this._loadedMeshesById.has(id)) {
-          this._loadedMeshesById.get(id).push(x);
-        } else {
-          this._loadedMeshesById.set(id, [x]);
-        }
-        
-        meshes.push(x);
-        handles.add(x.name);
-      }
-    });
-    
-    const modelInfo = {name, meshes, handles};
-    this._loadedModels.add(modelInfo);
-    this._loadedModelsByGuid.set(modelGuid, modelInfo);
-  }
-
-  private removeModelFromLoaded(modelGuid: string) {
-    if (!this._loadedModelsByGuid.has(modelGuid)) {
-      return;
-    }
-
-    const modelData = this._loadedModelsByGuid.get(modelGuid);
-    modelData.meshes.forEach(x => {  
-      this._loadedMeshes.delete(x); 
-      this._loadedMeshesById.delete(x.userData.id);
-      this._pickingScene.remove(x);
-      x.geometry?.dispose();
-    });
-
-    this._highlightedMesh = null;
-    this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-    this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-    this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-    
-    this._loadedModels.delete(modelData);
-    this._loadedModelsByGuid.delete(modelGuid);
-  }
-
-  private updateModelsDataArrays() {
-    this._loadedMeshesArray = [...this._loadedMeshes];
-    this._loadedModelsArray = [...this._loadedModels];
-  }
-
-  private emitOpenedModelsChanged() {  
-    const modelOpenedInfos: ModelOpenedInfo[] = [];
-    for (const [ modelGuid, model ] of this._loadedModelsByGuid) {
-      modelOpenedInfos.push({guid: modelGuid, name: model.name, handles: model.handles});
-    } 
-    this._openedModelsChange.next(modelOpenedInfos);
   }
   // #endregion
 
@@ -745,7 +558,7 @@ export class GltfViewer {
         const color = new Color(info.color);
         const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
         info.ids.forEach(x => {
-          const meshes = this._loadedMeshesById.get(x);
+          const meshes = this._loader.getLoadedMeshesById(x);
           if (meshes?.length) {
             meshes.forEach(mesh => {
               mesh.userData.colored = true;
@@ -817,8 +630,9 @@ export class GltfViewer {
     const notFound = new Set<string>();
 
     ids.forEach(x => {
-      if (this._loadedMeshesById.has(x)) {
-        found.push(...this._loadedMeshesById.get(x));
+      const meshes = this._loader.getLoadedMeshesById(x);
+      if (meshes?.length) {
+        found.push(...meshes);
       } else {
         notFound.add(x);
       }
@@ -908,7 +722,7 @@ export class GltfViewer {
       return;
     }
 
-    this._loadedMeshesArray.forEach(x => {
+    this._loader.loadedMeshesArray.forEach(x => {
       if (!x.userData.selected) {
         x.userData.isolated = true;
         this._meshesNeedColorUpdate.add(x);
