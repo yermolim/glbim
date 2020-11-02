@@ -153,6 +153,22 @@ export class ModelLoader {
   getLoadedMeshesById(id: string): MeshBgSm[] {
     return this._loadedMeshesById.get(id);
   }
+  
+  findMeshesByIds(ids: Set<string>): {found: MeshBgSm[]; notFound: Set<string>} {
+    const found: MeshBgSm[] = [];
+    const notFound = new Set<string>();
+
+    ids.forEach(x => {
+      const meshes = this.getLoadedMeshesById(x);
+      if (meshes?.length) {
+        found.push(...meshes);
+      } else {
+        notFound.add(x);
+      }
+    });
+
+    return {found, notFound};
+  }
 
   private async processLoadingQueueAsync(): Promise<void> {
     if (!this._loader 

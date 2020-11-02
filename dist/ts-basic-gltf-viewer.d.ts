@@ -8,6 +8,7 @@ import { Vector3 } from 'three';
 export declare type MeshMergeType = "scene" | "model" | "model+" | null;
 export declare type FastRenderType = "ch" | "aabb" | "ombb" | null;
 export declare type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export declare type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 export interface ModelFileInfo {
 	url: string;
 	guid: string;
@@ -52,7 +53,7 @@ declare class Vec4 {
 	constructor(x: number, y: number, z: number, w?: number);
 	static getDistance(start: Vec4, end: Vec4): Vec4;
 }
-declare class Vec4DoubleCS {
+export declare class Vec4DoubleCS {
 	private _x;
 	private _y;
 	private _z;
@@ -94,14 +95,14 @@ export declare class GltfViewerOptions {
 }
 export declare class GltfViewer {
 	optionsChange$: Observable<GltfViewerOptions>;
+	selectionChange$: Observable<Set<string>>;
+	manualSelectionChange$: Observable<Set<string>>;
+	lastFrameTime$: Observable<number>;
 	loadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
 	modelLoadingProgress$: Observable<ModelLoadingInfo>;
 	openedModelsChange$: Observable<ModelOpenedInfo[]>;
-	selectionChange$: Observable<Set<string>>;
-	manualSelectionChange$: Observable<Set<string>>;
-	lastFrameTime$: Observable<number>;
 	snapPointChange$: Observable<SnapPoint>;
 	snapPointSelectionChange$: Observable<SnapPoint[]>;
 	distanceMeasureChange$: Observable<Distance>;
@@ -123,7 +124,6 @@ export declare class GltfViewer {
 	private _hudScene;
 	private _axes;
 	private _meshesNeedColorUpdate;
-	private _measureMode;
 	private _pointerEventHelper;
 	private _pointSnapHelper;
 	private _pickingScene;
@@ -133,6 +133,7 @@ export declare class GltfViewer {
 	private _selectedMeshes;
 	private _isolatedMeshes;
 	private _coloredMeshes;
+	private _interactionMode;
 	constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions);
 	destroy(): void;
 	updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions>;
@@ -142,14 +143,14 @@ export declare class GltfViewer {
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
 	zoomToItems(ids: string[]): void;
-	toggleMeasureMode(value: boolean): void;
 	getOpenedModels(): ModelOpenedInfo[];
 	getSelectedItems(): Set<string>;
+	setInteractionMode(value: ViewerInteractionMode): void;
 	private initObservables;
 	private closeSubjects;
+	private onCanvasMouseMove;
 	private onCanvasPointerDown;
 	private onCanvasPointerUp;
-	private onCanvasMouseMove;
 	private addCanvasEventListeners;
 	private removeCanvasEventListeners;
 	private initLoader;
@@ -166,9 +167,12 @@ export declare class GltfViewer {
 	private removeColoring;
 	private getMeshAt;
 	private getSnapPointAt;
+	private initHud;
+	private setSnapMarkerAtPoint;
+	private setSelectedSnapMarkerAtPoint;
+	private setDistanceMarkerAtPoint;
 	private runQueuedSelection;
 	private findAndSelectMeshes;
-	private findMeshesByIds;
 	private removeSelection;
 	private removeIsolation;
 	private resetSelection;
@@ -181,13 +185,6 @@ export declare class GltfViewer {
 	private highlightMeshAtPoint;
 	private highlightItem;
 	private removeHighlighting;
-	private initHud;
-	private setSnapMarkerAtPoint;
-	private setDistanceMarkerAtPoint;
 }
-
-export {
-	Vec4DoubleCS as Vec4,
-};
 
 export {};

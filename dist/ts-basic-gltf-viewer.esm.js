@@ -301,6 +301,20 @@ class ModelLoader {
     getLoadedMeshesById(id) {
         return this._loadedMeshesById.get(id);
     }
+    findMeshesByIds(ids) {
+        const found = [];
+        const notFound = new Set();
+        ids.forEach(x => {
+            const meshes = this.getLoadedMeshesById(x);
+            if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
+                found.push(...meshes);
+            }
+            else {
+                notFound.add(x);
+            }
+        });
+        return { found, notFound };
+    }
     processLoadingQueueAsync() {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this._loader
@@ -1729,9 +1743,20 @@ class HudInstancedMarker {
         this._sprite.geometry["isInstancedBufferGeometry"] = true;
         this._sprite.geometry["instanceCount"] = data.length;
         data.forEach((d, i) => {
-            instancePosition.setXYZ(i, d.position.x, d.position.y, d.position.z);
-            instanceUv.setXYZW(i, d.uv.x, d.uv.y, d.uv.z, d.uv.w);
-            instanceScale.setX(i, d.scale);
+            var _a;
+            if (d.position) {
+                instancePosition.setXYZ(i, d.position.x, d.position.y, d.position.z);
+            }
+            else {
+                instancePosition.setXYZ(i, 0, 0, 0);
+            }
+            if (d.uv) {
+                instanceUv.setXYZW(i, d.uv.x, d.uv.y, d.uv.z, d.uv.w);
+            }
+            else {
+                instanceUv.setXYZW(i, 0, 0, 1, 1);
+            }
+            instanceScale.setX(i, (_a = d.scale) !== null && _a !== void 0 ? _a : 1);
         });
         instancePosition.needsUpdate = true;
         instanceUv.needsUpdate = true;
@@ -1956,7 +1981,7 @@ class HudPointSnap extends HudTool {
         this.snapPointSelectionChange$ = this._snapPointSelectionChange.asObservable();
         this.initSprites();
     }
-    setSnapMarker(snapPoint) {
+    setSnapPointMarker(snapPoint) {
         if (snapPoint) {
             this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
             this._snapPointChange.next(snapPoint);
@@ -1966,23 +1991,62 @@ class HudPointSnap extends HudTool {
             this._snapPointChange.next(null);
         }
     }
+    resetSnapPointMarker() {
+        this._snapPointChange.next(null);
+        this.getHudElement("s_snap").reset();
+    }
     addSelectedPoint(point) {
+        if (!point) {
+            return;
+        }
+        this._selectedPoints.set(`${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`, point);
+        this.updateSelectedPointMarkers();
     }
     removeSelectedPoint(point) {
+        if (!point) {
+            return;
+        }
+        const key = `${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`;
+        if (this._selectedPoints.has(key)) {
+            this._selectedPoints.delete(key);
+            this.updateSelectedPointMarkers();
+        }
     }
     setSelectedPoints(points) {
+        if (!(points === null || points === void 0 ? void 0 : points.length)) {
+            this.resetSelectedPoints();
+            return;
+        }
+        this._selectedPoints.clear();
+        points.forEach(x => {
+            this._selectedPoints.set(`${x.position.x}|${x.position.y_Yup}|${x.position.z_Yup}|${x.meshId}`, x);
+        });
+        this.updateSelectedPointMarkers();
     }
     resetSelectedPoints() {
+        this._selectedPoints.clear();
+        this.updateSelectedPointMarkers();
     }
     reset() {
-        this.resetSprites();
+        this.resetSelectedPoints();
+        this.resetSnapPointMarker();
     }
     initSprites() {
-        this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, CanvasTextureBuilder.buildCircleTexture(64, 0xFF0000), 8, this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
+        this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), 8, this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
         this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, this._toolZIndex, this._cameraZIndex), "s_snap");
     }
-    resetSprites() {
-        this.getHudElement("s_snap").reset();
+    updateSelectedPointMarkers() {
+        const instanceData = new Array(this._selectedPoints.size);
+        let i = 0;
+        this._selectedPoints.forEach(v => {
+            instanceData[i++] = {
+                position: v.position.toVector3(),
+                scale: 1,
+                uv: null,
+            };
+        });
+        this.getHudElement("s_snap_selection").set(instanceData);
+        this._snapPointSelectionChange.next([...this._selectedPoints.values()]);
     }
 }
 class HudDistanceMeasurer extends HudTool {
@@ -2043,6 +2107,7 @@ class HudDistanceMeasurer extends HudTool {
     reset() {
         this._measurePoints.start = null;
         this._measurePoints.end = null;
+        this._distanceMeasureChange.next(null);
         this.resetSprites();
         this.resetLines();
     }
@@ -2134,7 +2199,8 @@ class HudWarnings extends HudTool {
         this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, CanvasTextureBuilder.buildWarningMarkersTexture(), this._spriteSize, this._toolZIndex, this._cameraZIndex, true, 1000), "s_warn");
     }
     updateSprites() {
-        const instanceData = [];
+        const instanceData = new Array(this._warnings.size);
+        let i = 0;
         this._warnings.forEach(v => {
             const uv = new Vector4();
             switch (v.importance) {
@@ -2151,11 +2217,11 @@ class HudWarnings extends HudTool {
                     uv.set(0.5, 0, 1, 0.5);
                     break;
             }
-            instanceData.push({
+            instanceData[i++] = {
                 position: v.position,
                 scale: this._hoveredWarning === v ? 1.5 : 1,
                 uv
-            });
+            };
         });
         this.getHudElement("s_warn").set(instanceData);
     }
@@ -2345,7 +2411,6 @@ class GltfViewer {
         this._lastFrameTime = new BehaviorSubject(0);
         this._subscriptions = [];
         this._meshesNeedColorUpdate = new Set();
-        this._measureMode = false;
         this._pointerEventHelper = PointerEventHelper.default;
         this._queuedColoring = null;
         this._queuedSelection = null;
@@ -2353,6 +2418,32 @@ class GltfViewer {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._coloredMeshes = [];
+        this._interactionMode = "select_mesh";
+        this.onCanvasMouseMove = (e) => {
+            if (e.buttons) {
+                return;
+            }
+            clearTimeout(this._pointerEventHelper.mouseMoveTimer);
+            this._pointerEventHelper.mouseMoveTimer = null;
+            this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
+                const x = e.clientX;
+                const y = e.clientY;
+                switch (this._interactionMode) {
+                    case "select_mesh":
+                        this.highlightMeshAtPoint(x, y);
+                        break;
+                    case "select_vertex":
+                        this.highlightMeshAtPoint(x, y);
+                        this.setSnapMarkerAtPoint(x, y);
+                        break;
+                    case "select_sprite":
+                        break;
+                    case "measure_distance":
+                        this.setSnapMarkerAtPoint(x, y);
+                        break;
+                }
+            }, 30);
+        };
         this.onCanvasPointerDown = (e) => {
             this._pointerEventHelper.downX = e.clientX;
             this._pointerEventHelper.downY = e.clientY;
@@ -2365,39 +2456,31 @@ class GltfViewer {
                 || Math.abs(y - this._pointerEventHelper.downY) > this._pointerEventHelper.maxDiff) {
                 return;
             }
-            if (this._measureMode) {
-                this.setDistanceMarkerAtPoint(x, y);
-            }
-            else {
-                if (this._pointerEventHelper.waitForDouble) {
-                    this.isolateSelectedMeshes();
-                    this._pointerEventHelper.waitForDouble = false;
-                }
-                else {
-                    this._pointerEventHelper.waitForDouble = true;
-                    setTimeout(() => {
+            switch (this._interactionMode) {
+                case "select_mesh":
+                    if (this._pointerEventHelper.waitForDouble) {
+                        this.isolateSelectedMeshes();
                         this._pointerEventHelper.waitForDouble = false;
-                    }, 300);
-                    this.selectMeshAtPoint(x, y, e.ctrlKey);
-                }
+                    }
+                    else {
+                        this._pointerEventHelper.waitForDouble = true;
+                        setTimeout(() => {
+                            this._pointerEventHelper.waitForDouble = false;
+                        }, 300);
+                        this.selectMeshAtPoint(x, y, e.ctrlKey);
+                    }
+                    break;
+                case "select_vertex":
+                    this.setSelectedSnapMarkerAtPoint(x, y);
+                    break;
+                case "select_sprite":
+                    break;
+                case "measure_distance":
+                    this.setDistanceMarkerAtPoint(x, y);
+                    break;
             }
             this._pointerEventHelper.downX = null;
             this._pointerEventHelper.downY = null;
-        };
-        this.onCanvasMouseMove = (e) => {
-            if (e.buttons) {
-                return;
-            }
-            clearTimeout(this._pointerEventHelper.mouseMoveTimer);
-            this._pointerEventHelper.mouseMoveTimer = null;
-            this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
-                const x = e.clientX;
-                const y = e.clientY;
-                this.highlightMeshAtPoint(x, y);
-                if (this._measureMode) {
-                    this.setSnapMarkerAtPoint(x, y);
-                }
-            }, 30);
         };
         this.initObservables();
         this._container = document.getElementById(containerId);
@@ -2549,7 +2632,7 @@ class GltfViewer {
     ;
     zoomToItems(ids) {
         if (ids === null || ids === void 0 ? void 0 : ids.length) {
-            const { found } = this.findMeshesByIds(new Set(ids));
+            const { found } = this._loader.findMeshesByIds(new Set(ids));
             if (found.length) {
                 this.render(found);
                 return;
@@ -2557,25 +2640,33 @@ class GltfViewer {
         }
         this.renderWholeScene();
     }
-    toggleMeasureMode(value) {
-        if (this._measureMode === value) {
-            return;
-        }
-        if (this._measureMode) {
-            this._hudScene.pointSnap.reset();
-            this._hudScene.distanceMeasurer.reset();
-            this.render();
-            this._measureMode = false;
-        }
-        else {
-            this._measureMode = true;
-        }
-    }
     getOpenedModels() {
         return this._loader.openedModelInfos;
     }
     getSelectedItems() {
         return this._selectionChange.getValue();
+    }
+    setInteractionMode(value) {
+        if (this._interactionMode === value) {
+            return;
+        }
+        switch (this._interactionMode) {
+            case "select_mesh":
+                break;
+            case "select_vertex":
+                this._hudScene.pointSnap.reset();
+                break;
+            case "select_sprite":
+                break;
+            case "measure_distance":
+                this._hudScene.pointSnap.reset();
+                this._hudScene.distanceMeasurer.reset();
+                break;
+            default:
+                return;
+        }
+        this._interactionMode = value;
+        this.render();
     }
     initObservables() {
         this.optionsChange$ = this._optionsChange.asObservable();
@@ -2775,6 +2866,36 @@ class GltfViewer {
             : null;
         return snapPoint;
     }
+    initHud() {
+        this._hudScene = new HudScene();
+        this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
+        this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+        this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
+    }
+    setSnapMarkerAtPoint(clientX, clientY) {
+        if (!this._renderer || !this._pickingScene) {
+            return;
+        }
+        const snapPoint = this.getSnapPointAt(clientX, clientY);
+        this._hudScene.pointSnap.setSnapPointMarker(snapPoint);
+        this.render();
+    }
+    setSelectedSnapMarkerAtPoint(clientX, clientY) {
+        if (!this._renderer || !this._pickingScene) {
+            return;
+        }
+        const snapPoint = this.getSnapPointAt(clientX, clientY);
+        this._hudScene.pointSnap.setSelectedPoints(snapPoint ? [snapPoint] : []);
+        this.render();
+    }
+    setDistanceMarkerAtPoint(clientX, clientY) {
+        if (!this._renderer || !this._pickingScene) {
+            return;
+        }
+        const snapPoint = this.getSnapPointAt(clientX, clientY);
+        this._hudScene.distanceMeasurer.setEndMarker(snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVector3());
+        this.render();
+    }
     runQueuedSelection() {
         if (this._queuedSelection) {
             const { ids, isolate } = this._queuedSelection;
@@ -2782,24 +2903,10 @@ class GltfViewer {
         }
     }
     findAndSelectMeshes(ids, isolate) {
-        const { found } = this.findMeshesByIds(new Set(ids));
+        const { found } = this._loader.findMeshesByIds(new Set(ids));
         if (found.length) {
             this.selectMeshes(found, false, isolate);
         }
-    }
-    findMeshesByIds(ids) {
-        const found = [];
-        const notFound = new Set();
-        ids.forEach(x => {
-            const meshes = this._loader.getLoadedMeshesById(x);
-            if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
-                found.push(...meshes);
-            }
-            else {
-                notFound.add(x);
-            }
-        });
-        return { found, notFound };
     }
     removeSelection() {
         for (const mesh of this._selectedMeshes) {
@@ -2914,28 +3021,6 @@ class GltfViewer {
             this._highlightedMesh = null;
         }
     }
-    initHud() {
-        this._hudScene = new HudScene();
-        this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
-        this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
-        this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
-    }
-    setSnapMarkerAtPoint(clientX, clientY) {
-        if (!this._renderer || !this._pickingScene) {
-            return;
-        }
-        const snapPoint = this.getSnapPointAt(clientX, clientY);
-        this._hudScene.pointSnap.setSnapMarker(snapPoint);
-        this.render();
-    }
-    setDistanceMarkerAtPoint(clientX, clientY) {
-        if (!this._renderer || !this._pickingScene) {
-            return;
-        }
-        const snapPoint = this.getSnapPointAt(clientX, clientY);
-        this._hudScene.distanceMeasurer.setEndMarker(snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVector3());
-        this.render();
-    }
 }
 
-export { Distance, GltfViewer, GltfViewerOptions, Vec4DoubleCS as Vec4 };
+export { Distance, GltfViewer, GltfViewerOptions, Vec4DoubleCS };

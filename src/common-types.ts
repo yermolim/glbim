@@ -15,6 +15,8 @@ export type MeshBgAm = Mesh<BufferGeometry, Material>;
 export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
+
+export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 // #endregion
 
 // #region interfaces
@@ -144,7 +146,7 @@ export class Vec4DoubleCS {
   get z_Zup(): number {
     return this._y;
   }
-  
+
   constructor(isZup = false, x = 0, y = 0, z = 0, w = 0) {
     this._x = x;
     this._w = w;

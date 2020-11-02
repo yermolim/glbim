@@ -148,9 +148,17 @@ class HudInstancedMarker implements IHudElement {
     this._sprite.geometry["isInstancedBufferGeometry"] = true;
     this._sprite.geometry["instanceCount"] = data.length;
     data.forEach((d, i) => {
-      instancePosition.setXYZ(i, d.position.x, d.position.y, d.position.z);
-      instanceUv.setXYZW(i, d.uv.x, d.uv.y, d.uv.z, d.uv.w);
-      instanceScale.setX(i, d.scale);
+      if (d.position) {
+        instancePosition.setXYZ(i, d.position.x, d.position.y, d.position.z);
+      } else {        
+        instancePosition.setXYZ(i, 0, 0, 0);
+      }
+      if (d.uv) {
+        instanceUv.setXYZW(i, d.uv.x, d.uv.y, d.uv.z, d.uv.w);
+      } else {        
+        instanceUv.setXYZW(i, 0, 0, 1, 1);
+      }
+      instanceScale.setX(i, d.scale ?? 1);
     });  
     instancePosition.needsUpdate = true;
     instanceUv.needsUpdate = true;
@@ -434,7 +442,7 @@ class HudPointSnap extends HudTool {
   private _snapPointChange = new Subject<SnapPoint>();  
   private _snapPointSelectionChange: BehaviorSubject<SnapPoint[]>;
 
-  private _selectedPoints = new Map<string, Vector3>();
+  private _selectedPoints = new Map<string, SnapPoint>();
   
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
     toolZIndex: number, cameraZIndex: number) { 
@@ -449,7 +457,7 @@ class HudPointSnap extends HudTool {
     this.initSprites();    
   }
     
-  setSnapMarker(snapPoint: SnapPoint) {
+  setSnapPointMarker(snapPoint: SnapPoint) {
     if (snapPoint) {
       this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
       this._snapPointChange.next(snapPoint);
@@ -459,37 +467,73 @@ class HudPointSnap extends HudTool {
     }
   }
 
-  addSelectedPoint(point: SnapPoint) {
-
+  resetSnapPointMarker() {
+    this._snapPointChange.next(null);
+    this.getHudElement("s_snap").reset(); 
   }
 
-  removeSelectedPoint(point: SnapPoint) {
+  addSelectedPoint(point: SnapPoint) {
+    if (!point) {
+      return;
+    }
+    this._selectedPoints.set(`${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`, point);
+    this.updateSelectedPointMarkers();
+  }
 
+  removeSelectedPoint(point: SnapPoint) {    
+    if (!point) {
+      return;
+    }
+    const key = `${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`;
+    if (this._selectedPoints.has(key)) {
+      this._selectedPoints.delete(key);
+      this.updateSelectedPointMarkers();
+    }
   }
 
   setSelectedPoints(points: SnapPoint[]) {
-    
+    if (!points?.length) {
+      this.resetSelectedPoints();
+      return;
+    }
+    this._selectedPoints.clear();
+    points.forEach(x => {
+      this._selectedPoints.set(`${x.position.x}|${x.position.y_Yup}|${x.position.z_Yup}|${x.meshId}`, x);
+    });
+    this.updateSelectedPointMarkers();
   }
 
   resetSelectedPoints() {
-
+    this._selectedPoints.clear();
+    this.updateSelectedPointMarkers();
   }
   
   reset() {
-    this.resetSprites();
+    this.resetSelectedPoints();
+    this.resetSnapPointMarker();
   } 
   
   private initSprites() {
     this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution,
-      CanvasTextureBuilder.buildCircleTexture(64, 0xFF0000), 8, 
+      CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), 8, 
       this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
     this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, 
       CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 
       this._toolZIndex, this._cameraZIndex), "s_snap");
   }  
-    
-  private resetSprites() {   
-    this.getHudElement("s_snap").reset(); 
+  
+  private updateSelectedPointMarkers() {
+    const instanceData: HudInstancedMarkerData[] = new Array(this._selectedPoints.size);
+    let i = 0;
+    this._selectedPoints.forEach(v => {
+      instanceData[i++] = {
+        position: v.position.toVector3(),
+        scale: 1,
+        uv: null,
+      };
+    });
+    this.getHudElement("s_snap_selection").set(instanceData);
+    this._snapPointSelectionChange.next([...this._selectedPoints.values()]);
   }
 }
 
@@ -558,6 +602,8 @@ class HudDistanceMeasurer extends HudTool {
   reset() {
     this._measurePoints.start = null;
     this._measurePoints.end = null;
+
+    this._distanceMeasureChange.next(null); 
 
     this.resetSprites();
     this.resetLines();
@@ -704,7 +750,8 @@ class HudWarnings extends HudTool {
   }  
 
   private updateSprites() {
-    const instanceData: HudInstancedMarkerData[] = [];
+    const instanceData: HudInstancedMarkerData[] = new Array(this._warnings.size);
+    let i = 0;
     this._warnings.forEach(v => {
       const uv = new Vector4();
       switch (v.importance) {
@@ -721,12 +768,12 @@ class HudWarnings extends HudTool {
           uv.set(0.5, 0, 1, 0.5);
           break;
       }
-      instanceData.push({
+      instanceData[i++] = {
         position: v.position,
         // scale: this._selectedWarnings.has(v) ? 1.5 : 1,
         scale: this._hoveredWarning === v ? 1.5 : 1,
         uv
-      });
+      };
     });
     this.getHudElement("s_warn").set(instanceData);
   }

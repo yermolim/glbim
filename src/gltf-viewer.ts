@@ -4,8 +4,9 @@ import { WebGLRenderer, NoToneMapping, sRGBEncoding, Object3D, Mesh, Color } fro
 
 import { ResizeSensor } from "css-element-queries";
 
-import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, Vec4DoubleCS, SnapPoint, WarningInfo } from "./common-types";
+import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
+  MeshBgSm, ColoringInfo, PointerEventHelper, ViewerInteractionMode,
+  Distance, Vec4DoubleCS, SnapPoint, WarningInfo } from "./common-types";
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { ModelLoader } from "./components/model-loader";
@@ -18,21 +19,24 @@ import { PickingScene } from "./scenes/picking-scene";
 import { HudScene } from "./scenes/hud-scene";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
-export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, Distance, Vec4DoubleCS as Vec4, SnapPoint, WarningInfo };
+export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode,
+  Distance, Vec4DoubleCS, SnapPoint, WarningInfo };
 
 export class GltfViewer {
   // #region public observables
   optionsChange$: Observable<GltfViewerOptions>;
+  selectionChange$: Observable<Set<string>>;
+  manualSelectionChange$: Observable<Set<string>>; 
+  lastFrameTime$: Observable<number>;
+  
   loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
-  openedModelsChange$: Observable<ModelOpenedInfo[]>;  
-  selectionChange$: Observable<Set<string>>;
-  manualSelectionChange$: Observable<Set<string>>; 
-  lastFrameTime$: Observable<number>;
+  openedModelsChange$: Observable<ModelOpenedInfo[]>; 
+
   snapPointChange$: Observable<SnapPoint>;
-  snapPointSelectionChange$: Observable<SnapPoint[]>;
+  snapPointSelectionChange$: Observable<SnapPoint[]>;  
   distanceMeasureChange$: Observable<Distance>;
   // #endregion  
   
@@ -64,8 +68,6 @@ export class GltfViewer {
 
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
 
-  private _measureMode = false;
-
   // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
   private _pointSnapHelper: PointSnapHelper;
@@ -78,6 +80,8 @@ export class GltfViewer {
   private _selectedMeshes: MeshBgSm[] = [];
   private _isolatedMeshes: MeshBgSm[] = [];
   private _coloredMeshes: MeshBgSm[] = [];
+
+  private _interactionMode: ViewerInteractionMode = "select_mesh";
   // #endregion  
 
   constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) {
@@ -278,27 +282,13 @@ export class GltfViewer {
 
   zoomToItems(ids: string[]) {
     if (ids?.length) {
-      const { found } = this.findMeshesByIds(new Set<string>(ids));     
+      const { found } = this._loader.findMeshesByIds(new Set<string>(ids));     
       if (found.length) {
         this.render(found);
         return;
       }
     }
     this.renderWholeScene();
-  }
-
-  toggleMeasureMode(value: boolean) {
-    if (this._measureMode === value) {
-      return;
-    }
-    if (this._measureMode) {
-      this._hudScene.pointSnap.reset();
-      this._hudScene.distanceMeasurer.reset();
-      this.render();
-      this._measureMode = false;
-    } else {
-      this._measureMode = true;
-    }
   }
 
   getOpenedModels(): ModelOpenedInfo[] {
@@ -308,6 +298,31 @@ export class GltfViewer {
   getSelectedItems(): Set<string> {
     return this._selectionChange.getValue();
   }
+  
+  setInteractionMode(value: ViewerInteractionMode) {
+    if (this._interactionMode === value) {
+      return;
+    }
+    switch (this._interactionMode) {
+      case "select_mesh":
+        // TODO: reset mesh selection ???
+        break;
+      case "select_vertex":
+        this._hudScene.pointSnap.reset();
+        break;
+      case "select_sprite":
+        // TODO: reset sprite selection
+        break;
+      case "measure_distance":
+        this._hudScene.pointSnap.reset();
+        this._hudScene.distanceMeasurer.reset();
+        break;
+      default:
+        return;
+    }
+    this._interactionMode = value;
+    this.render();
+  }  
   // #endregion
 
   // #region rx
@@ -327,6 +342,35 @@ export class GltfViewer {
   // #endregion
 
   // #region canvas event handlers 
+  private onCanvasMouseMove = (e: MouseEvent) => {   
+    if (e.buttons) {
+      return;
+    } 
+
+    clearTimeout(this._pointerEventHelper.mouseMoveTimer);
+    this._pointerEventHelper.mouseMoveTimer = null;
+    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
+      const x = e.clientX;
+      const y = e.clientY;
+
+      switch (this._interactionMode) {
+        case "select_mesh":  
+          this.highlightMeshAtPoint(x, y);      
+          break;
+        case "select_vertex":
+          this.highlightMeshAtPoint(x, y);
+          this.setSnapMarkerAtPoint(x, y);
+          break;
+        case "select_sprite":
+          // TODO: highlight sprite
+          break;
+        case "measure_distance":
+          this.setSnapMarkerAtPoint(x, y);
+          break;
+      }
+    }, 30);
+  };
+
   private onCanvasPointerDown = (e: PointerEvent) => {
     this._pointerEventHelper.downX = e.clientX;
     this._pointerEventHelper.downY = e.clientY;
@@ -342,41 +386,32 @@ export class GltfViewer {
       return;
     }
 
-    if (this._measureMode) {
-      this.setDistanceMarkerAtPoint(x, y);
-    } else {
-      if (this._pointerEventHelper.waitForDouble) {
-        this.isolateSelectedMeshes();
-        this._pointerEventHelper.waitForDouble = false;
-      } else {
-        this._pointerEventHelper.waitForDouble = true;
-        setTimeout(() => {
+    switch (this._interactionMode) {
+      case "select_mesh":    
+        if (this._pointerEventHelper.waitForDouble) {
+          this.isolateSelectedMeshes();
           this._pointerEventHelper.waitForDouble = false;
-        }, 300);
-        this.selectMeshAtPoint(x, y, e.ctrlKey);
-      }
+        } else {
+          this._pointerEventHelper.waitForDouble = true;
+          setTimeout(() => {
+            this._pointerEventHelper.waitForDouble = false;
+          }, 300);
+          this.selectMeshAtPoint(x, y, e.ctrlKey);
+        }      
+        break;
+      case "select_vertex":
+        this.setSelectedSnapMarkerAtPoint(x, y);
+        break;
+      case "select_sprite":
+        // TODO: add sprite to selected
+        break;
+      case "measure_distance":
+        this.setDistanceMarkerAtPoint(x, y);
+        break;
     }
 
     this._pointerEventHelper.downX = null;
     this._pointerEventHelper.downY = null;
-  };
-
-  private onCanvasMouseMove = (e: MouseEvent) => {   
-    if (e.buttons) {
-      return;
-    } 
-
-    clearTimeout(this._pointerEventHelper.mouseMoveTimer);
-    this._pointerEventHelper.mouseMoveTimer = null;
-    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
-      const x = e.clientX;
-      const y = e.clientY;
-      this.highlightMeshAtPoint(x, y);
-
-      if (this._measureMode) {
-        this.setSnapMarkerAtPoint(x, y);
-      }
-    }, 30);
   };
 
   private addCanvasEventListeners() {
@@ -608,6 +643,42 @@ export class GltfViewer {
 
     return snapPoint;
   }
+  // #endregion  
+
+  // #region hud methods
+  private initHud() {
+    this._hudScene = new HudScene();
+    this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
+    this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+    this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
+  }
+
+  private setSnapMarkerAtPoint(clientX: number, clientY: number) {    
+    if (!this._renderer || !this._pickingScene) {
+      return;
+    } 
+    const snapPoint = this.getSnapPointAt(clientX, clientY);    
+    this._hudScene.pointSnap.setSnapPointMarker(snapPoint);
+    this.render(); 
+  }
+  
+  private setSelectedSnapMarkerAtPoint(clientX: number, clientY: number) {    
+    if (!this._renderer || !this._pickingScene) {
+      return;
+    } 
+    const snapPoint = this.getSnapPointAt(clientX, clientY);    
+    this._hudScene.pointSnap.setSelectedPoints(snapPoint ? [snapPoint] : []);
+    this.render(); 
+  }
+
+  private setDistanceMarkerAtPoint(clientX: number, clientY: number) { 
+    if (!this._renderer || !this._pickingScene) {
+      return;
+    }       
+    const snapPoint = this.getSnapPointAt(clientX, clientY); 
+    this._hudScene.distanceMeasurer.setEndMarker(snapPoint?.position.toVector3()); 
+    this.render(); 
+  }  
   // #endregion
   
   // #region item selection/isolation   
@@ -619,26 +690,10 @@ export class GltfViewer {
   }
 
   private findAndSelectMeshes(ids: string[], isolate: boolean) {    
-    const { found } = this.findMeshesByIds(new Set<string>(ids));
+    const { found } = this._loader.findMeshesByIds(new Set<string>(ids));
     if (found.length) {
       this.selectMeshes(found, false, isolate);
     }
-  }
-
-  private findMeshesByIds(ids: Set<string>): {found: MeshBgSm[]; notFound: Set<string>} {
-    const found: MeshBgSm[] = [];
-    const notFound = new Set<string>();
-
-    ids.forEach(x => {
-      const meshes = this._loader.getLoadedMeshesById(x);
-      if (meshes?.length) {
-        found.push(...meshes);
-      } else {
-        notFound.add(x);
-      }
-    });
-
-    return {found, notFound};
   }
 
   private removeSelection() {
@@ -775,32 +830,5 @@ export class GltfViewer {
       this._highlightedMesh = null;
     }
   }
-  // #endregion
-
-  // #region hud methods
-  private initHud() {
-    this._hudScene = new HudScene();
-    this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
-    this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
-    this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
-  }
-
-  private setSnapMarkerAtPoint(clientX: number, clientY: number) {    
-    if (!this._renderer || !this._pickingScene) {
-      return;
-    } 
-    const snapPoint = this.getSnapPointAt(clientX, clientY);    
-    this._hudScene.pointSnap.setSnapMarker(snapPoint);
-    this.render(); 
-  }
-
-  private setDistanceMarkerAtPoint(clientX: number, clientY: number) { 
-    if (!this._renderer || !this._pickingScene) {
-      return;
-    }       
-    const snapPoint = this.getSnapPointAt(clientX, clientY); 
-    this._hudScene.distanceMeasurer.setEndMarker(snapPoint?.position.toVector3()); 
-    this.render(); 
-  }  
   // #endregion
 }
