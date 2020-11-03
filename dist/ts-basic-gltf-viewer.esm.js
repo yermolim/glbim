@@ -2163,9 +2163,11 @@ class HudMarkers extends HudTool {
         this._tempVec2 = new Vector2();
         this._markersChange = new BehaviorSubject([]);
         this._markersSelectionChange = new BehaviorSubject([]);
-        this._subjects.push(this._markersChange, this._markersSelectionChange);
+        this._markersHighlightChange = new Subject();
+        this._subjects.push(this._markersChange, this._markersSelectionChange, this._markersHighlightChange);
         this.markersChange$ = this._markersChange.asObservable();
         this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
+        this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
         this.initSprites();
     }
     addMarker(marker) {
@@ -2218,6 +2220,7 @@ class HudMarkers extends HudTool {
             return;
         }
         this._highlightedMarker = marker;
+        this.emitHighlighted();
         this.updateSprites();
     }
     addMarkerToSelection(markerId) {
@@ -2300,6 +2303,9 @@ class HudMarkers extends HudTool {
     }
     emitMarkers() {
         this._markersChange.next(this._markers);
+    }
+    emitHighlighted() {
+        this._markersHighlightChange.next(this._highlightedMarker);
     }
     emitSelected() {
         this._markersSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
@@ -2958,6 +2964,7 @@ class GltfViewer {
         this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
         this.markersChange$ = this._hudScene.markers.markersChange$;
         this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
+        this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
         this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
     }
     setVertexSnapAtPoint(clientX, clientY) {

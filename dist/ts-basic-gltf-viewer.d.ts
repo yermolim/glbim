@@ -106,6 +106,7 @@ export declare class GltfViewer {
 	snapPointSelectionChange$: Observable<SnapPoint[]>;
 	markersChange$: Observable<MarkerInfo[]>;
 	markersSelectionChange$: Observable<MarkerInfo[]>;
+	markersHighlightChange$: Observable<MarkerInfo>;
 	distanceMeasureChange$: Observable<Distance>;
 	private _optionsChange;
 	private _selectionChange;

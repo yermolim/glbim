@@ -37,6 +37,7 @@ export class GltfViewer {
   
   markersChange$: Observable<MarkerInfo[]>;
   markersSelectionChange$: Observable<MarkerInfo[]>;
+  markersHighlightChange$: Observable<MarkerInfo>;
 
   distanceMeasureChange$: Observable<Distance>;
   // #endregion  
@@ -661,10 +662,14 @@ export class GltfViewer {
   // common
   private initHud() {
     this._hudScene = new HudScene();
+
     this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
     this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+
     this.markersChange$ = this._hudScene.markers.markersChange$;
     this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
+    this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
+
     this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
   }
 

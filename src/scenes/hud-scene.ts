@@ -662,6 +662,7 @@ class HudDistanceMeasurer extends HudTool {
 class HudMarkers extends HudTool { 
   markersChange$: Observable<MarkerInfo[]>;
   markersSelectionChange$: Observable<MarkerInfo[]>;
+  markersHighlightChange$: Observable<MarkerInfo>;
 
   private readonly _spriteSize = 16;
 
@@ -669,6 +670,7 @@ class HudMarkers extends HudTool {
 
   private _markersChange: BehaviorSubject<MarkerInfo[]>;  
   private _markersSelectionChange: BehaviorSubject<MarkerInfo[]>;
+  private _markersHighlightChange: Subject<MarkerInfo>;
   
   private _markers: MarkerInfo[] = [];  
   private _highlightedMarker: MarkerInfo;
@@ -683,9 +685,11 @@ class HudMarkers extends HudTool {
 
     this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
     this._markersSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
-    this._subjects.push(this._markersChange, this._markersSelectionChange);    
+    this._markersHighlightChange = new Subject<MarkerInfo>();
+    this._subjects.push(this._markersChange, this._markersSelectionChange, this._markersHighlightChange);    
     this.markersChange$ = this._markersChange.asObservable();
     this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
+    this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
 
     this.initSprites();
   }
@@ -745,6 +749,7 @@ class HudMarkers extends HudTool {
     }
 
     this._highlightedMarker = marker;
+    this.emitHighlighted();
     this.updateSprites();
   }
 
@@ -837,6 +842,10 @@ class HudMarkers extends HudTool {
 
   private emitMarkers() {
     this._markersChange.next(this._markers);
+  }
+  
+  private emitHighlighted() {
+    this._markersHighlightChange.next(this._highlightedMarker);
   }
 
   private emitSelected() {
