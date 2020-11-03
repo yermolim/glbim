@@ -17,6 +17,8 @@ export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-righ
 export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
 
 export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
+
+export type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3";
 // #endregion
 
 // #region interfaces
@@ -65,12 +67,12 @@ export interface RenderGeometry {
   indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
 }
 
-export interface WarningInfo {
+export interface MarkerInfo {
   id: string;
   meshId: string;
   description: string;
-  importance: 0 | 1 | 2 | 3;
-  position: Vector3;
+  position: Vec4DoubleCS;
+  type: MarkerType;
 }
 
 export interface SnapPoint {

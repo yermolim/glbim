@@ -1,4 +1,5 @@
-import { Color, CanvasTexture } from "three";
+import { Color, CanvasTexture, Vector4 } from "three";
+import { MarkerType } from "../common-types";
 
 export class CanvasTextureBuilder { 
 
@@ -25,7 +26,7 @@ export class CanvasTextureBuilder {
     return new CanvasTexture(canvas);
   }  
 
-  static buildWarningMarkersTexture(): CanvasTexture {
+  static buildSpriteAtlasTexture(): {texture: CanvasTexture; uvMap: Map<MarkerType, Vector4>} {
     const canvas = document.createElement("canvas");
     canvas.width = 128;
     canvas.height = 128;
@@ -36,7 +37,16 @@ export class CanvasTextureBuilder {
     CanvasTextureBuilder.drawWarningSign(ctx, "orange", 64, 0, 64);
     CanvasTextureBuilder.drawWarningSign(ctx, "red", 64, 64, 64);
 
-    return new CanvasTexture(canvas);
+    const uvMap = new Map<MarkerType, Vector4>();
+    uvMap.set("warn_0", new Vector4(0, 0.5, 0.5, 1));
+    uvMap.set("warn_1", new Vector4(0.5, 0.5, 1, 1));
+    uvMap.set("warn_2", new Vector4(0, 0, 0.5, 0.5));
+    uvMap.set("warn_3", new Vector4(0.5, 0, 1, 0.5));
+
+    return {
+      texture: new CanvasTexture(canvas),
+      uvMap,
+    };
   }
     
   static buildCircleTexture(size: number, color: number): CanvasTexture {

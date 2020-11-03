@@ -7,7 +7,7 @@ import { Scene, Vector2, Vector3, Vector4, Matrix4, Object3D,
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
-import { Vec4DoubleCS, Distance, WarningInfo, SnapPoint } from "../common-types";
+import { Vec4DoubleCS, Distance, MarkerInfo, SnapPoint, MarkerType } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { CanvasTextureBuilder } from "../helpers/canvas-texture-builder";
 
@@ -21,7 +21,7 @@ interface IHudElement {
 }
 
 interface HudInstancedMarkerData {
-  position: Vector3; 
+  position: Vec4DoubleCS; 
   uv: Vector4; 
   scale: number;
 }
@@ -149,7 +149,7 @@ class HudInstancedMarker implements IHudElement {
     this._sprite.geometry["instanceCount"] = data.length;
     data.forEach((d, i) => {
       if (d.position) {
-        instancePosition.setXYZ(i, d.position.x, d.position.y, d.position.z);
+        instancePosition.setXYZ(i, d.position.x, d.position.y_Yup, d.position.z_Yup);
       } else {        
         instancePosition.setXYZ(i, 0, 0, 0);
       }
@@ -439,7 +439,7 @@ class HudPointSnap extends HudTool {
   snapPointChange$: Observable<SnapPoint>;
   snapPointSelectionChange$: Observable<SnapPoint[]>;
   
-  private _snapPointChange = new Subject<SnapPoint>();  
+  private _snapPointChange: Subject<SnapPoint>;  
   private _snapPointSelectionChange: BehaviorSubject<SnapPoint[]>;
 
   private _selectedPoints = new Map<string, SnapPoint>();
@@ -457,7 +457,7 @@ class HudPointSnap extends HudTool {
     this.initSprites();    
   }
     
-  setSnapPointMarker(snapPoint: SnapPoint) {
+  setSnapPoint(snapPoint: SnapPoint) {
     if (snapPoint) {
       this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
       this._snapPointChange.next(snapPoint);
@@ -467,50 +467,50 @@ class HudPointSnap extends HudTool {
     }
   }
 
-  resetSnapPointMarker() {
+  resetSnapPoint() {
     this._snapPointChange.next(null);
     this.getHudElement("s_snap").reset(); 
   }
 
-  addSelectedPoint(point: SnapPoint) {
+  addSnapPointToSelected(point: SnapPoint) {
     if (!point) {
       return;
     }
     this._selectedPoints.set(`${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`, point);
-    this.updateSelectedPointMarkers();
+    this.updateSelectedPointSprites();
   }
 
-  removeSelectedPoint(point: SnapPoint) {    
+  removeSnapPointFromSelected(point: SnapPoint) {    
     if (!point) {
       return;
     }
     const key = `${point.position.x}|${point.position.y_Yup}|${point.position.z_Yup}|${point.meshId}`;
     if (this._selectedPoints.has(key)) {
       this._selectedPoints.delete(key);
-      this.updateSelectedPointMarkers();
+      this.updateSelectedPointSprites();
     }
   }
 
-  setSelectedPoints(points: SnapPoint[]) {
+  setSelectedSnapPoints(points: SnapPoint[]) {
     if (!points?.length) {
-      this.resetSelectedPoints();
+      this.resetSelectedSnapPoints();
       return;
     }
     this._selectedPoints.clear();
     points.forEach(x => {
       this._selectedPoints.set(`${x.position.x}|${x.position.y_Yup}|${x.position.z_Yup}|${x.meshId}`, x);
     });
-    this.updateSelectedPointMarkers();
+    this.updateSelectedPointSprites();
   }
 
-  resetSelectedPoints() {
+  resetSelectedSnapPoints() {
     this._selectedPoints.clear();
-    this.updateSelectedPointMarkers();
+    this.updateSelectedPointSprites();
   }
   
   reset() {
-    this.resetSelectedPoints();
-    this.resetSnapPointMarker();
+    this.resetSelectedSnapPoints();
+    this.resetSnapPoint();
   } 
   
   private initSprites() {
@@ -522,18 +522,20 @@ class HudPointSnap extends HudTool {
       this._toolZIndex, this._cameraZIndex), "s_snap");
   }  
   
-  private updateSelectedPointMarkers() {
+  private updateSelectedPointSprites() {
+    const points: SnapPoint[] = new Array(this._selectedPoints.size);
     const instanceData: HudInstancedMarkerData[] = new Array(this._selectedPoints.size);
     let i = 0;
     this._selectedPoints.forEach(v => {
+      points[i] = v;
       instanceData[i++] = {
-        position: v.position.toVector3(),
+        position: v.position,
         scale: 1,
         uv: null,
       };
     });
     this.getHudElement("s_snap_selection").set(instanceData);
-    this._snapPointSelectionChange.next([...this._selectedPoints.values()]);
+    this._snapPointSelectionChange.next(points);
   }
 }
 
@@ -657,12 +659,20 @@ class HudDistanceMeasurer extends HudTool {
   }
 }
 
-class HudWarnings extends HudTool {  
+class HudMarkers extends HudTool { 
+  markersChange$: Observable<MarkerInfo[]>;
+  markersSelectionChange$: Observable<MarkerInfo[]>;
+
   private readonly _spriteSize = 16;
+
+  private _uvMap: Map<MarkerType, Vector4>;
+
+  private _markersChange: BehaviorSubject<MarkerInfo[]>;  
+  private _markersSelectionChange: BehaviorSubject<MarkerInfo[]>;
   
-  private _warnings = new Map<string, WarningInfo>();  
-  private _selectedWarnings = new Set<WarningInfo>();  
-  private _hoveredWarning: WarningInfo;
+  private _markers: MarkerInfo[] = [];  
+  private _highlightedMarker: MarkerInfo;
+  private _selectedMarkerIds = new Set<string>();  
 
   private _tempVec3 = new Vector3();
   private _tempVec2 = new Vector2();
@@ -671,72 +681,120 @@ class HudWarnings extends HudTool {
     toolZIndex: number, cameraZIndex: number) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
+    this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
+    this._markersSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
+    this._subjects.push(this._markersChange, this._markersSelectionChange);    
+    this.markersChange$ = this._markersChange.asObservable();
+    this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
+
     this.initSprites();
-    
-    // TEMP
-    // const warnings = new Array(10000);
-    // for (let i = 0; i < 10000; i++) {
-    //   warnings[i] = {
-    //     id: i + "",
-    //     position: new Vector3(Math.random() * 100 + 150, Math.random() * 100 + 550, Math.random() * 100 -50),
-    //     description: "",
-    //     meshId: null,
-    //     importance: Math.floor(Math.random() * 3.99),
-    //   };
-    // }
-    // this.setWarnings(warnings); 
-
-    // setInterval(() => {
-    //   const w = this.getWarningAtCanvasPoint(new Vector2(0, 0));
-    //   if (w) {       
-    //     this._hoveredWarning = w;
-    //     this.updateSprites();
-    //   }
-    // }, 20);
-    // TEMP END
   }
 
-  addWarning(warning: WarningInfo) {
-    if (!warning) {
+  addMarker(marker: MarkerInfo) {
+    if (!marker) {
       return;
     }
-    this._warnings.set(warning.id, warning);
-    this.updateSprites();
+    const found = this._markers.find(x => x.id === marker.id);
+    if (!found) {
+      this._markers.push(marker);
+      this.emitMarkers();
+      this.updateSprites();
+    }
   }
 
-  removeWarning(warningId: string) {
-    this._warnings.delete(warningId);
-    this.updateSprites();
+  removeMarker(markerId: string) {
+    if (markerId) {
+      this._markers = this._markers.filter(x => x.id !== markerId);
+      if (this._selectedMarkerIds.delete(markerId)) {
+        this.emitSelected();
+      }
+      this.emitMarkers();
+      this.updateSprites();
+    }
   }
 
-  setWarnings(warnings: WarningInfo[]) {
-    if (!warnings) {
+  setMarkers(markers: MarkerInfo[]) {
+    if (!markers?.length) {
+      this.resetMarkers();
       return;
     }
-    warnings.forEach(x => {      
-      this._warnings.set(x.id, x);
-    });
+    this._markers = markers;
+    if (this._selectedMarkerIds.size) {
+      this._selectedMarkerIds.clear();
+      this.emitSelected();
+    }
+    this.emitMarkers();
     this.updateSprites();
   }
 
-  resetWarnings() {
-    this._warnings.clear();
+  resetMarkers() {
+    if (this._selectedMarkerIds.size) {      
+      this._selectedMarkerIds.clear();
+      this.emitSelected();
+    }
+    if (this._markers.length) {
+      this._markers.length = 0;
+      this.emitMarkers();
+    }
     this.updateSprites();
   }
 
-  getWarningAtCanvasPoint(canvasPositionZeroCenter: Vector2): WarningInfo {
-    if (this._warnings.size) {
+  highlightMarker(marker: MarkerInfo) {
+    if (marker === this._highlightedMarker) {
+      return;
+    }
+
+    this._highlightedMarker = marker;
+    this.updateSprites();
+  }
+
+  addMarkerToSelection(markerId: string) {
+    if (!this._selectedMarkerIds.has(markerId)) {
+      this._selectedMarkerIds.add(markerId);
+      this.updateSprites();
+      this.emitSelected();
+    }
+  }
+
+  removeMarkerFromSelection(markerId: string) {
+    if (this._selectedMarkerIds.delete(markerId)) {
+      this.updateSprites();
+      this.emitSelected();
+    }
+  }
+
+  setSelectedMarkers(markerIds: string[]) {
+    this._selectedMarkerIds.clear();
+    if (markerIds?.length) {  
+      markerIds.forEach(x => this._selectedMarkerIds.add(x));
+    }    
+    this.updateSprites();
+    this.emitSelected();
+  }
+
+  resetSelectedMarkers() {   
+    if (this._selectedMarkerIds.size) {
+      this._selectedMarkerIds.clear();
+      this.updateSprites();
+      this.emitSelected();
+    } 
+  }
+
+  getMarkerAtCanvasPoint(canvasPositionZeroCenter: Vector2): MarkerInfo {
+    if (this._markers.length) {
       const maxDistance = this._spriteSize / 2;
       
       // for (const warning of [...this._warnings.values()].reverse()) {      
-      for (const warning of this._warnings.values()) {      
-        this._tempVec3.copy(warning.position).applyMatrix4(this._hudProjectionMatrix);
+      for (let i = this._markers.length - 1; i >= 0; i--) {      
+        const marker = this._markers[i];
+        this._tempVec3.set(marker.position.x, marker.position.y_Yup, marker.position.z_Yup)
+          .applyMatrix4(this._hudProjectionMatrix);
         if (this._tempVec3.z > 1) {
           continue;
         }
         this._tempVec2.set(this._tempVec3.x, this._tempVec3.y);
         if (this._tempVec2.distanceTo(canvasPositionZeroCenter) < maxDistance){
-          return warning;
+          return marker;
         }
       }
     }
@@ -744,38 +802,45 @@ class HudWarnings extends HudTool {
   }
 
   private initSprites() {
+    const {texture, uvMap} =  CanvasTextureBuilder.buildSpriteAtlasTexture();
+    this._uvMap = uvMap;
     this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution,
-      CanvasTextureBuilder.buildWarningMarkersTexture(), 
-      this._spriteSize, this._toolZIndex, this._cameraZIndex, true, 1000), "s_warn");
+      texture, this._spriteSize, this._toolZIndex, this._cameraZIndex, true, 1000), "s_warn");
   }  
 
   private updateSprites() {
-    const instanceData: HudInstancedMarkerData[] = new Array(this._warnings.size);
-    let i = 0;
-    this._warnings.forEach(v => {
-      const uv = new Vector4();
-      switch (v.importance) {
-        case 0: 
-          uv.set(0, 0.5, 0.5, 1);
-          break;
-        case 1: 
-          uv.set(0.5, 0.5, 1, 1);
-          break;
-        case 2: 
-          uv.set(0, 0, 0.5, 0.5);
-          break;
-        case 3: 
-          uv.set(0.5, 0, 1, 0.5);
-          break;
+    this._markers.sort((a, b) => { 
+      if (a.type === b.type) {
+        return 0;
+      } else if (a.type > b.type) {
+        return 1;
+      } else {
+        return -1;
       }
+    });
+
+    const instanceData: HudInstancedMarkerData[] = new Array(this._markers.length);
+    let i = 0;
+    this._markers.forEach(v => {
       instanceData[i++] = {
         position: v.position,
-        // scale: this._selectedWarnings.has(v) ? 1.5 : 1,
-        scale: this._hoveredWarning === v ? 1.5 : 1,
-        uv
+        scale: this._highlightedMarker === v 
+          ? 1.5 
+          : this._selectedMarkerIds.has(v.id)
+            ? 1.25
+            : 1,
+        uv: this._uvMap.get(v.type),
       };
     });
     this.getHudElement("s_warn").set(instanceData);
+  }
+
+  private emitMarkers() {
+    this._markersChange.next(this._markers);
+  }
+
+  private emitSelected() {
+    this._markersSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
   }
 }
 // #endregion
@@ -800,9 +865,9 @@ export class HudScene {
     return this._distanceMeasurer;
   }
 
-  private _warnings: HudWarnings;
-  get warnings(): HudWarnings {
-    return this._warnings;
+  private _markers: HudMarkers;
+  get markers(): HudMarkers {
+    return this._markers;
   }
 
   constructor() { 
@@ -810,7 +875,7 @@ export class HudScene {
       this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ);
     this._distanceMeasurer = new HudDistanceMeasurer(this._scene,
       this._hudResolution, this._hudProjectionMatrix, 8, this._cameraZ);
-    this._warnings = new HudWarnings(this._scene,
+    this._markers = new HudMarkers(this._scene,
       this._hudResolution, this._hudProjectionMatrix, 1, this._cameraZ);
   }
 
@@ -821,8 +886,8 @@ export class HudScene {
     this._distanceMeasurer.destroy();
     this._distanceMeasurer = null;
 
-    this._warnings.destroy();
-    this._warnings = null;
+    this._markers.destroy();
+    this._markers = null;
 
     this._scene = null;
   }
