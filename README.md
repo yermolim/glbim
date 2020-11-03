@@ -22,4 +22,3 @@ if I find time for this, or if there are any requests, I will complete the descr
 dependencies:
 - <a href="https://github.com/mrdoob/three.js">three.js<a>
 - <a href="https://github.com/ReactiveX/rxjs">RxJS<a>
-- <a href="https://github.com/marcj/css-element-queries">CSS Element Queries<a>
