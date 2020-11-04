@@ -69,7 +69,6 @@ export interface RenderGeometry {
 
 export interface MarkerInfo {
   id: string;
-  meshId: string;
   description: string;
   position: Vec4DoubleCS;
   type: MarkerType;

@@ -21,23 +21,24 @@ export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMod
 
 export class GltfViewer {
   // #region public observables
-  optionsChange$: Observable<GltfViewerOptions>;
-  selectionChange$: Observable<Set<string>>;
-  manualSelectionChange$: Observable<Set<string>>; 
+  optionsChange$: Observable<GltfViewerOptions>;  
   lastFrameTime$: Observable<number>;
   
   loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
-  openedModelsChange$: Observable<ModelOpenedInfo[]>; 
+  modelsOpenedChange$: Observable<ModelOpenedInfo[]>; 
 
-  snapPointChange$: Observable<SnapPoint>;
-  snapPointSelectionChange$: Observable<SnapPoint[]>;  
+  meshesSelectionChange$: Observable<Set<string>>;
+  meshesManualSelectionChange$: Observable<Set<string>>; 
+
+  snapPointHighlightChange$: Observable<SnapPoint>;
+  snapPointManualSelectionChange$: Observable<SnapPoint[]>;  
   
   markersChange$: Observable<MarkerInfo[]>;
-  markersSelectionChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
+  markersManualSelectionChange$: Observable<MarkerInfo[]>;
 
   distanceMeasureChange$: Observable<Distance>;
   // #endregion  
@@ -340,8 +341,8 @@ export class GltfViewer {
   // #region rx
   private initObservables() {
     this.optionsChange$ = this._optionsChange.asObservable();
-    this.selectionChange$ = this._selectionChange.asObservable();
-    this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
+    this.meshesSelectionChange$ = this._selectionChange.asObservable();
+    this.meshesManualSelectionChange$ = this._manualSelectionChange.asObservable();
     this.lastFrameTime$ = this._lastFrameTime.asObservable();
   }
 
@@ -469,7 +470,7 @@ export class GltfViewer {
     this.modelLoadingStart$ = this._loader.modelLoadingStart$;
     this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
     this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
-    this.openedModelsChange$ = this._loader.openedModelsChange$;  
+    this.modelsOpenedChange$ = this._loader.modelsOpenedChange$;  
   }
 
   // #region renderer
@@ -663,11 +664,11 @@ export class GltfViewer {
   private initHud() {
     this._hudScene = new HudScene();
 
-    this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
-    this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+    this.snapPointHighlightChange$ = this._hudScene.pointSnap.snapPointHighlightChange$;
+    this.snapPointManualSelectionChange$ = this._hudScene.pointSnap.snapPointManualSelectionChange$;
 
     this.markersChange$ = this._hudScene.markers.markersChange$;
-    this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
+    this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
     this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
 
     this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;

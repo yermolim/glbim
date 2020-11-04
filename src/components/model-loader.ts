@@ -15,7 +15,7 @@ export class ModelLoader {
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
-  openedModelsChange$: Observable<ModelOpenedInfo[]>;
+  modelsOpenedChange$: Observable<ModelOpenedInfo[]>;
   // #endregion  
   
   // #region private rx subjects
@@ -23,7 +23,7 @@ export class ModelLoader {
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
   private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
-  private _openedModelsChange = new BehaviorSubject<ModelOpenedInfo[]>([]);  
+  private _modelsOpenedChange = new BehaviorSubject<ModelOpenedInfo[]>([]);  
   // #endregion
 
   private _loader: GLTFLoader;  
@@ -48,7 +48,7 @@ export class ModelLoader {
   }
 
   get openedModelInfos(): ModelOpenedInfo[] {
-    return this._openedModelsChange.getValue();
+    return this._modelsOpenedChange.getValue();
   }
   
   get loadingInProgress(): boolean {
@@ -78,7 +78,7 @@ export class ModelLoader {
     this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
     this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
     this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
-    this.openedModelsChange$ = this._openedModelsChange.asObservable();
+    this.modelsOpenedChange$ = this._modelsOpenedChange.asObservable();
 
     const loader = new GLTFLoader();
     if (dracoDecoderPath) {
@@ -95,7 +95,7 @@ export class ModelLoader {
     this._modelLoadingStart.complete();
     this._modelLoadingProgress.complete();
     this._modelLoadingEnd.complete();
-    this._openedModelsChange.complete();  
+    this._modelsOpenedChange.complete();  
     
     this._loadedMeshes?.forEach(x => {
       x.geometry.dispose();
@@ -305,6 +305,6 @@ export class ModelLoader {
     for (const [ modelGuid, model ] of this._loadedModelsByGuid) {
       modelOpenedInfos.push({guid: modelGuid, name: model.name, handles: model.handles});
     } 
-    this._openedModelsChange.next(modelOpenedInfos);
+    this._modelsOpenedChange.next(modelOpenedInfos);
   }
 }

@@ -35,7 +35,6 @@ export interface ColoringInfo {
 }
 export interface MarkerInfo {
 	id: string;
-	meshId: string;
 	description: string;
 	position: Vec4DoubleCS;
 	type: MarkerType;
@@ -94,19 +93,19 @@ export declare class GltfViewerOptions {
 }
 export declare class GltfViewer {
 	optionsChange$: Observable<GltfViewerOptions>;
-	selectionChange$: Observable<Set<string>>;
-	manualSelectionChange$: Observable<Set<string>>;
 	lastFrameTime$: Observable<number>;
 	loadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
 	modelLoadingProgress$: Observable<ModelLoadingInfo>;
-	openedModelsChange$: Observable<ModelOpenedInfo[]>;
-	snapPointChange$: Observable<SnapPoint>;
-	snapPointSelectionChange$: Observable<SnapPoint[]>;
+	modelsOpenedChange$: Observable<ModelOpenedInfo[]>;
+	meshesSelectionChange$: Observable<Set<string>>;
+	meshesManualSelectionChange$: Observable<Set<string>>;
+	snapPointHighlightChange$: Observable<SnapPoint>;
+	snapPointManualSelectionChange$: Observable<SnapPoint[]>;
 	markersChange$: Observable<MarkerInfo[]>;
-	markersSelectionChange$: Observable<MarkerInfo[]>;
 	markersHighlightChange$: Observable<MarkerInfo>;
+	markersManualSelectionChange$: Observable<MarkerInfo[]>;
 	distanceMeasureChange$: Observable<Distance>;
 	private _optionsChange;
 	private _selectionChange;

@@ -199,7 +199,7 @@ class ModelLoader {
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
         this._modelLoadingProgress = new Subject();
-        this._openedModelsChange = new BehaviorSubject([]);
+        this._modelsOpenedChange = new BehaviorSubject([]);
         this._loadingInProgress = false;
         this._loadingQueue = [];
         this._loadedModels = new Set();
@@ -217,7 +217,7 @@ class ModelLoader {
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
         this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
         this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
-        this.openedModelsChange$ = this._openedModelsChange.asObservable();
+        this.modelsOpenedChange$ = this._modelsOpenedChange.asObservable();
         const loader = new GLTFLoader();
         if (dracoDecoderPath) {
             const dracoLoader = new DRACOLoader();
@@ -234,7 +234,7 @@ class ModelLoader {
         return this._loadedMeshesArray;
     }
     get openedModelInfos() {
-        return this._openedModelsChange.getValue();
+        return this._modelsOpenedChange.getValue();
     }
     get loadingInProgress() {
         return this._loadingInProgress;
@@ -245,7 +245,7 @@ class ModelLoader {
         this._modelLoadingStart.complete();
         this._modelLoadingProgress.complete();
         this._modelLoadingEnd.complete();
-        this._openedModelsChange.complete();
+        this._modelsOpenedChange.complete();
         (_a = this._loadedMeshes) === null || _a === void 0 ? void 0 : _a.forEach(x => {
             x.geometry.dispose();
             x.material.dispose();
@@ -429,7 +429,7 @@ class ModelLoader {
         for (const [modelGuid, model] of this._loadedModelsByGuid) {
             modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
         }
-        this._openedModelsChange.next(modelOpenedInfos);
+        this._modelsOpenedChange.next(modelOpenedInfos);
     }
 }
 
@@ -1980,25 +1980,25 @@ class HudPointSnap extends HudTool {
     constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
         this._selectedPoints = new Map();
-        this._snapPointChange = new Subject();
-        this._snapPointSelectionChange = new BehaviorSubject([]);
-        this._subjects.push(this._snapPointChange, this._snapPointSelectionChange);
-        this.snapPointChange$ = this._snapPointChange.asObservable();
-        this.snapPointSelectionChange$ = this._snapPointSelectionChange.asObservable();
+        this._snapPointHighlightChange = new Subject();
+        this._snapPointManualSelectionChange = new BehaviorSubject([]);
+        this._subjects.push(this._snapPointHighlightChange, this._snapPointManualSelectionChange);
+        this.snapPointHighlightChange$ = this._snapPointHighlightChange.asObservable();
+        this.snapPointManualSelectionChange$ = this._snapPointManualSelectionChange.asObservable();
         this.initSprites();
     }
     setSnapPoint(snapPoint) {
         if (snapPoint) {
             this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
-            this._snapPointChange.next(snapPoint);
+            this._snapPointHighlightChange.next(snapPoint);
         }
         else {
             this.getHudElement("s_snap").reset();
-            this._snapPointChange.next(null);
+            this._snapPointHighlightChange.next(null);
         }
     }
     resetSnapPoint() {
-        this._snapPointChange.next(null);
+        this._snapPointHighlightChange.next(null);
         this.getHudElement("s_snap").reset();
     }
     addSnapPointToSelected(point) {
@@ -2054,7 +2054,7 @@ class HudPointSnap extends HudTool {
             };
         });
         this.getHudElement("s_snap_selection").set(instanceData);
-        this._snapPointSelectionChange.next(points);
+        this._snapPointManualSelectionChange.next(points);
     }
 }
 class HudDistanceMeasurer extends HudTool {
@@ -2162,11 +2162,11 @@ class HudMarkers extends HudTool {
         this._tempVec3 = new Vector3();
         this._tempVec2 = new Vector2();
         this._markersChange = new BehaviorSubject([]);
-        this._markersSelectionChange = new BehaviorSubject([]);
+        this._markersManualSelectionChange = new BehaviorSubject([]);
         this._markersHighlightChange = new Subject();
-        this._subjects.push(this._markersChange, this._markersSelectionChange, this._markersHighlightChange);
+        this._subjects.push(this._markersChange, this._markersManualSelectionChange, this._markersHighlightChange);
         this.markersChange$ = this._markersChange.asObservable();
-        this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
+        this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
         this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
         this.initSprites();
     }
@@ -2308,7 +2308,7 @@ class HudMarkers extends HudTool {
         this._markersHighlightChange.next(this._highlightedMarker);
     }
     emitSelected() {
-        this._markersSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
+        this._markersManualSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
     }
 }
 class HudScene {
@@ -2771,8 +2771,8 @@ class GltfViewer {
     }
     initObservables() {
         this.optionsChange$ = this._optionsChange.asObservable();
-        this.selectionChange$ = this._selectionChange.asObservable();
-        this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
+        this.meshesSelectionChange$ = this._selectionChange.asObservable();
+        this.meshesManualSelectionChange$ = this._manualSelectionChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
     }
     closeSubjects() {
@@ -2813,7 +2813,7 @@ class GltfViewer {
         this.modelLoadingStart$ = this._loader.modelLoadingStart$;
         this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
         this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
-        this.openedModelsChange$ = this._loader.openedModelsChange$;
+        this.modelsOpenedChange$ = this._loader.modelsOpenedChange$;
     }
     initRenderer() {
         if (this._renderer) {
@@ -2960,10 +2960,10 @@ class GltfViewer {
     }
     initHud() {
         this._hudScene = new HudScene();
-        this.snapPointChange$ = this._hudScene.pointSnap.snapPointChange$;
-        this.snapPointSelectionChange$ = this._hudScene.pointSnap.snapPointSelectionChange$;
+        this.snapPointHighlightChange$ = this._hudScene.pointSnap.snapPointHighlightChange$;
+        this.snapPointManualSelectionChange$ = this._hudScene.pointSnap.snapPointManualSelectionChange$;
         this.markersChange$ = this._hudScene.markers.markersChange$;
-        this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
+        this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
         this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
         this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
     }

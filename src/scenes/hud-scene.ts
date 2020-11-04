@@ -436,11 +436,11 @@ class HudTool {
 }
 
 class HudPointSnap extends HudTool { 
-  snapPointChange$: Observable<SnapPoint>;
-  snapPointSelectionChange$: Observable<SnapPoint[]>;
+  snapPointHighlightChange$: Observable<SnapPoint>;
+  snapPointManualSelectionChange$: Observable<SnapPoint[]>;
   
-  private _snapPointChange: Subject<SnapPoint>;  
-  private _snapPointSelectionChange: BehaviorSubject<SnapPoint[]>;
+  private _snapPointHighlightChange: Subject<SnapPoint>;  
+  private _snapPointManualSelectionChange: BehaviorSubject<SnapPoint[]>;
 
   private _selectedPoints = new Map<string, SnapPoint>();
   
@@ -448,11 +448,11 @@ class HudPointSnap extends HudTool {
     toolZIndex: number, cameraZIndex: number) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
-    this._snapPointChange = new Subject<SnapPoint>();
-    this._snapPointSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
-    this._subjects.push(this._snapPointChange, this._snapPointSelectionChange);    
-    this.snapPointChange$ = this._snapPointChange.asObservable();
-    this.snapPointSelectionChange$ = this._snapPointSelectionChange.asObservable();
+    this._snapPointHighlightChange = new Subject<SnapPoint>();
+    this._snapPointManualSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
+    this._subjects.push(this._snapPointHighlightChange, this._snapPointManualSelectionChange);    
+    this.snapPointHighlightChange$ = this._snapPointHighlightChange.asObservable();
+    this.snapPointManualSelectionChange$ = this._snapPointManualSelectionChange.asObservable();
 
     this.initSprites();    
   }
@@ -460,15 +460,15 @@ class HudPointSnap extends HudTool {
   setSnapPoint(snapPoint: SnapPoint) {
     if (snapPoint) {
       this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
-      this._snapPointChange.next(snapPoint);
+      this._snapPointHighlightChange.next(snapPoint);
     } else {
       this.getHudElement("s_snap").reset();
-      this._snapPointChange.next(null);
+      this._snapPointHighlightChange.next(null);
     }
   }
 
   resetSnapPoint() {
-    this._snapPointChange.next(null);
+    this._snapPointHighlightChange.next(null);
     this.getHudElement("s_snap").reset(); 
   }
 
@@ -535,7 +535,7 @@ class HudPointSnap extends HudTool {
       };
     });
     this.getHudElement("s_snap_selection").set(instanceData);
-    this._snapPointSelectionChange.next(points);
+    this._snapPointManualSelectionChange.next(points);
   }
 }
 
@@ -661,7 +661,7 @@ class HudDistanceMeasurer extends HudTool {
 
 class HudMarkers extends HudTool { 
   markersChange$: Observable<MarkerInfo[]>;
-  markersSelectionChange$: Observable<MarkerInfo[]>;
+  markersManualSelectionChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
 
   private readonly _spriteSize = 16;
@@ -669,7 +669,7 @@ class HudMarkers extends HudTool {
   private _uvMap: Map<MarkerType, Vector4>;
 
   private _markersChange: BehaviorSubject<MarkerInfo[]>;  
-  private _markersSelectionChange: BehaviorSubject<MarkerInfo[]>;
+  private _markersManualSelectionChange: BehaviorSubject<MarkerInfo[]>;
   private _markersHighlightChange: Subject<MarkerInfo>;
   
   private _markers: MarkerInfo[] = [];  
@@ -684,11 +684,11 @@ class HudMarkers extends HudTool {
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
     this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
-    this._markersSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
+    this._markersManualSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
     this._markersHighlightChange = new Subject<MarkerInfo>();
-    this._subjects.push(this._markersChange, this._markersSelectionChange, this._markersHighlightChange);    
+    this._subjects.push(this._markersChange, this._markersManualSelectionChange, this._markersHighlightChange);    
     this.markersChange$ = this._markersChange.asObservable();
-    this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
+    this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
     this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
 
     this.initSprites();
@@ -849,7 +849,7 @@ class HudMarkers extends HudTool {
   }
 
   private emitSelected() {
-    this._markersSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
+    this._markersManualSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
   }
 }
 // #endregion
