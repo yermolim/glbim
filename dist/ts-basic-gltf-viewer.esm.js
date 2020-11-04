@@ -1980,25 +1980,25 @@ class HudPointSnap extends HudTool {
     constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
         this._selectedPoints = new Map();
-        this._snapPointHighlightChange = new Subject();
-        this._snapPointManualSelectionChange = new BehaviorSubject([]);
-        this._subjects.push(this._snapPointHighlightChange, this._snapPointManualSelectionChange);
-        this.snapPointHighlightChange$ = this._snapPointHighlightChange.asObservable();
-        this.snapPointManualSelectionChange$ = this._snapPointManualSelectionChange.asObservable();
+        this._snapPointsHighlightChange = new Subject();
+        this._snapPointsManualSelectionChange = new BehaviorSubject([]);
+        this._subjects.push(this._snapPointsHighlightChange, this._snapPointsManualSelectionChange);
+        this.snapPointsHighlightChange$ = this._snapPointsHighlightChange.asObservable();
+        this.snapPointsManualSelectionChange$ = this._snapPointsManualSelectionChange.asObservable();
         this.initSprites();
     }
     setSnapPoint(snapPoint) {
         if (snapPoint) {
             this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
-            this._snapPointHighlightChange.next(snapPoint);
+            this._snapPointsHighlightChange.next(snapPoint);
         }
         else {
             this.getHudElement("s_snap").reset();
-            this._snapPointHighlightChange.next(null);
+            this._snapPointsHighlightChange.next(null);
         }
     }
     resetSnapPoint() {
-        this._snapPointHighlightChange.next(null);
+        this._snapPointsHighlightChange.next(null);
         this.getHudElement("s_snap").reset();
     }
     addSnapPointToSelected(point) {
@@ -2054,7 +2054,7 @@ class HudPointSnap extends HudTool {
             };
         });
         this.getHudElement("s_snap_selection").set(instanceData);
-        this._snapPointManualSelectionChange.next(points);
+        this._snapPointsManualSelectionChange.next(points);
     }
 }
 class HudDistanceMeasurer extends HudTool {
@@ -2960,8 +2960,8 @@ class GltfViewer {
     }
     initHud() {
         this._hudScene = new HudScene();
-        this.snapPointHighlightChange$ = this._hudScene.pointSnap.snapPointHighlightChange$;
-        this.snapPointManualSelectionChange$ = this._hudScene.pointSnap.snapPointManualSelectionChange$;
+        this.snapPointsHighlightChange$ = this._hudScene.pointSnap.snapPointsHighlightChange$;
+        this.snapPointsManualSelectionChange$ = this._hudScene.pointSnap.snapPointsManualSelectionChange$;
         this.markersChange$ = this._hudScene.markers.markersChange$;
         this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
         this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;

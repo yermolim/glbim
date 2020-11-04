@@ -101,8 +101,8 @@ export declare class GltfViewer {
 	modelsOpenedChange$: Observable<ModelOpenedInfo[]>;
 	meshesSelectionChange$: Observable<Set<string>>;
 	meshesManualSelectionChange$: Observable<Set<string>>;
-	snapPointHighlightChange$: Observable<SnapPoint>;
-	snapPointManualSelectionChange$: Observable<SnapPoint[]>;
+	snapPointsHighlightChange$: Observable<SnapPoint>;
+	snapPointsManualSelectionChange$: Observable<SnapPoint[]>;
 	markersChange$: Observable<MarkerInfo[]>;
 	markersHighlightChange$: Observable<MarkerInfo>;
 	markersManualSelectionChange$: Observable<MarkerInfo[]>;

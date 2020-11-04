@@ -33,8 +33,8 @@ export class GltfViewer {
   meshesSelectionChange$: Observable<Set<string>>;
   meshesManualSelectionChange$: Observable<Set<string>>; 
 
-  snapPointHighlightChange$: Observable<SnapPoint>;
-  snapPointManualSelectionChange$: Observable<SnapPoint[]>;  
+  snapPointsHighlightChange$: Observable<SnapPoint>;
+  snapPointsManualSelectionChange$: Observable<SnapPoint[]>;  
   
   markersChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
@@ -664,8 +664,8 @@ export class GltfViewer {
   private initHud() {
     this._hudScene = new HudScene();
 
-    this.snapPointHighlightChange$ = this._hudScene.pointSnap.snapPointHighlightChange$;
-    this.snapPointManualSelectionChange$ = this._hudScene.pointSnap.snapPointManualSelectionChange$;
+    this.snapPointsHighlightChange$ = this._hudScene.pointSnap.snapPointsHighlightChange$;
+    this.snapPointsManualSelectionChange$ = this._hudScene.pointSnap.snapPointsManualSelectionChange$;
 
     this.markersChange$ = this._hudScene.markers.markersChange$;
     this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;

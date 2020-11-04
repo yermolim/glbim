@@ -436,11 +436,11 @@ class HudTool {
 }
 
 class HudPointSnap extends HudTool { 
-  snapPointHighlightChange$: Observable<SnapPoint>;
-  snapPointManualSelectionChange$: Observable<SnapPoint[]>;
+  snapPointsHighlightChange$: Observable<SnapPoint>;
+  snapPointsManualSelectionChange$: Observable<SnapPoint[]>;
   
-  private _snapPointHighlightChange: Subject<SnapPoint>;  
-  private _snapPointManualSelectionChange: BehaviorSubject<SnapPoint[]>;
+  private _snapPointsHighlightChange: Subject<SnapPoint>;  
+  private _snapPointsManualSelectionChange: BehaviorSubject<SnapPoint[]>;
 
   private _selectedPoints = new Map<string, SnapPoint>();
   
@@ -448,11 +448,11 @@ class HudPointSnap extends HudTool {
     toolZIndex: number, cameraZIndex: number) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
-    this._snapPointHighlightChange = new Subject<SnapPoint>();
-    this._snapPointManualSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
-    this._subjects.push(this._snapPointHighlightChange, this._snapPointManualSelectionChange);    
-    this.snapPointHighlightChange$ = this._snapPointHighlightChange.asObservable();
-    this.snapPointManualSelectionChange$ = this._snapPointManualSelectionChange.asObservable();
+    this._snapPointsHighlightChange = new Subject<SnapPoint>();
+    this._snapPointsManualSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
+    this._subjects.push(this._snapPointsHighlightChange, this._snapPointsManualSelectionChange);    
+    this.snapPointsHighlightChange$ = this._snapPointsHighlightChange.asObservable();
+    this.snapPointsManualSelectionChange$ = this._snapPointsManualSelectionChange.asObservable();
 
     this.initSprites();    
   }
@@ -460,15 +460,15 @@ class HudPointSnap extends HudTool {
   setSnapPoint(snapPoint: SnapPoint) {
     if (snapPoint) {
       this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
-      this._snapPointHighlightChange.next(snapPoint);
+      this._snapPointsHighlightChange.next(snapPoint);
     } else {
       this.getHudElement("s_snap").reset();
-      this._snapPointHighlightChange.next(null);
+      this._snapPointsHighlightChange.next(null);
     }
   }
 
   resetSnapPoint() {
-    this._snapPointHighlightChange.next(null);
+    this._snapPointsHighlightChange.next(null);
     this.getHudElement("s_snap").reset(); 
   }
 
@@ -535,7 +535,7 @@ class HudPointSnap extends HudTool {
       };
     });
     this.getHudElement("s_snap_selection").set(instanceData);
-    this._snapPointManualSelectionChange.next(points);
+    this._snapPointsManualSelectionChange.next(points);
   }
 }
 
