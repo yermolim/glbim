@@ -749,18 +749,26 @@ class CanvasTextureBuilder {
     }
     static buildSpriteAtlasTexture() {
         const canvas = document.createElement("canvas");
-        canvas.width = 128;
-        canvas.height = 128;
+        canvas.width = 256;
+        canvas.height = 256;
         const ctx = canvas.getContext("2d");
-        CanvasTextureBuilder.drawWarningSign(ctx, "gray", 64, 0, 0);
-        CanvasTextureBuilder.drawWarningSign(ctx, "yellow", 64, 64, 0);
-        CanvasTextureBuilder.drawWarningSign(ctx, "orange", 64, 0, 64);
-        CanvasTextureBuilder.drawWarningSign(ctx, "red", 64, 64, 64);
+        CanvasTextureBuilder.drawWarningSign(ctx, "gray", true, 64, 0, 0);
+        CanvasTextureBuilder.drawWarningSign(ctx, "yellow", true, 64, 64, 0);
+        CanvasTextureBuilder.drawWarningSign(ctx, "orange", true, 64, 128, 0);
+        CanvasTextureBuilder.drawWarningSign(ctx, "red", true, 64, 192, 0);
+        CanvasTextureBuilder.drawWarningSign(ctx, "gray", false, 64, 0, 64);
+        CanvasTextureBuilder.drawWarningSign(ctx, "yellow", false, 64, 64, 64);
+        CanvasTextureBuilder.drawWarningSign(ctx, "orange", false, 64, 128, 64);
+        CanvasTextureBuilder.drawWarningSign(ctx, "red", false, 64, 192, 64);
         const uvMap = new Map();
-        uvMap.set("warn_0", new Vector4(0, 0.5, 0.5, 1));
-        uvMap.set("warn_1", new Vector4(0.5, 0.5, 1, 1));
-        uvMap.set("warn_2", new Vector4(0, 0, 0.5, 0.5));
-        uvMap.set("warn_3", new Vector4(0.5, 0, 1, 0.5));
+        uvMap.set("warn_0", new Vector4(0, 0.75, 0.25, 1));
+        uvMap.set("warn_1", new Vector4(0.25, 0.75, 0.5, 1));
+        uvMap.set("warn_2", new Vector4(0.5, 0.75, 0.75, 1));
+        uvMap.set("warn_3", new Vector4(0.75, 0.75, 1, 1));
+        uvMap.set("warn_0_selected", new Vector4(0, 0.5, 0.25, 0.75));
+        uvMap.set("warn_1_selected", new Vector4(0.25, 0.5, 0.5, 0.75));
+        uvMap.set("warn_2_selected", new Vector4(0.5, 0.5, 0.75, 0.75));
+        uvMap.set("warn_3_selected", new Vector4(0.75, 0.5, 1, 0.75));
         return {
             texture: new CanvasTexture(canvas),
             uvMap,
@@ -778,7 +786,7 @@ class CanvasTextureBuilder {
         ctx.fill();
         return new CanvasTexture(canvas);
     }
-    static drawWarningSign(ctx, color, size, offsetX, offsetY) {
+    static drawWarningSign(ctx, color, drawInner, size, offsetX, offsetY) {
         ctx.moveTo(offsetX, offsetY);
         ctx.fillStyle = color;
         const outerPath = new Path2D(`
@@ -790,16 +798,18 @@ class CanvasTextureBuilder {
       A ${0.09375 * size} ${0.09375 * size} 0 0 1 ${0.90625 * size + offsetX} ${0.9375 * size + offsetY} 
       Z`);
         ctx.fill(outerPath);
-        ctx.fillStyle = "white";
-        const innerPath = new Path2D(`
-      M ${0.1953125 * size + offsetX} ${0.8515625 * size + offsetY}
-      A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.134375 * size + offsetX} ${0.74609375 * size + offsetY}
-      L ${0.4390625 * size + offsetX} ${0.2109375 * size + offsetY} 
-      A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.5609375 * size + offsetX} ${0.2109375 * size + offsetY}
-      L ${0.865625 * size + offsetX} ${0.74609375 * size + offsetY}
-      A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.8046875 * size + offsetX} ${0.8515625 * size + offsetY} 
-      Z`);
-        ctx.fill(innerPath);
+        if (drawInner) {
+            ctx.fillStyle = "white";
+            const innerPath = new Path2D(`
+        M ${0.1953125 * size + offsetX} ${0.8515625 * size + offsetY}
+        A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.134375 * size + offsetX} ${0.74609375 * size + offsetY}
+        L ${0.4390625 * size + offsetX} ${0.2109375 * size + offsetY} 
+        A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.5609375 * size + offsetX} ${0.2109375 * size + offsetY}
+        L ${0.865625 * size + offsetX} ${0.74609375 * size + offsetY}
+        A ${0.0703125 * size} ${0.0703125 * size} 0 0 1 ${0.8046875 * size + offsetX} ${0.8515625 * size + offsetY} 
+        Z`);
+            ctx.fill(innerPath);
+        }
         ctx.fillStyle = "black";
         const exclamationPath = new Path2D(`
       M ${0.4375 * size + offsetX} ${0.3515625 * size + offsetY} 
@@ -2293,10 +2303,8 @@ class HudMarkers extends HudTool {
                 position: v.position,
                 scale: this._highlightedMarker === v
                     ? 1.5
-                    : this._selectedMarkerIds.has(v.id)
-                        ? 1.25
-                        : 1,
-                uv: this._uvMap.get(v.type),
+                    : 1,
+                uv: this._uvMap.get(this._selectedMarkerIds.has(v.id) ? v.type + "_selected" : v.type),
             };
         });
         this.getHudElement("s_warn").set(instanceData);

@@ -666,7 +666,7 @@ class HudMarkers extends HudTool {
 
   private readonly _spriteSize = 16;
 
-  private _uvMap: Map<MarkerType, Vector4>;
+  private _uvMap: Map<string, Vector4>;
 
   private _markersChange: BehaviorSubject<MarkerInfo[]>;  
   private _markersManualSelectionChange: BehaviorSubject<MarkerInfo[]>;
@@ -831,10 +831,8 @@ class HudMarkers extends HudTool {
         position: v.position,
         scale: this._highlightedMarker === v 
           ? 1.5 
-          : this._selectedMarkerIds.has(v.id)
-            ? 1.25
-            : 1,
-        uv: this._uvMap.get(v.type),
+          : 1,
+        uv: this._uvMap.get(this._selectedMarkerIds.has(v.id) ? v.type + "_selected" : v.type),
       };
     });
     this.getHudElement("s_warn").set(instanceData);
