@@ -1128,8 +1128,9 @@ class RenderScene {
                 meshes.forEach(sourceMesh => {
                     const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
                     const material = this.getMaterialByColor(rgbRmo);
+                    sourceMesh.updateMatrixWorld();
                     const renderMesh = new Mesh(sourceMesh.geometry, material);
-                    renderMesh.applyMatrix4(sourceMesh.matrix);
+                    renderMesh.applyMatrix4(sourceMesh.matrixWorld);
                     this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
                     scene.add(renderMesh);
                 });
@@ -1190,9 +1191,10 @@ class RenderScene {
             const chunkSize = 100;
             const processChunk = (chunk) => {
                 chunk.forEach(x => {
+                    x.updateMatrixWorld();
                     const geometry = x.geometry
                         .clone()
-                        .applyMatrix4(x.matrix);
+                        .applyMatrix4(x.matrixWorld);
                     const positions = geometry.getAttribute("position").array;
                     const indices = geometry.getIndex().array;
                     const meshIndices = new Uint32Array(indices.length);
@@ -1558,7 +1560,8 @@ class SimplifiedScene {
         boxPositionArray[21] = box.min.x;
         boxPositionArray[22] = box.max.y;
         boxPositionArray[23] = box.min.z;
-        const boxPosition = new Float32BufferAttribute(boxPositionArray, 3).applyMatrix4(mesh.matrix).array;
+        mesh.updateMatrixWorld();
+        const boxPosition = new Float32BufferAttribute(boxPositionArray, 3).applyMatrix4(mesh.matrixWorld).array;
         return boxPosition;
     }
 }

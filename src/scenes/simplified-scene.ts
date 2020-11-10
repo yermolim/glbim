@@ -230,7 +230,8 @@ export class SimplifiedScene {
     boxPositionArray[22] = box.max.y;
     boxPositionArray[23] = box.min.z;
 
-    const boxPosition = new Float32BufferAttribute(boxPositionArray, 3).applyMatrix4(mesh.matrix).array;
+    mesh.updateMatrixWorld();
+    const boxPosition = new Float32BufferAttribute(boxPositionArray, 3).applyMatrix4(mesh.matrixWorld).array;
     return boxPosition;
   }
 }
