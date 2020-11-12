@@ -50,8 +50,8 @@ export class CameraControls {
     }
   }
 
-  rotateAroundAxis(axis: AxisName, animate: boolean, toZUp = true) {
-    this.prepareForRotationAroundAxis(axis, toZUp);
+  rotateToFaceTheAxis(axis: AxisName, animate: boolean, toZUp = true) {
+    this.prepareRotation(axis, toZUp);
     this.applyRotation(animate);
   }
   
@@ -96,7 +96,8 @@ export class CameraControls {
     this._orbitControls.update();
   }
 
-  private prepareForRotationAroundAxis(axis: AxisName, toZUp: boolean) {
+  //#region rotation to face the axis
+  private prepareRotation(axis: AxisName, toZUp: boolean) {
     switch (axis) {
       case "x":
         this._rPosRelCamTarget.set(1, 0, 0);
@@ -151,29 +152,32 @@ export class CameraControls {
     this._rPosRelCamTarget.multiplyScalar(this._rRadius);
 
     this._rQcfSource.copy(this._camera.quaternion);
-    // this._rQcfTemp.copy(this._rQcfSource);
     this._rQcfTarget.setFromEuler(this._rEuler);
   }
 
   private applyRotation(animate: boolean) {    
     if (!animate) {
       this._camera.position.copy(this._rPosFocus).add(this._rPosRelCamTarget);
-      this._orbitControls.target.copy(this._rPosFocus);
-      this._orbitControls.update();
+      this._camera.quaternion.copy(this._rQcfTarget);
       this._renderCb();
     } else { 
       const rotationSpeed = 2 * Math.PI; // rad/sec
-      const animationStart = performance.now(); // ms
+      const totalTime = this._rQcfSource.angleTo(this._rQcfTarget) / rotationSpeed;
+      
       let timeDelta: number; // sec
       let step: number; // rad
+      const animationStart = performance.now(); // ms
 
       const renderRotationFrame = () => {
         // increment step
         timeDelta = (performance.now() - animationStart) / 1000;
-        step = timeDelta * rotationSpeed || 0.01;  
+        step = timeDelta / totalTime; 
+        if (step > 1) {
+          step = 1;
+        }
 
         // get intermediate quaternion between source and target positions
-        this._rQcfTemp.copy(this._rQcfSource).rotateTowards(this._rQcfTarget, step);    
+        this._rQcfTemp.copy(this._rQcfSource).slerp(this._rQcfTarget, step);    
         // get intermediate camera position relative to focus position 
         this._rPosRelCamTemp.set(0, 0, 1)
           .applyQuaternion(this._rQcfTemp)
@@ -183,10 +187,8 @@ export class CameraControls {
         this._camera.position.copy(this._rPosFocus)
           .add(this._rPosRelCamTemp);
 
-        // ensure that controls target point is same as the focus point
-        this._orbitControls.target.copy(this._rPosFocus);
-        // update controls to update camera quaternion (make camera look at the focus point)
-        this._orbitControls.update();
+        // update camera quaternion (make camera look at focus point)
+        this._camera.quaternion.copy(this._rQcfTemp);
 
         // render view
         this._renderCb();
@@ -199,4 +201,5 @@ export class CameraControls {
       renderRotationFrame();
     }
   }
+  //#endregion
 }

@@ -238,7 +238,9 @@ export class RenderScene {
       const { rgbRmo } = this.refreshMeshColors(sourceMesh);      
       const material = this.getMaterialByColor(rgbRmo);
       const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
-      renderMesh.material = material;
+      if (renderMesh) {
+        renderMesh.material = material;
+      }
     });
   } 
 

@@ -121,7 +121,7 @@ export class GltfViewer {
     this.initRenderer();
     
     this._axes = new Axes(this._container, 
-      (axis) => this._cameraControls.rotateAroundAxis(axis, true),
+      (axis) => this._cameraControls.rotateToFaceTheAxis(axis, true),
       this._options.axesHelperEnabled,
       this._options.axesHelperPlacement,
       this._options.axesHelperSize);

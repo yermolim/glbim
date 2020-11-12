@@ -466,8 +466,8 @@ class CameraControls {
             this._camera.updateProjectionMatrix();
         }
     }
-    rotateAroundAxis(axis, animate, toZUp = true) {
-        this.prepareForRotationAroundAxis(axis, toZUp);
+    rotateToFaceTheAxis(axis, animate, toZUp = true) {
+        this.prepareRotation(axis, toZUp);
         this.applyRotation(animate);
     }
     focusCameraOnObjects(objects, offset = 1.2) {
@@ -502,7 +502,7 @@ class CameraControls {
         this._camera.position.copy(center).sub(direction);
         this._orbitControls.update();
     }
-    prepareForRotationAroundAxis(axis, toZUp) {
+    prepareRotation(axis, toZUp) {
         switch (axis) {
             case "x":
                 this._rPosRelCamTarget.set(1, 0, 0);
@@ -564,26 +564,28 @@ class CameraControls {
     applyRotation(animate) {
         if (!animate) {
             this._camera.position.copy(this._rPosFocus).add(this._rPosRelCamTarget);
-            this._orbitControls.target.copy(this._rPosFocus);
-            this._orbitControls.update();
+            this._camera.quaternion.copy(this._rQcfTarget);
             this._renderCb();
         }
         else {
             const rotationSpeed = 2 * Math.PI;
-            const animationStart = performance.now();
+            const totalTime = this._rQcfSource.angleTo(this._rQcfTarget) / rotationSpeed;
             let timeDelta;
             let step;
+            const animationStart = performance.now();
             const renderRotationFrame = () => {
                 timeDelta = (performance.now() - animationStart) / 1000;
-                step = timeDelta * rotationSpeed || 0.01;
-                this._rQcfTemp.copy(this._rQcfSource).rotateTowards(this._rQcfTarget, step);
+                step = timeDelta / totalTime;
+                if (step > 1) {
+                    step = 1;
+                }
+                this._rQcfTemp.copy(this._rQcfSource).slerp(this._rQcfTarget, step);
                 this._rPosRelCamTemp.set(0, 0, 1)
                     .applyQuaternion(this._rQcfTemp)
                     .multiplyScalar(this._rRadius);
                 this._camera.position.copy(this._rPosFocus)
                     .add(this._rPosRelCamTemp);
-                this._orbitControls.target.copy(this._rPosFocus);
-                this._orbitControls.update();
+                this._camera.quaternion.copy(this._rQcfTemp);
                 this._renderCb();
                 if (this._rQcfTemp.angleTo(this._rQcfTarget)) {
                     window.requestAnimationFrame(() => renderRotationFrame());
@@ -1241,7 +1243,9 @@ class RenderScene {
             const { rgbRmo } = this.refreshMeshColors(sourceMesh);
             const material = this.getMaterialByColor(rgbRmo);
             const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
-            renderMesh.material = material;
+            if (renderMesh) {
+                renderMesh.material = material;
+            }
         });
     }
     updateMeshGeometryColors(sourceMeshes) {
@@ -2604,7 +2608,7 @@ class GltfViewer {
         this.initHud();
         this.initLoader(dracoDecoderPath);
         this.initRenderer();
-        this._axes = new Axes(this._container, (axis) => this._cameraControls.rotateAroundAxis(axis, true), this._options.axesHelperEnabled, this._options.axesHelperPlacement, this._options.axesHelperSize);
+        this._axes = new Axes(this._container, (axis) => this._cameraControls.rotateToFaceTheAxis(axis, true), this._options.axesHelperEnabled, this._options.axesHelperPlacement, this._options.axesHelperSize);
         this._containerResizeObserver = new ResizeObserver(this.resizeRenderer);
         this._containerResizeObserver.observe(this._container);
     }
