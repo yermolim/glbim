@@ -265,11 +265,13 @@ export class RenderScene {
     if (!geometry) {
       return;
     }
+
     const { colors, rmos, indicesBySourceMesh } = geometry;
     let anyMeshOpacityChanged = false;
-    meshes.forEach(mesh => {
-      const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh); 
-      indicesBySourceMesh.get(mesh).forEach(i => {
+    meshes.forEach(mesh => {   
+      const indices = indicesBySourceMesh.get(mesh);
+      const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh, rmos.getZ(indices[0]) / 255); 
+      indices.forEach(i => {
         colors.setXYZ(i, rgbRmo.rByte, rgbRmo.gByte, rgbRmo.bByte);
         rmos.setXYZ(i, rgbRmo.roughnessByte, rgbRmo.metalnessByte, rgbRmo.opacityByte);
       });
@@ -279,6 +281,7 @@ export class RenderScene {
     });
     colors.needsUpdate = true;
     rmos.needsUpdate = true;  
+
     if (anyMeshOpacityChanged) {
       this._geometryIndicesNeedSort.add(rgIndex);
     }  
@@ -334,44 +337,45 @@ export class RenderScene {
     return material;
   }   
 
-  private refreshMeshColors(mesh: MeshBgSm): {rgbRmo: ColorRgbRmo; opacityChanged: boolean} {     
-    const initialRgbRmo = ColorRgbRmo.getFromMesh(mesh);       
+  private refreshMeshColors(mesh: MeshBgSm, opacityInitial: number = null): 
+  {rgbRmo: ColorRgbRmo; opacityChanged: boolean} {
+
+    opacityInitial = opacityInitial ?? ColorRgbRmo.getFromMesh(mesh).opacity;   
     if (!mesh.userData.isolated) {
       ColorRgbRmo.deleteFromMesh(mesh);
     }
-    const baseRgbRmo = ColorRgbRmo.getFromMesh(mesh);  
+    const rgbRmoBase = ColorRgbRmo.getFromMesh(mesh);  
 
-    let newRgbRmo: ColorRgbRmo;
+    let rgbRmo: ColorRgbRmo;
     if (mesh.userData.highlighted) {  
-      newRgbRmo = new ColorRgbRmo(        
+      rgbRmo = new ColorRgbRmo(        
         this._highlightColor.r,
         this._highlightColor.g,
         this._highlightColor.b,
-        baseRgbRmo.roughness,
-        baseRgbRmo.metalness,
-        baseRgbRmo.opacity,  
+        rgbRmoBase.roughness,
+        rgbRmoBase.metalness,
+        rgbRmoBase.opacity,  
       );
     } else if (mesh.userData.selected) {  
-      newRgbRmo = new ColorRgbRmo(        
+      rgbRmo = new ColorRgbRmo(        
         this._selectionColor.r,
         this._selectionColor.g,
         this._selectionColor.b,
-        baseRgbRmo.roughness,
-        baseRgbRmo.metalness,
-        baseRgbRmo.opacity,  
+        rgbRmoBase.roughness,
+        rgbRmoBase.metalness,
+        rgbRmoBase.opacity,  
       );
     } else if (mesh.userData.isolated) { 
-      newRgbRmo = this._isolationColor;
+      rgbRmo = this._isolationColor;
     } else {
-      newRgbRmo = baseRgbRmo;
+      rgbRmo = rgbRmoBase;
     }
 
-    ColorRgbRmo.setToMesh(mesh, newRgbRmo);
+    ColorRgbRmo.setToMesh(mesh, rgbRmo);
+    const opacityChanged = (rgbRmo.opacity === 1 && opacityInitial < 1)
+      || (rgbRmo.opacity < 1 && opacityInitial === 1);
 
-    return {
-      rgbRmo: newRgbRmo,
-      opacityChanged: newRgbRmo.opacity !== initialRgbRmo.opacity,
-    };
+    return { rgbRmo, opacityChanged };
   } 
 
   private destroyMaterials() {    

@@ -33,13 +33,22 @@ export class ColorRgbRmo {
   }
 
   constructor(r: number, g: number, b: number,
-    roughness: number, metalness: number, opacity: number) {
-    this.r = r;
-    this.g = g;
-    this.b = b;
-    this.roughness = roughness;
-    this.metalness = metalness;
-    this.opacity = opacity;
+    roughness: number, metalness: number, opacity: number, byte = false) {
+    if (byte) {
+      this.r = r / 255;
+      this.g = g / 255;
+      this.b = b / 255;
+      this.roughness = roughness / 255;
+      this.metalness = metalness / 255;
+      this.opacity = opacity / 255;      
+    } else {
+      this.r = r;
+      this.g = g;
+      this.b = b;
+      this.roughness = roughness;
+      this.metalness = metalness;
+      this.opacity = opacity;
+    }
   }
 
   static createFromMaterial(material: MeshStandardMaterial): ColorRgbRmo {
