@@ -89,7 +89,7 @@ export class Axes extends Object3D {
       return;
     }
 
-    this.quaternion.copy(mainCamera.quaternion).inverse();
+    this.quaternion.copy(mainCamera.quaternion).invert();
     if (toZUp) {
       this.quaternion.multiply(Axes._toZUp);
     }
