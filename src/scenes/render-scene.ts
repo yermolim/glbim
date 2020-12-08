@@ -209,7 +209,7 @@ export class RenderScene {
       });
     };
     for (let i = 0; i < meshes.length; i += chunkSize) {
-      await new Promise((resolve) => { 
+      await new Promise<void>((resolve) => { 
         setTimeout(() => {
           processChunk(meshes.slice(i, i + chunkSize));
           resolve();

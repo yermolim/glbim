@@ -112,7 +112,7 @@ export class SimplifiedScene {
       });
     };
     for (let i = 0; i < meshes.length; i += hullChunkSize) {
-      await new Promise((resolve) => { 
+      await new Promise<void>((resolve) => { 
         setTimeout(() => {
           hullChunk(meshes.slice(i, i + hullChunkSize));
           resolve();
@@ -176,7 +176,7 @@ export class SimplifiedScene {
     };
 
     for (let i = 0; i < meshes.length; i += chunkSize) {
-      await new Promise((resolve) => { 
+      await new Promise<void>((resolve) => { 
         setTimeout(() => {
           processChunk(meshes.slice(i, i + chunkSize));
           resolve();
