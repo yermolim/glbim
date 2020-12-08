@@ -94,6 +94,7 @@ export declare class GltfViewerOptions {
 export declare class GltfViewer {
 	optionsChange$: Observable<GltfViewerOptions>;
 	lastFrameTime$: Observable<number>;
+	cameraPositionChange$: Observable<Vec4DoubleCS>;
 	loadingStateChange$: Observable<boolean>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;

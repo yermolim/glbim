@@ -23,6 +23,8 @@ export class GltfViewer {
   // #region public observables
   optionsChange$: Observable<GltfViewerOptions>;  
   lastFrameTime$: Observable<number>;
+
+  cameraPositionChange$: Observable<Vec4DoubleCS>;
   
   loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
@@ -502,6 +504,7 @@ export class GltfViewer {
       this._cameraControls.focusCameraOnObjects(null);
     } else {
       this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove()); 
+      this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
     } 
     
     this._container.append(this._renderer.domElement);

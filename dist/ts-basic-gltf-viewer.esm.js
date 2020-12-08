@@ -454,12 +454,18 @@ class CameraControls {
         this._rQcfSource = new Quaternion();
         this._rQcfTarget = new Quaternion();
         this._rQcfTemp = new Quaternion();
+        this.onCameraPositionChange = () => {
+            this._cameraPositionChanged.next(Vec4DoubleCS.fromVector3(this._camera.position));
+            this._renderCb();
+        };
         this._renderCb = renderCallback;
         const camera = new PerspectiveCamera(75, 1, 1, 10000);
         camera.position.set(0, 1000, 1000);
         camera.lookAt(0, 0, 0);
+        this._cameraPositionChanged = new BehaviorSubject(Vec4DoubleCS.fromVector3(camera.position));
+        this.cameraPositionChange$ = this._cameraPositionChanged.asObservable();
         const orbitControls = new OrbitControls(camera, container);
-        orbitControls.addEventListener("change", this._renderCb);
+        orbitControls.addEventListener("change", this.onCameraPositionChange);
         orbitControls.update();
         this._camera = camera;
         this._orbitControls = orbitControls;
@@ -469,6 +475,7 @@ class CameraControls {
     }
     destroy() {
         this._orbitControls.dispose();
+        this._cameraPositionChanged.complete();
     }
     resize(width, height) {
         if (this._camera) {
@@ -575,7 +582,7 @@ class CameraControls {
         if (!animate) {
             this._camera.position.copy(this._rPosFocus).add(this._rPosRelCamTarget);
             this._camera.quaternion.copy(this._rQcfTarget);
-            this._renderCb();
+            this.onCameraPositionChange();
         }
         else {
             const rotationSpeed = 2 * Math.PI;
@@ -596,7 +603,7 @@ class CameraControls {
                 this._camera.position.copy(this._rPosFocus)
                     .add(this._rPosRelCamTemp);
                 this._camera.quaternion.copy(this._rQcfTemp);
-                this._renderCb();
+                this.onCameraPositionChange();
                 if (this._rQcfTemp.angleTo(this._rQcfTarget)) {
                     window.requestAnimationFrame(() => renderRotationFrame());
                 }
@@ -2865,6 +2872,7 @@ class GltfViewer {
         }
         else {
             this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove());
+            this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
         }
         this._container.append(this._renderer.domElement);
     }

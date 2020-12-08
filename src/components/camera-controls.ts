@@ -1,8 +1,13 @@
+import { Observable, BehaviorSubject } from "rxjs";
+
 import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { AxisName } from "../common-types";
+import { AxisName, Vec4DoubleCS } from "../common-types";
 
 export class CameraControls {
+  cameraPositionChange$: Observable<Vec4DoubleCS>;
+  private _cameraPositionChanged: BehaviorSubject<Vec4DoubleCS>;
+
   private _camera: PerspectiveCamera;
   get camera(): PerspectiveCamera {
     return this._camera;
@@ -29,10 +34,13 @@ export class CameraControls {
 
     const camera = new PerspectiveCamera(75, 1, 1, 10000);  
     camera.position.set (0, 1000, 1000);
-    camera.lookAt (0, 0, 0);    
-      
+    camera.lookAt (0, 0, 0);  
+
+    this._cameraPositionChanged = new BehaviorSubject<Vec4DoubleCS>(Vec4DoubleCS.fromVector3(camera.position));
+    this.cameraPositionChange$ = this._cameraPositionChanged.asObservable();      
+
     const orbitControls = new OrbitControls(camera, container);
-    orbitControls.addEventListener("change", this._renderCb);
+    orbitControls.addEventListener("change", this.onCameraPositionChange);
     orbitControls.update();
 
     this._camera = camera;
@@ -41,6 +49,7 @@ export class CameraControls {
 
   destroy() {
     this._orbitControls.dispose();
+    this._cameraPositionChanged.complete();
   }
     
   resize(width: number, height: number) {
@@ -70,6 +79,11 @@ export class CameraControls {
 
     this.focusCameraOnBox(this._focusBox, offset);
   }  
+
+  private onCameraPositionChange = () => {
+    this._cameraPositionChanged.next(Vec4DoubleCS.fromVector3(this._camera.position));
+    this._renderCb();
+  };
 
   private focusCameraOnBox(box: Box3, offset: number) {
     const size = box.getSize(new Vector3());
@@ -159,7 +173,7 @@ export class CameraControls {
     if (!animate) {
       this._camera.position.copy(this._rPosFocus).add(this._rPosRelCamTarget);
       this._camera.quaternion.copy(this._rQcfTarget);
-      this._renderCb();
+      this.onCameraPositionChange();
     } else { 
       const rotationSpeed = 2 * Math.PI; // rad/sec
       const totalTime = this._rQcfSource.angleTo(this._rQcfTarget) / rotationSpeed;
@@ -191,7 +205,7 @@ export class CameraControls {
         this._camera.quaternion.copy(this._rQcfTemp);
 
         // render view
-        this._renderCb();
+        this.onCameraPositionChange();
 
         // repeat until intermediate quaternion won't be equal to the target one 
         if (this._rQcfTemp.angleTo(this._rQcfTarget)) {
