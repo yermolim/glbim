@@ -7,7 +7,7 @@ export declare type MeshMergeType = "scene" | "model" | "model+" | null;
 export declare type FastRenderType = "ch" | "aabb" | "ombb" | null;
 export declare type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export declare type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
-export declare type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3";
+export declare type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 export interface ModelFileInfo {
 	url: string;
 	guid: string;
@@ -66,6 +66,7 @@ export declare class Vec4DoubleCS {
 	static fromVector3(vec: Vector3, isZup?: boolean): Vec4DoubleCS;
 	toVector3(isZup?: boolean): Vector3;
 	toVec4(isZup?: boolean): Vec4;
+	equals(other: Vec4DoubleCS): boolean;
 }
 export declare class Distance {
 	start: Vec4;
@@ -106,6 +107,7 @@ export declare class GltfViewer {
 	snapPointsManualSelectionChange$: Observable<SnapPoint[]>;
 	markersChange$: Observable<MarkerInfo[]>;
 	markersHighlightChange$: Observable<MarkerInfo>;
+	markersSelectionChange$: Observable<MarkerInfo[]>;
 	markersManualSelectionChange$: Observable<MarkerInfo[]>;
 	distanceMeasureChange$: Observable<Distance>;
 	private _optionsChange;
@@ -149,6 +151,7 @@ export declare class GltfViewer {
 	zoomToItems(ids: string[]): void;
 	getSelectedItems(): Set<string>;
 	setMarkers(markers: MarkerInfo[]): void;
+	selectMarkers(ids: string[]): void;
 	private initObservables;
 	private closeSubjects;
 	private onCanvasMouseMove;

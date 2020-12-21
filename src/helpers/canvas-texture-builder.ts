@@ -1,5 +1,4 @@
 import { Color, CanvasTexture, Vector4 } from "three";
-import { MarkerType } from "../common-types";
 
 export class CanvasTextureBuilder { 
 
@@ -40,6 +39,8 @@ export class CanvasTextureBuilder {
     CanvasTextureBuilder.drawWarningSign(ctx, "yellow", false, 64, 64, 64);
     CanvasTextureBuilder.drawWarningSign(ctx, "orange", false, 64, 128, 64);
     CanvasTextureBuilder.drawWarningSign(ctx, "red", false, 64, 192, 64);
+    CanvasTextureBuilder.drawCameraLogo(ctx, "steelblue", 64, 0, 128);
+    CanvasTextureBuilder.drawCameraLogo(ctx, "black", 64, 64, 128);
 
     const uvMap = new Map<string, Vector4>();
     uvMap.set("warn_0", new Vector4(0, 0.75, 0.25, 1));
@@ -50,6 +51,8 @@ export class CanvasTextureBuilder {
     uvMap.set("warn_1_selected", new Vector4(0.25, 0.5, 0.5, 0.75));
     uvMap.set("warn_2_selected", new Vector4(0.5, 0.5, 0.75, 0.75));
     uvMap.set("warn_3_selected", new Vector4(0.75, 0.5, 1, 0.75));
+    uvMap.set("photo", new Vector4(0, 0.25, 0.25, 0.5));
+    uvMap.set("photo_selected", new Vector4(0.25, 0.25, 0.5, 0.5));
 
     return {
       texture: new CanvasTexture(canvas),
@@ -111,5 +114,63 @@ export class CanvasTextureBuilder {
     ctx.moveTo(0.5 * size + offsetX, 0.75 * size + offsetY);
     ctx.arc(0.5 * size + offsetX, 0.75 * size + offsetY, 0.0625 * size, 0, 2 * Math.PI);
     ctx.fill();  
+  }
+
+  private static drawCameraLogo(ctx: CanvasRenderingContext2D, color: string,
+    size: number, offsetX: number, offsetY: number) {      
+    ctx.moveTo(offsetX, offsetY);
+    
+    const mainPath = new Path2D(`
+      M ${offsetX} ${0.3 * size + offsetY}
+      H ${0.05 * size + offsetX}
+      V ${0.25 * size + offsetY}
+      H ${0.15 * size + offsetX}
+      V ${0.30 * size + offsetY}
+      H ${0.2 * size + offsetX}
+      L ${0.3 * size + offsetX} ${0.15 * size + offsetY}
+      H ${0.5 * size + offsetX}
+      L ${0.6 * size + offsetX} ${0.3 * size + offsetY}
+      H ${0.7 * size + offsetX}
+      V ${0.25 * size + offsetY}
+      H ${0.9 * size + offsetX}
+      V ${0.3 * size + offsetY}
+      H ${size + offsetX}
+      V ${0.9 * size + offsetY}
+      H ${offsetX}
+      V ${0.3 * size + offsetY}
+    `);
+    ctx.fillStyle = color;
+    ctx.fill(mainPath);
+    
+    const innerPath = new Path2D(`
+    	M ${0.7 * size + offsetX} ${0.4 * size + offsetY}
+      H ${0.85 * size + offsetX}
+      V ${0.5 * size + offsetY}
+      H ${0.7 * size + offsetX} 
+      V ${0.4 * size + offsetY}
+    `);
+    ctx.fillStyle = "white";
+    ctx.fill(innerPath);  
+    
+    ctx.beginPath();
+    ctx.moveTo(0.4 * size + offsetX, 0.6 * size + offsetY);
+    ctx.arc(0.4 * size + offsetX, 0.6 * size + offsetY, 0.2 * size, 0, 2 * Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = "white";
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.moveTo(0.4 * size + offsetX, 0.6 * size + offsetY);
+    ctx.arc(0.4 * size + offsetX, 0.6 * size + offsetY, 0.15 * size, 0, 2 * Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.moveTo(0.1 * size + offsetX, 0.45 * size + offsetY);
+    ctx.arc(0.1 * size + offsetX, 0.45 * size + offsetY, 0.05 * size, 0, 2 * Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = "white";
+    ctx.fill();
   }
 }

@@ -7,7 +7,7 @@ import { Scene, Vector2, Vector3, Vector4, Matrix4, Object3D,
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 
-import { Vec4DoubleCS, Distance, MarkerInfo, SnapPoint, MarkerType } from "../common-types";
+import { Vec4DoubleCS, Distance, MarkerInfo, SnapPoint } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { CanvasTextureBuilder } from "../helpers/canvas-texture-builder";
 
@@ -661,6 +661,7 @@ class HudDistanceMeasurer extends HudTool {
 
 class HudMarkers extends HudTool { 
   markersChange$: Observable<MarkerInfo[]>;
+  markersSelectionChange$: Observable<MarkerInfo[]>;
   markersManualSelectionChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
 
@@ -669,6 +670,7 @@ class HudMarkers extends HudTool {
   private _uvMap: Map<string, Vector4>;
 
   private _markersChange: BehaviorSubject<MarkerInfo[]>;  
+  private _markersSelectionChange: BehaviorSubject<MarkerInfo[]>;
   private _markersManualSelectionChange: BehaviorSubject<MarkerInfo[]>;
   private _markersHighlightChange: Subject<MarkerInfo>;
   
@@ -684,10 +686,15 @@ class HudMarkers extends HudTool {
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
 
     this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
+    this._markersSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
     this._markersManualSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);
     this._markersHighlightChange = new Subject<MarkerInfo>();
-    this._subjects.push(this._markersChange, this._markersManualSelectionChange, this._markersHighlightChange);    
+
+    this._subjects.push(this._markersChange, this._markersSelectionChange, 
+      this._markersManualSelectionChange, this._markersHighlightChange);  
+
     this.markersChange$ = this._markersChange.asObservable();
+    this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
     this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
     this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
 
@@ -757,24 +764,26 @@ class HudMarkers extends HudTool {
     if (!this._selectedMarkerIds.has(markerId)) {
       this._selectedMarkerIds.add(markerId);
       this.updateSprites();
-      this.emitSelected();
+      this.emitSelected(true);
     }
   }
 
   removeMarkerFromSelection(markerId: string) {
     if (this._selectedMarkerIds.delete(markerId)) {
       this.updateSprites();
-      this.emitSelected();
+      this.emitSelected(true);
     }
   }
 
-  setSelectedMarkers(markerIds: string[]) {
+  setSelectedMarkers(markerIds: string[], manual: boolean) {
     this._selectedMarkerIds.clear();
     if (markerIds?.length) {  
       markerIds.forEach(x => this._selectedMarkerIds.add(x));
-    }    
+    }
     this.updateSprites();
-    this.emitSelected();
+    if (manual) {
+      this.emitSelected(manual);
+    }
   }
 
   resetSelectedMarkers() {   
@@ -846,8 +855,12 @@ class HudMarkers extends HudTool {
     this._markersHighlightChange.next(this._highlightedMarker);
   }
 
-  private emitSelected() {
-    this._markersManualSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
+  private emitSelected(manual = false) {
+    const selectedMarkers = this._markers.filter(x => this._selectedMarkerIds.has(x.id));    
+    this._markersSelectionChange.next(selectedMarkers);
+    if (manual) {
+      this._markersManualSelectionChange.next(selectedMarkers);
+    }
   }
 }
 // #endregion

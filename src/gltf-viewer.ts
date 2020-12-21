@@ -17,7 +17,7 @@ import { HudScene } from "./scenes/hud-scene";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode,
-  Distance, Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType };
+  Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };
 
 export class GltfViewer {
   // #region public observables
@@ -40,6 +40,7 @@ export class GltfViewer {
   
   markersChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
+  markersSelectionChange$: Observable<MarkerInfo[]>;
   markersManualSelectionChange$: Observable<MarkerInfo[]>;
 
   distanceMeasureChange$: Observable<Distance>;
@@ -336,6 +337,12 @@ export class GltfViewer {
   // markers
   setMarkers(markers: MarkerInfo[]) {
     this._hudScene?.markers.setMarkers(markers);
+    this.render();
+  }
+
+  selectMarkers(ids: string[]) {   
+    this._hudScene?.markers.setSelectedMarkers(ids, false);
+    this.render();
   }
 
   // #endregion
@@ -671,6 +678,7 @@ export class GltfViewer {
     this.snapPointsManualSelectionChange$ = this._hudScene.pointSnap.snapPointsManualSelectionChange$;
 
     this.markersChange$ = this._hudScene.markers.markersChange$;
+    this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
     this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
     this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
 
@@ -715,7 +723,7 @@ export class GltfViewer {
 
     const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderer, clientX, clientY);
     const marker = this._hudScene.markers.getMarkerAtCanvasPoint(point);
-    this._hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null);
+    this._hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
     this.render(); 
   }
 

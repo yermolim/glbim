@@ -18,7 +18,7 @@ export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
 
 export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 
-export type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3";
+export type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 // #endregion
 
 // #region interfaces
@@ -177,6 +177,16 @@ export class Vec4DoubleCS {
     return !isZup
       ? new Vec4(this._x, this._y, this._z, this._w)
       : new Vec4(this._x, -this._z, this._y, this._w);
+  }
+
+  equals(other: Vec4DoubleCS): boolean {
+    if (!other) {
+      return false;
+    }
+    return this._x === other._x
+      && this._y === other._y
+      && this._z === other._z
+      && this._w === other._w;
   }
 }
 

@@ -81,6 +81,15 @@ class Vec4DoubleCS {
             ? new Vec4(this._x, this._y, this._z, this._w)
             : new Vec4(this._x, -this._z, this._y, this._w);
     }
+    equals(other) {
+        if (!other) {
+            return false;
+        }
+        return this._x === other._x
+            && this._y === other._y
+            && this._z === other._z
+            && this._w === other._w;
+    }
 }
 class Distance {
     constructor(start, end) {
@@ -779,6 +788,8 @@ class CanvasTextureBuilder {
         CanvasTextureBuilder.drawWarningSign(ctx, "yellow", false, 64, 64, 64);
         CanvasTextureBuilder.drawWarningSign(ctx, "orange", false, 64, 128, 64);
         CanvasTextureBuilder.drawWarningSign(ctx, "red", false, 64, 192, 64);
+        CanvasTextureBuilder.drawCameraLogo(ctx, "steelblue", 64, 0, 128);
+        CanvasTextureBuilder.drawCameraLogo(ctx, "black", 64, 64, 128);
         const uvMap = new Map();
         uvMap.set("warn_0", new Vector4(0, 0.75, 0.25, 1));
         uvMap.set("warn_1", new Vector4(0.25, 0.75, 0.5, 1));
@@ -788,6 +799,8 @@ class CanvasTextureBuilder {
         uvMap.set("warn_1_selected", new Vector4(0.25, 0.5, 0.5, 0.75));
         uvMap.set("warn_2_selected", new Vector4(0.5, 0.5, 0.75, 0.75));
         uvMap.set("warn_3_selected", new Vector4(0.75, 0.5, 1, 0.75));
+        uvMap.set("photo", new Vector4(0, 0.25, 0.25, 0.5));
+        uvMap.set("photo_selected", new Vector4(0.25, 0.25, 0.5, 0.5));
         return {
             texture: new CanvasTexture(canvas),
             uvMap,
@@ -838,6 +851,57 @@ class CanvasTextureBuilder {
         ctx.fill(exclamationPath);
         ctx.moveTo(0.5 * size + offsetX, 0.75 * size + offsetY);
         ctx.arc(0.5 * size + offsetX, 0.75 * size + offsetY, 0.0625 * size, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    static drawCameraLogo(ctx, color, size, offsetX, offsetY) {
+        ctx.moveTo(offsetX, offsetY);
+        const mainPath = new Path2D(`
+      M ${offsetX} ${0.3 * size + offsetY}
+      H ${0.05 * size + offsetX}
+      V ${0.25 * size + offsetY}
+      H ${0.15 * size + offsetX}
+      V ${0.30 * size + offsetY}
+      H ${0.2 * size + offsetX}
+      L ${0.3 * size + offsetX} ${0.15 * size + offsetY}
+      H ${0.5 * size + offsetX}
+      L ${0.6 * size + offsetX} ${0.3 * size + offsetY}
+      H ${0.7 * size + offsetX}
+      V ${0.25 * size + offsetY}
+      H ${0.9 * size + offsetX}
+      V ${0.3 * size + offsetY}
+      H ${size + offsetX}
+      V ${0.9 * size + offsetY}
+      H ${offsetX}
+      V ${0.3 * size + offsetY}
+    `);
+        ctx.fillStyle = color;
+        ctx.fill(mainPath);
+        const innerPath = new Path2D(`
+    	M ${0.7 * size + offsetX} ${0.4 * size + offsetY}
+      H ${0.85 * size + offsetX}
+      V ${0.5 * size + offsetY}
+      H ${0.7 * size + offsetX} 
+      V ${0.4 * size + offsetY}
+    `);
+        ctx.fillStyle = "white";
+        ctx.fill(innerPath);
+        ctx.beginPath();
+        ctx.moveTo(0.4 * size + offsetX, 0.6 * size + offsetY);
+        ctx.arc(0.4 * size + offsetX, 0.6 * size + offsetY, 0.2 * size, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0.4 * size + offsetX, 0.6 * size + offsetY);
+        ctx.arc(0.4 * size + offsetX, 0.6 * size + offsetY, 0.15 * size, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0.1 * size + offsetX, 0.45 * size + offsetY);
+        ctx.arc(0.1 * size + offsetX, 0.45 * size + offsetY, 0.05 * size, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = "white";
         ctx.fill();
     }
 }
@@ -2196,10 +2260,12 @@ class HudMarkers extends HudTool {
         this._tempVec3 = new Vector3();
         this._tempVec2 = new Vector2();
         this._markersChange = new BehaviorSubject([]);
+        this._markersSelectionChange = new BehaviorSubject([]);
         this._markersManualSelectionChange = new BehaviorSubject([]);
         this._markersHighlightChange = new Subject();
-        this._subjects.push(this._markersChange, this._markersManualSelectionChange, this._markersHighlightChange);
+        this._subjects.push(this._markersChange, this._markersSelectionChange, this._markersManualSelectionChange, this._markersHighlightChange);
         this.markersChange$ = this._markersChange.asObservable();
+        this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
         this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
         this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
         this.initSprites();
@@ -2261,22 +2327,24 @@ class HudMarkers extends HudTool {
         if (!this._selectedMarkerIds.has(markerId)) {
             this._selectedMarkerIds.add(markerId);
             this.updateSprites();
-            this.emitSelected();
+            this.emitSelected(true);
         }
     }
     removeMarkerFromSelection(markerId) {
         if (this._selectedMarkerIds.delete(markerId)) {
             this.updateSprites();
-            this.emitSelected();
+            this.emitSelected(true);
         }
     }
-    setSelectedMarkers(markerIds) {
+    setSelectedMarkers(markerIds, manual) {
         this._selectedMarkerIds.clear();
         if (markerIds === null || markerIds === void 0 ? void 0 : markerIds.length) {
             markerIds.forEach(x => this._selectedMarkerIds.add(x));
         }
         this.updateSprites();
-        this.emitSelected();
+        if (manual) {
+            this.emitSelected(manual);
+        }
     }
     resetSelectedMarkers() {
         if (this._selectedMarkerIds.size) {
@@ -2339,8 +2407,12 @@ class HudMarkers extends HudTool {
     emitHighlighted() {
         this._markersHighlightChange.next(this._highlightedMarker);
     }
-    emitSelected() {
-        this._markersManualSelectionChange.next(this._markers.filter(x => this._selectedMarkerIds.has(x.id)));
+    emitSelected(manual = false) {
+        const selectedMarkers = this._markers.filter(x => this._selectedMarkerIds.has(x.id));
+        this._markersSelectionChange.next(selectedMarkers);
+        if (manual) {
+            this._markersManualSelectionChange.next(selectedMarkers);
+        }
     }
 }
 class HudScene {
@@ -2800,6 +2872,12 @@ class GltfViewer {
     setMarkers(markers) {
         var _a;
         (_a = this._hudScene) === null || _a === void 0 ? void 0 : _a.markers.setMarkers(markers);
+        this.render();
+    }
+    selectMarkers(ids) {
+        var _a;
+        (_a = this._hudScene) === null || _a === void 0 ? void 0 : _a.markers.setSelectedMarkers(ids, false);
+        this.render();
     }
     initObservables() {
         this.optionsChange$ = this._optionsChange.asObservable();
@@ -2996,6 +3074,7 @@ class GltfViewer {
         this.snapPointsHighlightChange$ = this._hudScene.pointSnap.snapPointsHighlightChange$;
         this.snapPointsManualSelectionChange$ = this._hudScene.pointSnap.snapPointsManualSelectionChange$;
         this.markersChange$ = this._hudScene.markers.markersChange$;
+        this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
         this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
         this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
         this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
@@ -3031,7 +3110,7 @@ class GltfViewer {
         }
         const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderer, clientX, clientY);
         const marker = this._hudScene.markers.getMarkerAtCanvasPoint(point);
-        this._hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null);
+        this._hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
         this.render();
     }
     measureDistanceAtPoint(clientX, clientY) {
