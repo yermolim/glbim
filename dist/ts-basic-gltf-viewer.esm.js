@@ -1739,6 +1739,62 @@ class PickingScene {
     }
 }
 
+class HudTool {
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
+        this._hudResolution = new Vector2();
+        this._hudProjectionMatrix = new Matrix4();
+        this._subjects = [];
+        this._hudElements = new Map();
+        this._hudScene = hudScene;
+        this._hudResolution = hudResolution;
+        this._hudProjectionMatrix = hudProjectionMatrix;
+        this._toolZIndex = toolZIndex;
+        this._cameraZIndex = cameraZIndex;
+    }
+    destroy() {
+        this.destroyHudElements();
+        this._subjects.forEach(x => x.complete());
+    }
+    update() {
+        this._hudElements.forEach(x => x.update());
+    }
+    getHudElement(key) {
+        return this._hudElements.get(key);
+    }
+    addHudElement(element, key) {
+        if (!(element === null || element === void 0 ? void 0 : element.object3d)) {
+            return;
+        }
+        if (this._hudElements.has(key)) {
+            this.removeHudElement(key);
+        }
+        this._hudElements.set(key, element);
+        this._hudScene.add(element.object3d);
+    }
+    removeHudElement(key) {
+        const element = this._hudElements.get(key);
+        if (element) {
+            this._hudScene.remove(element.object3d);
+            element.destroy();
+            this._hudElements.delete(key);
+        }
+    }
+    clearHudElements() {
+        this._hudElements.forEach(v => {
+            this._hudScene.remove(v.object3d);
+            v.destroy();
+        });
+        this._hudElements.clear();
+    }
+    destroyHudElements() {
+        this._hudElements.forEach(v => {
+            this._hudScene.remove(v.object3d);
+            v.destroy();
+        });
+        this._hudElements = null;
+    }
+}
+
 class HudInstancedMarker {
     constructor(hudProjectionMatrix, hudResolution, texture, sizePx, spriteZIndex, cameraZIndex, keepVisible, maxInstances = 10000) {
         const material = MaterialBuilder.buildSpriteMaterial(texture);
@@ -1876,6 +1932,7 @@ class HudInstancedMarker {
         }
     }
 }
+
 class HudUniqueMarker {
     constructor(hudProjectionMatrix, texture, sizePx, markerZIndex, cameraZIndex) {
         const material = MaterialBuilder.buildSpriteMaterial(texture);
@@ -1943,137 +2000,7 @@ class HudUniqueMarker {
         }
     }
 }
-class HudLineSegment {
-    constructor(hudProjectionMatrix, hudResolution, color, width, zIndex, dashed = false) {
-        this._hudResolution = hudResolution;
-        const material = MaterialBuilder.buildLineMaterial(color, width, dashed);
-        material.onBeforeCompile = shader => {
-            shader.uniforms = Object.assign({}, shader.uniforms, { hudMatrix: { value: hudProjectionMatrix } });
-            shader.vertexShader = shader.vertexShader.replace("void main() {", `
-        uniform mat4 hudMatrix;
 
-        vec3 applyMatrix4(vec3 vec, mat4 mat) {
-          vec3 result = vec3(0.0);
-          float w = 1.0 / (mat[0].w * vec.x + mat[1].w * vec.y + mat[2].w * vec.z + mat[3].w);
-          result .x = (mat[0].x * vec.x + mat[1].x * vec.y + mat[2].x * vec.z + mat[3].x) * w;
-          result .y = (mat[0].y * vec.x + mat[1].y * vec.y + mat[2].y * vec.z + mat[3].y) * w;
-          result .z = (mat[0].z * vec.x + mat[1].z * vec.y + mat[2].z * vec.z + mat[3].z) * w;
-          return result;			
-        }
-
-        void main() {
-          vec3 hudStart = applyMatrix4(instanceStart, hudMatrix);
-          if (hudStart.z > 1.0) {
-            hudStart.x = -hudStart.x;
-            hudStart.y = -hudStart.y;
-          }
-          hudStart.z = ${zIndex}.0;
-
-          vec3 hudEnd = applyMatrix4(instanceEnd, hudMatrix);
-          if (hudEnd.z > 1.0) {
-            hudEnd.x = -hudEnd.x;
-            hudEnd.y = -hudEnd.y;
-          }
-          hudEnd.z = ${zIndex}.0;
-
-          float hudDistanceStart = 0.0;
-          float hudDistanceEnd = length(hudEnd - hudStart);
-      `);
-            shader.vertexShader = shader.vertexShader.replace("vLineDistance = ( position.y < 0.5 ) ? dashScale * instanceDistanceStart : dashScale * instanceDistanceEnd;", "vLineDistance = ( position.y < 0.5 ) ? dashScale * hudDistanceStart : dashScale * hudDistanceEnd;");
-            shader.vertexShader = shader.vertexShader.replace("vec4 start = modelViewMatrix * vec4( instanceStart, 1.0 );", "vec4 start = modelViewMatrix * vec4( hudStart, 1.0 );");
-            shader.vertexShader = shader.vertexShader.replace("vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );", "vec4 end = modelViewMatrix * vec4( hudEnd, 1.0 );");
-        };
-        const geometry = new LineGeometry();
-        geometry.setPositions(new Array(6).fill(0));
-        const segment = new Line2(geometry, material);
-        segment.frustumCulled = false;
-        segment.visible = false;
-        this._segment = segment;
-    }
-    get object3d() {
-        return this._segment;
-    }
-    update() {
-        this._segment.material.resolution.copy(this._hudResolution);
-    }
-    destroy() {
-        this._segment.geometry.dispose();
-        this._segment.material.dispose();
-        this._segment = null;
-    }
-    set(positions) {
-        if ((positions === null || positions === void 0 ? void 0 : positions.length) !== 2) {
-            this.reset();
-            return;
-        }
-        const [start, end] = positions;
-        if (!this._segment.visible) {
-            this._segment.visible = true;
-        }
-        this._segment.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);
-    }
-    reset() {
-        if (this._segment.visible) {
-            this._segment.visible = false;
-            this._segment.geometry.setPositions(new Array(6).fill(0));
-        }
-    }
-}
-class HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
-        this._hudResolution = new Vector2();
-        this._hudProjectionMatrix = new Matrix4();
-        this._subjects = [];
-        this._hudElements = new Map();
-        this._hudScene = hudScene;
-        this._hudResolution = hudResolution;
-        this._hudProjectionMatrix = hudProjectionMatrix;
-        this._toolZIndex = toolZIndex;
-        this._cameraZIndex = cameraZIndex;
-    }
-    destroy() {
-        this.destroyHudElements();
-        this._subjects.forEach(x => x.complete());
-    }
-    update() {
-        this._hudElements.forEach(x => x.update());
-    }
-    getHudElement(key) {
-        return this._hudElements.get(key);
-    }
-    addHudElement(element, key) {
-        if (!(element === null || element === void 0 ? void 0 : element.object3d)) {
-            return;
-        }
-        if (this._hudElements.has(key)) {
-            this.removeHudElement(key);
-        }
-        this._hudElements.set(key, element);
-        this._hudScene.add(element.object3d);
-    }
-    removeHudElement(key) {
-        const element = this._hudElements.get(key);
-        if (element) {
-            this._hudScene.remove(element.object3d);
-            element.destroy();
-            this._hudElements.delete(key);
-        }
-    }
-    clearHudElements() {
-        this._hudElements.forEach(v => {
-            this._hudScene.remove(v.object3d);
-            v.destroy();
-        });
-        this._hudElements.clear();
-    }
-    destroyHudElements() {
-        this._hudElements.forEach(v => {
-            this._hudScene.remove(v.object3d);
-            v.destroy();
-        });
-        this._hudElements = null;
-    }
-}
 class HudPointSnap extends HudTool {
     constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
@@ -2155,6 +2082,84 @@ class HudPointSnap extends HudTool {
         this._snapPointsManualSelectionChange.next(points);
     }
 }
+
+class HudLineSegment {
+    constructor(hudProjectionMatrix, hudResolution, color, width, zIndex, dashed = false) {
+        this._hudResolution = hudResolution;
+        const material = MaterialBuilder.buildLineMaterial(color, width, dashed);
+        material.onBeforeCompile = shader => {
+            shader.uniforms = Object.assign({}, shader.uniforms, { hudMatrix: { value: hudProjectionMatrix } });
+            shader.vertexShader = shader.vertexShader.replace("void main() {", `
+        uniform mat4 hudMatrix;
+
+        vec3 applyMatrix4(vec3 vec, mat4 mat) {
+          vec3 result = vec3(0.0);
+          float w = 1.0 / (mat[0].w * vec.x + mat[1].w * vec.y + mat[2].w * vec.z + mat[3].w);
+          result .x = (mat[0].x * vec.x + mat[1].x * vec.y + mat[2].x * vec.z + mat[3].x) * w;
+          result .y = (mat[0].y * vec.x + mat[1].y * vec.y + mat[2].y * vec.z + mat[3].y) * w;
+          result .z = (mat[0].z * vec.x + mat[1].z * vec.y + mat[2].z * vec.z + mat[3].z) * w;
+          return result;			
+        }
+
+        void main() {
+          vec3 hudStart = applyMatrix4(instanceStart, hudMatrix);
+          if (hudStart.z > 1.0) {
+            hudStart.x = -hudStart.x;
+            hudStart.y = -hudStart.y;
+          }
+          hudStart.z = ${zIndex}.0;
+
+          vec3 hudEnd = applyMatrix4(instanceEnd, hudMatrix);
+          if (hudEnd.z > 1.0) {
+            hudEnd.x = -hudEnd.x;
+            hudEnd.y = -hudEnd.y;
+          }
+          hudEnd.z = ${zIndex}.0;
+
+          float hudDistanceStart = 0.0;
+          float hudDistanceEnd = length(hudEnd - hudStart);
+      `);
+            shader.vertexShader = shader.vertexShader.replace("vLineDistance = ( position.y < 0.5 ) ? dashScale * instanceDistanceStart : dashScale * instanceDistanceEnd;", "vLineDistance = ( position.y < 0.5 ) ? dashScale * hudDistanceStart : dashScale * hudDistanceEnd;");
+            shader.vertexShader = shader.vertexShader.replace("vec4 start = modelViewMatrix * vec4( instanceStart, 1.0 );", "vec4 start = modelViewMatrix * vec4( hudStart, 1.0 );");
+            shader.vertexShader = shader.vertexShader.replace("vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );", "vec4 end = modelViewMatrix * vec4( hudEnd, 1.0 );");
+        };
+        const geometry = new LineGeometry();
+        geometry.setPositions(new Array(6).fill(0));
+        const segment = new Line2(geometry, material);
+        segment.frustumCulled = false;
+        segment.visible = false;
+        this._segment = segment;
+    }
+    get object3d() {
+        return this._segment;
+    }
+    update() {
+        this._segment.material.resolution.copy(this._hudResolution);
+    }
+    destroy() {
+        this._segment.geometry.dispose();
+        this._segment.material.dispose();
+        this._segment = null;
+    }
+    set(positions) {
+        if ((positions === null || positions === void 0 ? void 0 : positions.length) !== 2) {
+            this.reset();
+            return;
+        }
+        const [start, end] = positions;
+        if (!this._segment.visible) {
+            this._segment.visible = true;
+        }
+        this._segment.geometry.setPositions([start.x, start.y, start.z, end.x, end.y, end.z]);
+    }
+    reset() {
+        if (this._segment.visible) {
+            this._segment.visible = false;
+            this._segment.geometry.setPositions(new Array(6).fill(0));
+        }
+    }
+}
+
 class HudDistanceMeasurer extends HudTool {
     constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
@@ -2251,6 +2256,7 @@ class HudDistanceMeasurer extends HudTool {
         this.getHudElement("s_dm_end").reset();
     }
 }
+
 class HudMarkers extends HudTool {
     constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
@@ -2415,6 +2421,7 @@ class HudMarkers extends HudTool {
         }
     }
 }
+
 class HudScene {
     constructor() {
         this._cameraZ = 10;

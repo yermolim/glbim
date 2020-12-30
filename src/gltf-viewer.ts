@@ -13,7 +13,7 @@ import { Axes } from "./components/axes";
 import { RenderScene } from "./scenes/render-scene";
 import { SimplifiedScene } from "./scenes/simplified-scene";
 import { PickingScene } from "./scenes/picking-scene";
-import { HudScene } from "./scenes/hud-scene";
+import { HudScene } from "./scenes/hud/hud-scene";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode,
