@@ -14,8 +14,8 @@ export class HudDistanceMeasurer extends HudTool {
   private _measurePoints: {start: Vector3; end: Vector3} = {start: null, end: null};
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
-    toolZIndex: number, cameraZIndex: number) { 
-    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
+    toolZIndex: number, cameraZIndex: number, spriteSize: number) { 
+    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
 
     this._distanceMeasureChange = new Subject<Distance>(); 
     this._subjects.push(this._distanceMeasureChange);
@@ -115,9 +115,11 @@ export class HudDistanceMeasurer extends HudTool {
 
   private initSprites() {     
     this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, 
-      CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, this._toolZIndex, this._cameraZIndex), "s_dm_start");
+      CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 
+      this._spriteSize, this._toolZIndex, this._cameraZIndex), "s_dm_start");
     this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, 
-      CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, this._toolZIndex, this._cameraZIndex), "s_dm_end");
+      CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 
+      this._spriteSize, this._toolZIndex, this._cameraZIndex), "s_dm_end");
   }  
   
   private resetSprites() {   

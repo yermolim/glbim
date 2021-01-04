@@ -5,13 +5,11 @@ import { CanvasTextureBuilder } from "../../../helpers/canvas-texture-builder";
 import { HudTool } from "./hud-tool";
 import { HudInstancedMarkerData, HudInstancedMarker } from "../elements/hud-instanced-marker";
 
-export class HudMarkers extends HudTool { 
+export class HudMarkers extends HudTool {
   markersChange$: Observable<MarkerInfo[]>;
   markersSelectionChange$: Observable<MarkerInfo[]>;
   markersManualSelectionChange$: Observable<MarkerInfo[]>;
   markersHighlightChange$: Observable<MarkerInfo>;
-
-  private readonly _spriteSize = 16;
 
   private _uvMap: Map<string, Vector4>;
 
@@ -28,8 +26,8 @@ export class HudMarkers extends HudTool {
   private _tempVec2 = new Vector2();
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
-    toolZIndex: number, cameraZIndex: number) { 
-    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
+    toolZIndex: number, cameraZIndex: number, spriteSize: number) { 
+    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
 
     this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
     this._markersSelectionChange = new BehaviorSubject<MarkerInfo[]>([]);

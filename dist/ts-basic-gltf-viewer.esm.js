@@ -1740,7 +1740,7 @@ class PickingScene {
 }
 
 class HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize) {
         this._hudResolution = new Vector2();
         this._hudProjectionMatrix = new Matrix4();
         this._subjects = [];
@@ -1750,6 +1750,7 @@ class HudTool {
         this._hudProjectionMatrix = hudProjectionMatrix;
         this._toolZIndex = toolZIndex;
         this._cameraZIndex = cameraZIndex;
+        this._spriteSize = spriteSize;
     }
     destroy() {
         this.destroyHudElements();
@@ -2002,8 +2003,8 @@ class HudUniqueMarker {
 }
 
 class HudPointSnap extends HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
-        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize) {
+        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
         this._selectedPoints = new Map();
         this._snapPointsHighlightChange = new Subject();
         this._snapPointsManualSelectionChange = new BehaviorSubject([]);
@@ -2063,8 +2064,8 @@ class HudPointSnap extends HudTool {
         this.resetSnapPoint();
     }
     initSprites() {
-        this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), 8, this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
-        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, this._toolZIndex, this._cameraZIndex), "s_snap");
+        this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), this._spriteSize, this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
+        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), this._spriteSize, this._toolZIndex, this._cameraZIndex), "s_snap");
     }
     updateSelectedPointSprites() {
         const points = new Array(this._selectedPoints.size);
@@ -2161,8 +2162,8 @@ class HudLineSegment {
 }
 
 class HudDistanceMeasurer extends HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
-        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize) {
+        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
         this._measurePoints = { start: null, end: null };
         this._distanceMeasureChange = new Subject();
         this._subjects.push(this._distanceMeasureChange);
@@ -2248,8 +2249,8 @@ class HudDistanceMeasurer extends HudTool {
         this.getHudElement("l_dm_w").reset();
     }
     initSprites() {
-        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0x391285), 8, this._toolZIndex, this._cameraZIndex), "s_dm_start");
-        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), 8, this._toolZIndex, this._cameraZIndex), "s_dm_end");
+        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0x391285), this._spriteSize, this._toolZIndex, this._cameraZIndex), "s_dm_start");
+        this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, CanvasTextureBuilder.buildCircleTexture(64, 0x00FFFF), this._spriteSize, this._toolZIndex, this._cameraZIndex), "s_dm_end");
     }
     resetSprites() {
         this.getHudElement("s_dm_start").reset();
@@ -2258,9 +2259,8 @@ class HudDistanceMeasurer extends HudTool {
 }
 
 class HudMarkers extends HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex) {
-        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
-        this._spriteSize = 16;
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize) {
+        super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
         this._markers = [];
         this._selectedMarkerIds = new Set();
         this._tempVec3 = new Vector3();
@@ -2436,9 +2436,9 @@ class HudScene {
                 point.y = -point.y;
             }
         };
-        this._pointSnap = new HudPointSnap(this._scene, this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ);
-        this._distanceMeasurer = new HudDistanceMeasurer(this._scene, this._hudResolution, this._hudProjectionMatrix, 8, this._cameraZ);
-        this._markers = new HudMarkers(this._scene, this._hudResolution, this._hudProjectionMatrix, 1, this._cameraZ);
+        this._pointSnap = new HudPointSnap(this._scene, this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ, 8);
+        this._distanceMeasurer = new HudDistanceMeasurer(this._scene, this._hudResolution, this._hudProjectionMatrix, 8, this._cameraZ, 8);
+        this._markers = new HudMarkers(this._scene, this._hudResolution, this._hudProjectionMatrix, 1, this._cameraZ, 24);
     }
     get pointSnap() {
         return this._pointSnap;

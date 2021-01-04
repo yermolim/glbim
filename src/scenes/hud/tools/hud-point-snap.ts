@@ -16,8 +16,8 @@ export class HudPointSnap extends HudTool {
   private _selectedPoints = new Map<string, SnapPoint>();
   
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
-    toolZIndex: number, cameraZIndex: number) { 
-    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex);
+    toolZIndex: number, cameraZIndex: number, spriteSize: number) { 
+    super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
 
     this._snapPointsHighlightChange = new Subject<SnapPoint>();
     this._snapPointsManualSelectionChange = new BehaviorSubject<SnapPoint[]>([]);
@@ -86,10 +86,10 @@ export class HudPointSnap extends HudTool {
   
   private initSprites() {
     this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution,
-      CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), 8, 
+      CanvasTextureBuilder.buildCircleTexture(64, 0x8B0000), this._spriteSize, 
       this._toolZIndex, this._cameraZIndex, false), "s_snap_selection");
     this.addHudElement(new HudUniqueMarker(this._hudProjectionMatrix, 
-      CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), 8, 
+      CanvasTextureBuilder.buildCircleTexture(64, 0xFF00FF), this._spriteSize, 
       this._toolZIndex, this._cameraZIndex), "s_snap");
   }  
   

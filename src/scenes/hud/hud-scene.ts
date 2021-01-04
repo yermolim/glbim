@@ -33,11 +33,11 @@ export class HudScene {
 
   constructor() { 
     this._pointSnap = new HudPointSnap(this._scene,
-      this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ);
+      this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ, 8);
     this._distanceMeasurer = new HudDistanceMeasurer(this._scene,
-      this._hudResolution, this._hudProjectionMatrix, 8, this._cameraZ);
+      this._hudResolution, this._hudProjectionMatrix, 8, this._cameraZ, 8);
     this._markers = new HudMarkers(this._scene,
-      this._hudResolution, this._hudProjectionMatrix, 1, this._cameraZ);
+      this._hudResolution, this._hudProjectionMatrix, 1, this._cameraZ, 24);
   }
 
   destroy() {

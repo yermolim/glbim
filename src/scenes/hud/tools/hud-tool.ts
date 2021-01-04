@@ -9,6 +9,8 @@ export class HudTool {
 
   protected _toolZIndex: number;
   protected _cameraZIndex: number;
+  
+  protected _spriteSize: number;
 
   protected _subjects: Subject<any>[] = [];
 
@@ -16,13 +18,15 @@ export class HudTool {
 
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4,
-    toolZIndex: number, cameraZIndex: number) { 
+    toolZIndex: number, cameraZIndex: number, spriteSize: number) { 
     this._hudScene = hudScene;
     this._hudResolution = hudResolution;
     this._hudProjectionMatrix = hudProjectionMatrix;
 
     this._toolZIndex = toolZIndex;
     this._cameraZIndex = cameraZIndex;
+
+    this._spriteSize = spriteSize;
   }
 
   destroy() {
