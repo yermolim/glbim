@@ -1,13 +1,11 @@
 .*
 **/tsconfig.json
-**/webpack.config.js
 **/rollup.config.js
 **/karma.conf.js
 **/ls-config.json
 node_modules
 src
 tsc
+demo
 test
 coverage
-demo
-demo.gif

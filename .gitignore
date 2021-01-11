@@ -3,6 +3,8 @@
 # compiled output
 /tmp
 /tsc
+/demo/assets
+/demo/*.js
 
 # dependencies
 /node_modules
