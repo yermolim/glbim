@@ -155,6 +155,11 @@ export class ModelLoader {
     await Promise.all(promises);
   };
 
+  async closeAllModelsAsync(): Promise<void> {
+    const loadedGuids = this.openedModelInfos.map(x => x.guid);
+    return this.closeModelsAsync(loadedGuids);
+  }
+
   getLoadedMeshesById(id: string): MeshBgSm[] {
     return this._loadedMeshesById.get(id);
   }
@@ -253,9 +258,6 @@ export class ModelLoader {
 
         if (this._wcsToUcsMatrix) {
           x.position.applyMatrix4(this._wcsToUcsMatrix);
-
-          // x.matrixAutoUpdate = false;
-          // x.matrix.multiply(this._wcsToUcsMatrix);
         }
 
         this._loadedMeshes.add(x);
@@ -266,8 +268,6 @@ export class ModelLoader {
         }        
         meshes.push(x);
         handles.add(x.name);
-
-        console.log(x);
 
         if (this.onMeshLoaded) {
           this.onMeshLoaded(x);

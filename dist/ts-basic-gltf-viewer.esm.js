@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { Vector3, Mesh, BufferGeometry, MeshStandardMaterial, Box3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderTarget, Matrix4, InstancedBufferAttribute, Triangle, WebGLRenderer, sRGBEncoding, NoToneMapping } from 'three';
+import { Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderTarget, Matrix4, InstancedBufferAttribute, Triangle, WebGLRenderer, sRGBEncoding, NoToneMapping } from 'three';
 import { first } from 'rxjs/operators';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
@@ -70,11 +70,6 @@ class Vec4DoubleCS {
         return vec
             ? new Vec4DoubleCS(isZup, vec.x, vec.y, vec.z)
             : new Vec4DoubleCS(isZup);
-    }
-    toVector3(isZup = false) {
-        return !isZup
-            ? new Vector3(this._x, this._y, this._z)
-            : new Vector3(this.x, -this._z, this._y);
     }
     toVec4(isZup = false) {
         return !isZup
@@ -204,7 +199,7 @@ ColorRgbRmo.prop = "rgbrmo";
 ColorRgbRmo.customProp = "rgbrmoC";
 ColorRgbRmo.defaultProp = "rgbrmoD";
 
-var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$3 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -275,14 +270,14 @@ class ModelLoader {
         this._loader = null;
     }
     openModelsAsync(modelInfos) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$3(this, void 0, void 0, function* () {
             if (!(modelInfos === null || modelInfos === void 0 ? void 0 : modelInfos.length)) {
                 return [];
             }
             const promises = [];
             modelInfos.forEach(x => {
                 const resultSubject = new AsyncSubject();
-                this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () {
+                this._loadingQueue.push(() => __awaiter$3(this, void 0, void 0, function* () {
                     const { url, guid, name } = x;
                     const result = !this._loadedModelsByGuid.has(guid)
                         ? yield this.loadModel(url, guid, name)
@@ -299,14 +294,14 @@ class ModelLoader {
     }
     ;
     closeModelsAsync(modelGuids) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$3(this, void 0, void 0, function* () {
             if (!(modelGuids === null || modelGuids === void 0 ? void 0 : modelGuids.length)) {
                 return;
             }
             const promises = [];
             modelGuids.forEach(x => {
                 const resultSubject = new AsyncSubject();
-                this._loadingQueue.push(() => __awaiter(this, void 0, void 0, function* () {
+                this._loadingQueue.push(() => __awaiter$3(this, void 0, void 0, function* () {
                     this.removeModelFromLoaded(x);
                     resultSubject.next(true);
                     resultSubject.complete();
@@ -318,6 +313,12 @@ class ModelLoader {
         });
     }
     ;
+    closeAllModelsAsync() {
+        return __awaiter$3(this, void 0, void 0, function* () {
+            const loadedGuids = this.openedModelInfos.map(x => x.guid);
+            return this.closeModelsAsync(loadedGuids);
+        });
+    }
     getLoadedMeshesById(id) {
         return this._loadedMeshesById.get(id);
     }
@@ -336,7 +337,7 @@ class ModelLoader {
         return { found, notFound };
     }
     processLoadingQueueAsync() {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$3(this, void 0, void 0, function* () {
             if (!this._loader
                 || this._loadingInProgress
                 || !this._loadingQueue.length) {
@@ -359,7 +360,7 @@ class ModelLoader {
         });
     }
     loadModel(url, guid, name) {
-        return __awaiter(this, void 0, void 0, function* () {
+        return __awaiter$3(this, void 0, void 0, function* () {
             this.onModelLoadingStart(url, guid);
             let error;
             try {
@@ -412,7 +413,6 @@ class ModelLoader {
                 }
                 meshes.push(x);
                 handles.add(x.name);
-                console.log(x);
                 if (this.onMeshLoaded) {
                     this.onMeshLoaded(x);
                 }
@@ -733,7 +733,6 @@ class MaterialBuilder {
     static buildBasicMaterial(color) {
         return new MeshBasicMaterial({
             color,
-            flatShading: true,
             blending: NoBlending,
             side: DoubleSide,
         });
@@ -1121,7 +1120,7 @@ class Axes extends Object3D {
 }
 Axes._toZUp = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
 
-var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -1155,7 +1154,7 @@ class RenderScene {
         this.destroyMaterials();
     }
     updateSceneAsync(lights, meshes, models, meshMergeType) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             this.deleteScene();
             yield this.createSceneAsync(lights, meshes, models, meshMergeType);
         });
@@ -1188,7 +1187,7 @@ class RenderScene {
         this._scene = null;
     }
     createSceneAsync(lights, meshes, models, meshMergeType) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             const scene = new Scene();
             scene.add(...lights);
             if (meshMergeType) {
@@ -1229,7 +1228,7 @@ class RenderScene {
         });
     }
     groupModelMeshesByMergeType(meshes, models, meshMergeType) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             let grouppedMeshes;
             switch (meshMergeType) {
                 case "scene":
@@ -1260,7 +1259,7 @@ class RenderScene {
         });
     }
     buildRenderGeometryAsync(meshes) {
-        return __awaiter$1(this, void 0, void 0, function* () {
+        return __awaiter$2(this, void 0, void 0, function* () {
             let positionsLen = 0;
             let indicesLen = 0;
             meshes.forEach(x => {
@@ -1450,7 +1449,7 @@ class RenderScene {
     }
 }
 
-var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -1496,7 +1495,7 @@ class SimplifiedScene {
         this._scene = null;
     }
     updateSceneAsync(lights, meshes, fastRenderType) {
-        return __awaiter$2(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             this._scene = null;
             const scene = new Scene();
             scene.add(...lights);
@@ -1528,7 +1527,7 @@ class SimplifiedScene {
         this._simpleMaterial.needsUpdate = true;
     }
     buildHullGeometryAsync(meshes) {
-        return __awaiter$2(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
                 return null;
             }
@@ -1589,7 +1588,7 @@ class SimplifiedScene {
         });
     }
     buildBoxGeometryAsync(meshes) {
-        return __awaiter$2(this, void 0, void 0, function* () {
+        return __awaiter$1(this, void 0, void 0, function* () {
             if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
                 return null;
             }
@@ -1733,7 +1732,6 @@ class PickingScene {
         const color = new Color(this.nextPickingColor());
         const material = new MeshBasicMaterial({
             color: color,
-            flatShading: true,
             blending: NoBlending,
             side: DoubleSide,
         });
@@ -2021,7 +2019,8 @@ class HudPointSnap extends HudTool {
     }
     setSnapPoint(snapPoint) {
         if (snapPoint) {
-            this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
+            const snapPosition = snapPoint.position.toVec4();
+            this.getHudElement("s_snap").set([new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)]);
             this._snapPointsHighlightChange.next(snapPoint);
         }
         else {
@@ -2596,7 +2595,7 @@ class PointSnapHelper {
     }
 }
 
-var __awaiter$3 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -2607,6 +2606,7 @@ var __awaiter$3 = (undefined && undefined.__awaiter) || function (thisArg, _argu
 };
 class GltfViewer {
     constructor(containerId, dracoDecoderPath, options) {
+        this._contextLoss = new BehaviorSubject(false);
         this._optionsChange = new BehaviorSubject(null);
         this._selectionChange = new BehaviorSubject(new Set());
         this._manualSelectionChange = new Subject();
@@ -2741,7 +2741,7 @@ class GltfViewer {
         this._renderer = null;
     }
     updateOptionsAsync(options) {
-        return __awaiter$3(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             const oldOptions = this._options;
             this._options = new GltfViewerOptions(options);
             let rendererReinitialized = false;
@@ -2826,19 +2826,20 @@ class GltfViewer {
         this.render();
     }
     openModelsAsync(modelInfos) {
-        return __awaiter$3(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             return this._loader.openModelsAsync(modelInfos);
         });
     }
     ;
     closeModelsAsync(modelGuids) {
-        return __awaiter$3(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             return this._loader.closeModelsAsync(modelGuids);
         });
     }
     ;
     getOpenedModels() {
-        return this._loader.openedModelInfos;
+        var _a;
+        return (_a = this._loader) === null || _a === void 0 ? void 0 : _a.openedModelInfos;
     }
     colorItems(coloringInfos) {
         if (this._loader.loadingInProgress) {
@@ -2893,12 +2894,14 @@ class GltfViewer {
         this.render();
     }
     initObservables() {
+        this.contextLoss$ = this._contextLoss.asObservable();
         this.optionsChange$ = this._optionsChange.asObservable();
         this.meshesSelectionChange$ = this._selectionChange.asObservable();
         this.meshesManualSelectionChange$ = this._manualSelectionChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
     }
     closeSubjects() {
+        this._contextLoss.complete();
         this._optionsChange.complete();
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
@@ -2925,7 +2928,7 @@ class GltfViewer {
                 .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
                 .invert();
         }
-        this._loader = new ModelLoader(dracoDecoderPath, () => __awaiter$3(this, void 0, void 0, function* () {
+        this._loader = new ModelLoader(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
             this.runQueuedColoring();
             this.runQueuedSelection();
             yield this.updateRenderSceneAsync();
@@ -2972,10 +2975,18 @@ class GltfViewer {
             this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove());
             this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
         }
+        renderer.domElement.addEventListener("webglcontextlost", () => {
+            var _a;
+            (_a = this._loader) === null || _a === void 0 ? void 0 : _a.closeAllModelsAsync().then(() => renderer.domElement.getContext("webgl"));
+            this._contextLoss.next(true);
+        });
+        renderer.domElement.addEventListener("webglcontextrestored ", () => {
+            this._contextLoss.next(false);
+        });
         this._container.append(this._renderer.domElement);
     }
     updateRenderSceneAsync() {
-        return __awaiter$3(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             yield this._renderScene.updateSceneAsync(this._lights.getLights(), this._loader.loadedMeshesArray, this._loader.loadedModelsArray, this._options.meshMergeType);
             if (this._options.fastRenderType) {
                 yield this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), this._loader.loadedMeshesArray, this._options.fastRenderType);
@@ -3138,7 +3149,10 @@ class GltfViewer {
             return;
         }
         const snapPoint = this.getSnapPointAt(clientX, clientY);
-        this._hudScene.distanceMeasurer.setEndMarker(snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVector3());
+        const snapPosition = snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVec4();
+        this._hudScene.distanceMeasurer.setEndMarker(snapPoint
+            ? new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)
+            : null);
         this.render();
     }
     runQueuedSelection() {

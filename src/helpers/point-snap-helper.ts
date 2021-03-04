@@ -1,5 +1,5 @@
 import { Raycaster, Camera, WebGLRenderer, BufferAttribute,
-  Vector2, Vector3, Face3, Triangle, Object3D, Matrix4 } from "three";
+  Vector2, Vector3, Face, Triangle } from "three";
 import { MeshBgAm } from "../common-types";
 
 export class PointSnapHelper {
@@ -102,7 +102,7 @@ export class PointSnapHelper {
     return snapPoint;
   }
 
-  private getNearestVertex(mesh: MeshBgAm, point: Vector3, face: Face3): Vector3 {
+  private getNearestVertex(mesh: MeshBgAm, point: Vector3, face: Face): Vector3 {
     const a = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.a);
     const b = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.b);
     const c = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.c);

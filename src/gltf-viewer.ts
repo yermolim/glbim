@@ -1,6 +1,6 @@
 import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
 import { WebGLRenderer, NoToneMapping, sRGBEncoding, 
-  Object3D, Mesh, Color, Matrix4 } from "three";
+  Object3D, Mesh, Color, Matrix4, Vector3 } from "three";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   MeshBgSm, ColoringInfo, PointerEventHelper, ViewerInteractionMode,
@@ -21,7 +21,9 @@ export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMod
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };
 
 export class GltfViewer {
-  // #region public observables
+  // #region public observables   
+  contextLoss$: Observable<boolean>;
+
   optionsChange$: Observable<GltfViewerOptions>;  
   lastFrameTime$: Observable<number>;
 
@@ -48,6 +50,7 @@ export class GltfViewer {
   // #endregion  
   
   // #region private rx subjects
+  private _contextLoss = new BehaviorSubject<boolean>(false);  
   private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
   private _manualSelectionChange = new Subject<Set<string>>();  
@@ -281,7 +284,7 @@ export class GltfViewer {
   };
 
   getOpenedModels(): ModelOpenedInfo[] {
-    return this._loader.openedModelInfos;
+    return this._loader?.openedModelInfos;
   }
 
   // items
@@ -350,6 +353,7 @@ export class GltfViewer {
 
   // #region rx
   private initObservables() {
+    this.contextLoss$ = this._contextLoss.asObservable();
     this.optionsChange$ = this._optionsChange.asObservable();
     this.meshesSelectionChange$ = this._selectionChange.asObservable();
     this.meshesManualSelectionChange$ = this._manualSelectionChange.asObservable();
@@ -357,6 +361,7 @@ export class GltfViewer {
   }
 
   private closeSubjects() {
+    this._contextLoss.complete();
     this._optionsChange.complete(); 
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
@@ -522,8 +527,17 @@ export class GltfViewer {
     } else {
       this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove()); 
       this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
-    } 
+    }     
+
+    renderer.domElement.addEventListener("webglcontextlost", () => {
+      this._loader?.closeAllModelsAsync().then(() => renderer.domElement.getContext("webgl"));
+      this._contextLoss.next(true);
+    });
     
+    renderer.domElement.addEventListener("webglcontextrestored ", () => {
+      this._contextLoss.next(false);      
+    });
+
     this._container.append(this._renderer.domElement);
   }
   
@@ -743,7 +757,10 @@ export class GltfViewer {
       return;
     }       
     const snapPoint = this.getSnapPointAt(clientX, clientY); 
-    this._hudScene.distanceMeasurer.setEndMarker(snapPoint?.position.toVector3()); 
+    const snapPosition = snapPoint?.position.toVec4();
+    this._hudScene.distanceMeasurer.setEndMarker(snapPoint
+      ? new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)
+      : null); 
     this.render(); 
   }  
 

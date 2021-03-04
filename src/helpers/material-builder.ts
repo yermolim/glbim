@@ -1,7 +1,6 @@
 import { Color, DoubleSide, NormalBlending, NoBlending, 
-  Texture, Material,
-  MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
-  MeshBasicMaterial, LineBasicMaterial, SpriteMaterial, RawShaderMaterial } from "three";
+  Texture, MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial,
+  MeshBasicMaterial, LineBasicMaterial, SpriteMaterial } from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
@@ -74,8 +73,7 @@ export class MaterialBuilder {
 
   static buildBasicMaterial(color: number): MeshBasicMaterial {
     return new MeshBasicMaterial({ 
-      color, 
-      flatShading: true,
+      color,
       blending: NoBlending,
       side: DoubleSide,
     });

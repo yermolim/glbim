@@ -1,5 +1,5 @@
 import { BehaviorSubject, Observable, Subject } from "rxjs";
-import { Scene, Vector2, Matrix4 } from "three";
+import { Scene, Vector2, Matrix4, Vector3 } from "three";
 import { SnapPoint } from "../../../common-types";
 import { CanvasTextureBuilder } from "../../../helpers/canvas-texture-builder";
 import { HudTool } from "./hud-tool";
@@ -30,7 +30,8 @@ export class HudPointSnap extends HudTool {
     
   setSnapPoint(snapPoint: SnapPoint) {
     if (snapPoint) {
-      this.getHudElement("s_snap").set([snapPoint.position.toVector3()]);
+      const snapPosition = snapPoint.position.toVec4();
+      this.getHudElement("s_snap").set([new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)]);
       this._snapPointsHighlightChange.next(snapPoint);
     } else {
       this.getHudElement("s_snap").reset();

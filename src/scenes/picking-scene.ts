@@ -110,8 +110,7 @@ export class PickingScene {
 
     const color = new Color(this.nextPickingColor());
     const material = new MeshBasicMaterial({ 
-      color: color, 
-      flatShading: true,
+      color: color,
       blending: NoBlending,
       side: DoubleSide,
     });

@@ -161,16 +161,10 @@ export class Vec4DoubleCS {
     }
   } 
 
-  static fromVector3(vec: Vector3, isZup = false): Vec4DoubleCS {
+  static fromVector3(vec: {x: number; y: number; z: number}, isZup = false): Vec4DoubleCS {
     return vec 
       ? new Vec4DoubleCS(isZup, vec.x, vec.y, vec.z)
       : new Vec4DoubleCS(isZup);
-  }
-
-  toVector3(isZup = false): Vector3 {
-    return !isZup
-      ? new Vector3(this._x, this._y, this._z)
-      : new Vector3(this.x, -this._z, this._y);
   }
 
   toVec4(isZup = false): Vec4 {
@@ -195,7 +189,8 @@ export class Distance {
   end: Vec4;
   distance: Vec4; 
   
-  constructor (start: Vec4 | Vector3, end: Vec4 | Vector3) {
+  constructor (start: {x: number; y: number; z: number}, 
+    end: {x: number; y: number; z: number}) {
     this.start = new Vec4(start.x, start.y, start.z);
     this.end = new Vec4(end.x, end.y, end.z);
     this.distance = Vec4.getDistance(this.start, this.end);
