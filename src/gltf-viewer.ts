@@ -1,5 +1,6 @@
 import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
-import { WebGLRenderer, NoToneMapping, sRGBEncoding, Object3D, Mesh, Color, Vector3 } from "three";
+import { WebGLRenderer, NoToneMapping, sRGBEncoding, 
+  Object3D, Mesh, Color, Matrix4 } from "three";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   MeshBgSm, ColoringInfo, PointerEventHelper, ViewerInteractionMode,
@@ -453,7 +454,15 @@ export class GltfViewer {
   }
   // #endregion
 
-  private initLoader(dracoDecoderPath: string) {
+  private initLoader(dracoDecoderPath: string) {    
+    const wcsToUcsMatrix = new Matrix4();
+    const ucsOrigin = this._options.basePoint;
+    if (ucsOrigin) {
+      wcsToUcsMatrix
+        .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
+        .invert();
+    }
+
     this._loader = new  ModelLoader(dracoDecoderPath,
       async () => {
         this.runQueuedColoring();
@@ -473,6 +482,7 @@ export class GltfViewer {
       (mesh: MeshBgSm) => {
         this._pickingScene.remove(mesh);
       },
+      wcsToUcsMatrix,
     );
 
     this.loadingStateChange$ = this._loader.loadingStateChange$;

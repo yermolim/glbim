@@ -33,8 +33,8 @@ export class CameraControls {
     this._renderCb = renderCallback;
 
     const camera = new PerspectiveCamera(75, 1, 1, 10000);  
-    camera.position.set (0, 1000, 1000);
-    camera.lookAt (0, 0, 0);  
+    camera.position.set(0, 1000, 1000);
+    camera.lookAt(0, 0, 0);  
 
     this._cameraPositionChanged = new BehaviorSubject<Vec4DoubleCS>(Vec4DoubleCS.fromVector3(camera.position));
     this.cameraPositionChange$ = this._cameraPositionChanged.asObservable();      

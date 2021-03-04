@@ -90,6 +90,7 @@ export declare class GltfViewerOptions {
 	axesHelperEnabled: boolean;
 	axesHelperPlacement: CornerName;
 	axesHelperSize: number;
+	basePoint: Vec4DoubleCS;
 	constructor(item?: object);
 }
 export declare class GltfViewer {

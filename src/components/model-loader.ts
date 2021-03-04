@@ -1,13 +1,13 @@
 import { Observable, Subject, BehaviorSubject, AsyncSubject } from "rxjs";
 import { first } from "rxjs/operators";
 
-import { Mesh, MeshStandardMaterial, BufferGeometry } from "three";
+import { Mesh, MeshStandardMaterial, BufferGeometry, Matrix4 } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 
-import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelGeometryInfo, ModelFileInfo,
-  MeshBgSm } from "../common-types";
+import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, 
+  ModelGeometryInfo, ModelFileInfo, MeshBgSm} from "../common-types";
 
 export class ModelLoader {
   // #region public observables
@@ -55,6 +55,8 @@ export class ModelLoader {
     return this._loadingInProgress;
   }
 
+  private _wcsToUcsMatrix: Matrix4;
+
   private onQueueLoaded: () => Promise<any>;
   private onModelLoaded: (guid: string) => void;
   private onModelUnloaded: (guid: string) => void;
@@ -66,13 +68,16 @@ export class ModelLoader {
     onModelLoaded: (guid: string) => void = null,
     onModelUnloaded: (guid: string) => void = null,
     onMeshLoaded: (m: MeshBgSm) => void = null,
-    onMeshUnloaded: (m: MeshBgSm) => void = null) {
+    onMeshUnloaded: (m: MeshBgSm) => void = null,
+    wcsToUcsMatrix: Matrix4 = null) {
 
     this.onQueueLoaded = onQueueLoaded;
     this.onModelLoaded = onModelLoaded;
     this.onModelUnloaded = onModelUnloaded;
     this.onMeshLoaded = onMeshLoaded;
     this.onMeshUnloaded = onMeshUnloaded;
+
+    this._wcsToUcsMatrix = wcsToUcsMatrix;
     
     this.loadingStateChange$ = this._loadingStateChange.asObservable();
     this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
@@ -246,6 +251,13 @@ export class ModelLoader {
         x.userData.id = id;
         x.userData.modelGuid = modelGuid;
 
+        if (this._wcsToUcsMatrix) {
+          x.position.applyMatrix4(this._wcsToUcsMatrix);
+
+          // x.matrixAutoUpdate = false;
+          // x.matrix.multiply(this._wcsToUcsMatrix);
+        }
+
         this._loadedMeshes.add(x);
         if (this._loadedMeshesById.has(id)) {
           this._loadedMeshesById.get(id).push(x);
@@ -254,6 +266,8 @@ export class ModelLoader {
         }        
         meshes.push(x);
         handles.add(x.name);
+
+        console.log(x);
 
         if (this.onMeshLoaded) {
           this.onMeshLoaded(x);

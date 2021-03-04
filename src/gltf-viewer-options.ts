@@ -1,4 +1,4 @@
-import { MeshMergeType, FastRenderType, CornerName } from "./common-types";
+import { MeshMergeType, FastRenderType, CornerName, Vec4DoubleCS } from "./common-types";
 
 export class GltfViewerOptions {
   useAntialiasing = false;
@@ -19,6 +19,8 @@ export class GltfViewerOptions {
   axesHelperEnabled = true;
   axesHelperPlacement: CornerName = "top-right";
   axesHelperSize = 128;
+
+  basePoint: Vec4DoubleCS = null;
   
   constructor(item: object = null) {
     if (item != null) {

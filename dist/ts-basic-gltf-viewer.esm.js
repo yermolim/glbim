@@ -116,6 +116,7 @@ class GltfViewerOptions {
         this.axesHelperEnabled = true;
         this.axesHelperPlacement = "top-right";
         this.axesHelperSize = 128;
+        this.basePoint = null;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -213,7 +214,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 class ModelLoader {
-    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null) {
+    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null, wcsToUcsMatrix = null) {
         this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
@@ -232,6 +233,7 @@ class ModelLoader {
         this.onModelUnloaded = onModelUnloaded;
         this.onMeshLoaded = onMeshLoaded;
         this.onMeshUnloaded = onMeshUnloaded;
+        this._wcsToUcsMatrix = wcsToUcsMatrix;
         this.loadingStateChange$ = this._loadingStateChange.asObservable();
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
         this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
@@ -398,6 +400,9 @@ class ModelLoader {
                 const id = `${modelGuid}|${x.name}`;
                 x.userData.id = id;
                 x.userData.modelGuid = modelGuid;
+                if (this._wcsToUcsMatrix) {
+                    x.position.applyMatrix4(this._wcsToUcsMatrix);
+                }
                 this._loadedMeshes.add(x);
                 if (this._loadedMeshesById.has(id)) {
                     this._loadedMeshesById.get(id).push(x);
@@ -407,6 +412,7 @@ class ModelLoader {
                 }
                 meshes.push(x);
                 handles.add(x.name);
+                console.log(x);
                 if (this.onMeshLoaded) {
                     this.onMeshLoaded(x);
                 }
@@ -2912,6 +2918,13 @@ class GltfViewer {
         this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
     }
     initLoader(dracoDecoderPath) {
+        const wcsToUcsMatrix = new Matrix4();
+        const ucsOrigin = this._options.basePoint;
+        if (ucsOrigin) {
+            wcsToUcsMatrix
+                .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
+                .invert();
+        }
         this._loader = new ModelLoader(dracoDecoderPath, () => __awaiter$3(this, void 0, void 0, function* () {
             this.runQueuedColoring();
             this.runQueuedSelection();
@@ -2925,7 +2938,7 @@ class GltfViewer {
             this._pickingScene.add(mesh);
         }, (mesh) => {
             this._pickingScene.remove(mesh);
-        });
+        }, wcsToUcsMatrix);
         this.loadingStateChange$ = this._loader.loadingStateChange$;
         this.modelLoadingStart$ = this._loader.modelLoadingStart$;
         this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
