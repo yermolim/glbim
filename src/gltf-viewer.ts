@@ -530,8 +530,8 @@ export class GltfViewer {
     }     
 
     renderer.domElement.addEventListener("webglcontextlost", () => {
-      this._loader?.closeAllModelsAsync().then(() => renderer.domElement.getContext("webgl"));
       this._contextLoss.next(true);
+      this._loader?.closeAllModelsAsync();
     });
     
     renderer.domElement.addEventListener("webglcontextrestored ", () => {
