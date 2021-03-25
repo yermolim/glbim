@@ -3,7 +3,7 @@
 # compiled output
 /tmp
 /tsc
-/demo/assets
+/demo/assets/draco
 /demo/*.js
 
 # dependencies

@@ -1,3 +1,27 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) 2020-present yermolim (Volodymyr Yermolenko)
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE
+ */
+
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
 import { Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, AmbientLight, HemisphereLight, DirectionalLight, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderTarget, Matrix4, InstancedBufferAttribute, Triangle, WebGLRenderer, sRGBEncoding, NoToneMapping } from 'three';
 import { first } from 'rxjs/operators';

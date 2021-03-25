@@ -5,12 +5,22 @@
     <link rel="icon" href="data:,">
     <base href="/">
     <meta charset="UTF-8">
-    <meta name="description" content="TS PDF Viewer test">
+    <meta name="description" content="TS Basic Gltf Viewer Demo">
     <meta name="author" content="Volodymyr Yermolenko">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
-    <title>Dots animation test</title>
+    <title>TS Basic Gltf Viewer Demo</title>
 </head>
 <body>    
+    <!-- hack to fit page in mobile browsers  -->
+    <script type="module">
+        const mobileVhHack = () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+        mobileVhHack();
+        window.addEventListener("resize", mobileVhHack);
+    </script>
+    
     <div id="gltf-viewer-container" class="abs-stretch"></div>
 
     <script src="demo.js" type="module"></script>  
