@@ -1,6 +1,6 @@
 {
   "name": "ts-basic-gltf-viewer",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "description": "three.js-based basic gltf model viewer",
   "module": "dist/ts-basic-gltf-viewer.esm.js",
   "types": "dist/ts-basic-gltf-viewer.d.ts",
