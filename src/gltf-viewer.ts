@@ -21,7 +21,7 @@ export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMod
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };
 
 export class GltfViewer {
-  // #region public observables   
+  // #region public observables
   contextLoss$: Observable<boolean>;
 
   optionsChange$: Observable<GltfViewerOptions>;  
@@ -47,7 +47,7 @@ export class GltfViewer {
   markersManualSelectionChange$: Observable<MarkerInfo[]>;
 
   distanceMeasureChange$: Observable<Distance>;
-  // #endregion  
+  // #endregion
   
   // #region private rx subjects
   private _contextLoss = new BehaviorSubject<boolean>(false);  
@@ -94,6 +94,12 @@ export class GltfViewer {
   private _interactionMode: ViewerInteractionMode = "select_mesh";
   // #endregion  
 
+  /**
+   * 
+   * @param containerId HTMLElement id
+   * @param dracoDecoderPath path to the folder with 'draco_decoder.js' file
+   * @param options viewer options
+   */
   constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) {
     this.initObservables();
 
@@ -137,6 +143,9 @@ export class GltfViewer {
     this._containerResizeObserver.observe(this._container);
   }
 
+  /**
+   * free viewer resources
+   */
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
     this.closeSubjects();  
@@ -176,6 +185,11 @@ export class GltfViewer {
   // #region public interaction 
 
   // common
+  /**
+   * update viewer options. not all options can be changed
+   * @param options 
+   * @returns 
+   */
   async updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions> {
     const oldOptions = this._options;
     this._options = new GltfViewerOptions(options);
@@ -248,6 +262,11 @@ export class GltfViewer {
     return this._options;
   }
   
+  /**
+   * set viewer interaction mode
+   * @param value 
+   * @returns 
+   */
   setInteractionMode(value: ViewerInteractionMode) {
     if (this._interactionMode === value) {
       return;
@@ -275,19 +294,37 @@ export class GltfViewer {
   }  
 
   // models
+  /**
+   * open models
+   * @param modelInfos model information objects
+   * @returns 
+   */
   async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
     return this._loader.openModelsAsync(modelInfos);
   };
 
+  /**
+   * close models with the specified guids
+   * @param modelGuids 
+   * @returns 
+   */
   async closeModelsAsync(modelGuids: string[]): Promise<void> {
     return this._loader.closeModelsAsync(modelGuids);
   };
 
+  /**
+   * get a short information about the currently opened models
+   * @returns 
+   */
   getOpenedModels(): ModelOpenedInfo[] {
     return this._loader?.openedModelInfos;
   }
 
-  // items
+  /**
+   * paint items using the specified coloring information
+   * @param coloringInfos coloring information objects
+   * @returns 
+   */
   colorItems(coloringInfos: ColoringInfo[]) {
     if (this._loader.loadingInProgress) {
       this._queuedColoring = coloringInfos;
@@ -297,6 +334,11 @@ export class GltfViewer {
     this.resetSelectionAndColorMeshes(coloringInfos);
   }
 
+  /**
+   * select items with the specified ids if found
+   * @param ids item identifiers represented as `${model_uuid}|${item_name}`
+   * @returns
+   */
   selectItems(ids: string[]) {
     if (!ids?.length) {
       return;
@@ -310,6 +352,11 @@ export class GltfViewer {
     this.findAndSelectMeshes(ids, false);
   };
 
+  /**
+   * make all items semi-transparent except the ones with the specified ids
+   * @param ids item identifiers represented as `${model_uuid}|${item_name}`
+   * @returns 
+   */
   isolateItems(ids: string[]) {
     if (!ids?.length) {
       return;
@@ -322,7 +369,12 @@ export class GltfViewer {
 
     this.findAndSelectMeshes(ids, true);
   };
-
+  
+  /**
+   * center view on the items with the specified ids if found
+   * @param ids item identifiers represented as `${model_uuid}|${item_name}`
+   * @returns 
+   */
   zoomToItems(ids: string[]) {
     if (ids?.length) {
       const { found } = this._loader.findMeshesByIds(new Set<string>(ids));     
@@ -334,21 +386,32 @@ export class GltfViewer {
     this.renderWholeScene();
   }
 
+  /**
+   * get identifiers of the selected items
+   * @returns item identifiers represented as `${model_uuid}|${item_name}`
+   */
   getSelectedItems(): Set<string> {
     return this._selectionChange.getValue();
   }
 
   // markers
+  /**
+   * add markers to the HUD
+   * @param markers marker information objects
+   */
   setMarkers(markers: MarkerInfo[]) {
     this._hudScene?.markers.setMarkers(markers);
     this.render();
   }
 
+  /**
+   * select markers with the specified ids if found
+   * @param ids marker ids
+   */
   selectMarkers(ids: string[]) {   
     this._hudScene?.markers.setSelectedMarkers(ids, false);
     this.render();
   }
-
   // #endregion
 
   // #region rx
