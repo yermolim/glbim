@@ -2,12 +2,12 @@ import { GltfViewerOptions } from "../gltf-viewer-options";
 
 import { Axes } from "../components/axes";
 import { Lights } from "../components/lights";
-import { CameraControls } from "../components/camera-controls";
 
 import { HudScene } from "../scenes/hud/hud-scene";
 import { RenderScene } from "../scenes/render-scene";
 import { SimplifiedScene } from "../scenes/simplified-scene";
 
+import { CameraService } from "./camera-service";
 export class ScenesService {  
   private readonly _options: GltfViewerOptions;
 
@@ -33,7 +33,7 @@ export class ScenesService {
     return this._hudScene;
   }
 
-  constructor(container: HTMLElement, cameraControls: CameraControls, 
+  constructor(container: HTMLElement, cameraService: CameraService, 
     options: GltfViewerOptions) {
     if (!options) {
       throw new Error("Options is not defined");
@@ -47,7 +47,7 @@ export class ScenesService {
       this._options.dirLightIntensity);
       
     this._axes = new Axes(container, 
-      (axis) => cameraControls.rotateToFaceTheAxis(axis, true),
+      (axis) => cameraService.rotateToFaceTheAxis(axis, true),
       this._options.axesHelperEnabled,
       this._options.axesHelperPlacement,
       this._options.axesHelperSize);

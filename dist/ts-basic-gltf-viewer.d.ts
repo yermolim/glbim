@@ -131,7 +131,7 @@ export declare class GltfViewer {
 	private _container;
 	private _containerResizeObserver;
 	private _options;
-	private _cameraControls;
+	private _cameraService;
 	private _loaderService;
 	private _scenesService;
 	private _renderService;
@@ -161,7 +161,6 @@ export declare class GltfViewer {
 	selectMarkers(ids: string[]): void;
 	private initObservables;
 	private closeSubjects;
-	private initRenderService;
 	private onRendererMouseMove;
 	private onRendererPointerDown;
 	private onRendererPointerUp;
@@ -169,6 +168,8 @@ export declare class GltfViewer {
 	private onRendererContextRestore;
 	private addRendererEventListeners;
 	private removeRendererEventListeners;
+	private initCameraService;
+	private initRenderService;
 	private initScenesService;
 	private initLoaderService;
 	private runQueuedColoring;

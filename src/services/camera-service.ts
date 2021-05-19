@@ -1,10 +1,10 @@
 import { Observable, BehaviorSubject } from "rxjs";
-
 import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+
 import { AxisName, Vec4DoubleCS } from "../common-types";
 
-export class CameraControls {
+export class CameraService {
   cameraPositionChange$: Observable<Vec4DoubleCS>;
   private _cameraPositionChanged: BehaviorSubject<Vec4DoubleCS>;
 

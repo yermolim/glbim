@@ -9,11 +9,10 @@ import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
-import { ModelLoaderService } from "./services/model-loader-service";
-import { CameraControls } from "./components/camera-controls";
-
 import { PickingScene } from "./scenes/picking-scene";
 
+import { ModelLoaderService } from "./services/model-loader-service";
+import { CameraService } from "./services/camera-service";
 import { ScenesService } from "./services/scenes-service";
 import { RenderService } from "./services/render-service";
 
@@ -64,8 +63,7 @@ export class GltfViewer {
 
   private _options: GltfViewerOptions;  
 
-  private _cameraControls: CameraControls; 
-  
+  private _cameraService: CameraService;   
   private _loaderService: ModelLoaderService;  
   private _scenesService: ScenesService;
   private _renderService: RenderService;
@@ -103,11 +101,7 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
     
-    this._cameraControls = new CameraControls(this._container, () => {
-      this._renderService?.renderOnCameraMove();
-    }); 
-    this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
-
+    this.initCameraService();
     
     this._pointSnapHelper = new PointSnapHelper();
     this._pickingScene = new PickingScene();
@@ -148,8 +142,8 @@ export class GltfViewer {
     this._pointSnapHelper?.destroy();
     this._pointSnapHelper = null; 
     
-    this._cameraControls?.destroy();
-    this._cameraControls = null;
+    this._cameraService?.destroy();
+    this._cameraService = null;
   }
 
   // #region public interaction 
@@ -407,19 +401,7 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region renderer
-  private initRenderService() {    
-    if (this._renderService) {
-      this.removeRendererEventListeners();
-      this._renderService.destroy();
-      this._renderService = null;
-    }
-    
-    this._renderService = new RenderService(this._container, this._loaderService, 
-      this._cameraControls, this._scenesService, this._options, this._lastFrameTime);  
-    this.addRendererEventListeners();
-  }
-
+  // #region renderer events
   private onRendererMouseMove = (e: MouseEvent) => {   
     if (e.buttons) {
       return;
@@ -522,8 +504,27 @@ export class GltfViewer {
   }
   // #endregion
 
+  private initCameraService() {
+    this._cameraService = new CameraService(this._container, () => {
+      this._renderService?.renderOnCameraMove();
+    }); 
+    this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
+  }
+
+  private initRenderService() {    
+    if (this._renderService) {
+      this.removeRendererEventListeners();
+      this._renderService.destroy();
+      this._renderService = null;
+    }
+    
+    this._renderService = new RenderService(this._container, this._loaderService, 
+      this._cameraService, this._scenesService, this._options, this._lastFrameTime);  
+    this.addRendererEventListeners();
+  }
+
   private initScenesService() {
-    this._scenesService = new ScenesService(this._container, this._cameraControls, this._options);
+    this._scenesService = new ScenesService(this._container, this._cameraService, this._options);
     this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$;
     this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$;
     this.markersChange$ = this._scenesService.hudScene.markers.markersChange$;
@@ -621,17 +622,17 @@ export class GltfViewer {
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {  
     const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY); 
     return this._renderService.renderer && this._pickingScene
-      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderService.renderer, position)
+      ? this._pickingScene.getSourceMeshAt(this._cameraService.camera, this._renderService.renderer, position)
       : null;
   }
   
   private getSnapPointAt(clientX: number, clientY: number): SnapPoint {
     const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
-    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
+    const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraService.camera,
       this._renderService.renderer, position);
 
     const point = pickingMesh
-      ? this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
+      ? this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraService.camera,
         this._renderService.renderer, position, pickingMesh)
       : null;
 

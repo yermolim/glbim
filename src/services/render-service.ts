@@ -4,9 +4,8 @@ import { NoToneMapping, Object3D, sRGBEncoding, WebGLRenderer } from "three";
 import { GltfViewerOptions } from "../gltf-viewer-options";
 import { MeshBgSm } from "../common-types";
 
-import { CameraControls } from "../components/camera-controls";
+import { CameraService } from "./camera-service";
 import { ModelLoaderService } from "./model-loader-service";
-
 import { ScenesService } from "./scenes-service";
 
 export class RenderService { 
@@ -24,14 +23,14 @@ export class RenderService {
   }
   private _deferRender: number;
   
-  private readonly _cameraControls: CameraControls; 
+  private readonly _cameraService: CameraService; 
   private readonly _loaderService: ModelLoaderService;  
   private readonly _scenesService: ScenesService;
   
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
 
   constructor(container: HTMLElement, loaderService: ModelLoaderService, 
-    cameraControls: CameraControls, scenesService: ScenesService, 
+    cameraService: CameraService, scenesService: ScenesService, 
     options: GltfViewerOptions, lastFrameTimeSubject?: BehaviorSubject<number>) {
     if (!container) {
       throw new Error("Container is not defined");
@@ -39,8 +38,8 @@ export class RenderService {
     if (!loaderService) {
       throw new Error("LoaderService is not defined");
     }
-    if (!cameraControls) {
-      throw new Error("CameraControls is not defined");
+    if (!cameraService) {
+      throw new Error("CameraService is not defined");
     }
     if (!scenesService) {
       throw new Error("SceneService is not defined");
@@ -51,7 +50,7 @@ export class RenderService {
 
     this._container = container;
     this._loaderService = loaderService;
-    this._cameraControls = cameraControls;
+    this._cameraService = cameraService;
     this._scenesService = scenesService;
     this._options = options;
     this._lastFrameTimeSubject = lastFrameTimeSubject;
@@ -70,7 +69,7 @@ export class RenderService {
     this._renderer = renderer;
     this.resizeRenderer();
 
-    this._cameraControls.focusCameraOnObjects(null);
+    this._cameraService.focusCameraOnObjects(null);
 
     this._container.append(this._renderer.domElement);
   }
@@ -84,7 +83,7 @@ export class RenderService {
     
   resizeRenderer = () => {
     const { width, height } = this._container.getBoundingClientRect();
-    this._cameraControls?.resize(width, height);
+    this._cameraService?.resize(width, height);
     if (this._renderer) {
       this._renderer.setSize(width, height, false);
       this.render();   
@@ -133,12 +132,12 @@ export class RenderService {
       const start = performance.now();
 
       if (fast && this._scenesService.simplifiedScene?.scene) {
-        this._renderer.render(this._scenesService.simplifiedScene.scene, this._cameraControls.camera);
+        this._renderer.render(this._scenesService.simplifiedScene.scene, this._cameraService.camera);
       } else if (this._scenesService.renderScene?.scene) {
-        this._renderer.render(this._scenesService.renderScene.scene, this._cameraControls.camera);
+        this._renderer.render(this._scenesService.renderScene.scene, this._cameraService.camera);
       }
-      this._scenesService.hudScene?.render(this._cameraControls.camera, this._renderer);
-      this._scenesService.axes?.render(this._cameraControls.camera, this._renderer);
+      this._scenesService.hudScene?.render(this._cameraService.camera, this._renderer);
+      this._scenesService.axes?.render(this._cameraService.camera, this._renderer);
 
       const frameTime = performance.now() - start;
       this._lastFrameTimeSubject?.next(frameTime);
@@ -155,7 +154,7 @@ export class RenderService {
 
   private prepareToRender(focusObjects: Object3D[] = null) {
     if (focusObjects?.length) {
-      this._cameraControls.focusCameraOnObjects(focusObjects);
+      this._cameraService.focusCameraOnObjects(focusObjects);
     }
 
     if (this._meshesNeedColorUpdate.size) {
