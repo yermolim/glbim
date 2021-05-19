@@ -63,8 +63,9 @@ export class GltfViewer {
   private _containerResizeObserver: ResizeObserver;
 
   private _options: GltfViewerOptions;  
-  private _loader: ModelLoader;  
 
+  private _loader: ModelLoader;  
+  
   private _renderer: WebGLRenderer;
   private _deferRender: number;
 
@@ -120,11 +121,12 @@ export class GltfViewer {
     this._pointSnapHelper = new PointSnapHelper();
     this._pickingScene = new PickingScene();
 
-    this._renderScene = new RenderScene(
-      this._options.isolationColor, 
-      this._options.isolationOpacity,
-      this._options.selectionColor, 
-      this._options.highlightColor);
+    this._renderScene = new RenderScene({
+      isolationColor: this._options.isolationColor, 
+      isolationOpacity: this._options.isolationOpacity,
+      selectionColor: this._options.selectionColor, 
+      highlightColor: this._options.highlightColor
+    });
     this._simplifiedScene = new SimplifiedScene();
 
     this.initHud();
@@ -228,8 +230,12 @@ export class GltfViewer {
         || this._options.isolationOpacity !== oldOptions.isolationOpacity
         || this._options.selectionColor !== oldOptions.selectionColor
         || this._options.highlightColor !== oldOptions.highlightColor) {      
-      this._renderScene.updateCommonColors(this._options.isolationColor, this._options.isolationOpacity,
-        this._options.selectionColor, this._options.highlightColor);
+      this._renderScene.updateCommonColors({
+        isolationColor: this._options.isolationColor, 
+        isolationOpacity: this._options.isolationOpacity,
+        selectionColor: this._options.selectionColor, 
+        highlightColor: this._options.highlightColor
+      });
       colorsUpdated = true;
     }
 

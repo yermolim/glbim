@@ -1,6 +1,14 @@
 import { MeshStandardMaterial } from "three";
 import { MeshBgSm } from "../common-types";
 
+/**
+ * R - Red
+ * G - Green
+ * B - blue
+ * R - roughness
+ * M - metalness
+ * O - opacity
+ */
 export class ColorRgbRmo {
   private static readonly prop = "rgbrmo";
   private static readonly customProp = "rgbrmoC";

@@ -7,6 +7,13 @@ import { MeshMergeType, MeshBgSm,
 import { MaterialBuilder } from "../helpers/material-builder";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
+export interface RenderSceneColors {
+  selectionColor: number;
+  highlightColor: number;
+  isolationColor: number;
+  isolationOpacity: number; 
+};
+
 export class RenderScene {
   private _currentMergeType: MeshMergeType;  
   private _isolationColor: ColorRgbRmo;
@@ -33,10 +40,9 @@ export class RenderScene {
     return [...this._renderMeshBySourceMesh.values()];
   }
 
-  constructor(isolationColor: number, isolationOpacity: number, 
-    selectionColor: number, highlightColor: number) {
+  constructor(colors: RenderSceneColors) {
 
-    this.updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor);
+    this.updateCommonColors(colors);
     this._globalMaterial = MaterialBuilder.buildGlobalMaterial(); 
   }
 
@@ -67,9 +73,11 @@ export class RenderScene {
     this.sortGeometryIndicesByOpacity(); 
   }  
 
-  updateCommonColors(isolationColor: number, isolationOpacity: number, 
-    selectionColor: number, highlightColor: number) {
-
+  updateCommonColors(colors: RenderSceneColors) {
+    if (!colors) {
+      throw new Error("Colors are not defined");
+    }
+    const {isolationColor, isolationOpacity, selectionColor, highlightColor} = colors;
     this._isolationColor = MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity);
     this._selectionColor = new Color(selectionColor);
     this._highlightColor = new Color(highlightColor);

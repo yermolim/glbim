@@ -1154,14 +1154,14 @@ var __awaiter$2 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class RenderScene {
-    constructor(isolationColor, isolationOpacity, selectionColor, highlightColor) {
+    constructor(colors) {
         this._geometries = [];
         this._materials = new Map();
         this._geometryIndexBySourceMesh = new Map();
         this._sourceMeshesByGeometryIndex = new Map();
         this._renderMeshBySourceMesh = new Map();
         this._geometryIndicesNeedSort = new Set();
-        this.updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor);
+        this.updateCommonColors(colors);
         this._globalMaterial = MaterialBuilder.buildGlobalMaterial();
     }
     get scene() {
@@ -1196,7 +1196,11 @@ class RenderScene {
         }
         this.sortGeometryIndicesByOpacity();
     }
-    updateCommonColors(isolationColor, isolationOpacity, selectionColor, highlightColor) {
+    updateCommonColors(colors) {
+        if (!colors) {
+            throw new Error("Colors are not defined");
+        }
+        const { isolationColor, isolationOpacity, selectionColor, highlightColor } = colors;
         this._isolationColor = MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity);
         this._selectionColor = new Color(selectionColor);
         this._highlightColor = new Color(highlightColor);
@@ -2729,7 +2733,12 @@ class GltfViewer {
         this._lights = new Lights(this._options.usePhysicalLights, this._options.ambientLightIntensity, this._options.hemiLightIntensity, this._options.dirLightIntensity);
         this._pointSnapHelper = new PointSnapHelper();
         this._pickingScene = new PickingScene();
-        this._renderScene = new RenderScene(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
+        this._renderScene = new RenderScene({
+            isolationColor: this._options.isolationColor,
+            isolationOpacity: this._options.isolationOpacity,
+            selectionColor: this._options.selectionColor,
+            highlightColor: this._options.highlightColor
+        });
         this._simplifiedScene = new SimplifiedScene();
         this.initHud();
         this.initLoader(dracoDecoderPath);
@@ -2796,7 +2805,12 @@ class GltfViewer {
                 || this._options.isolationOpacity !== oldOptions.isolationOpacity
                 || this._options.selectionColor !== oldOptions.selectionColor
                 || this._options.highlightColor !== oldOptions.highlightColor) {
-                this._renderScene.updateCommonColors(this._options.isolationColor, this._options.isolationOpacity, this._options.selectionColor, this._options.highlightColor);
+                this._renderScene.updateCommonColors({
+                    isolationColor: this._options.isolationColor,
+                    isolationOpacity: this._options.isolationOpacity,
+                    selectionColor: this._options.selectionColor,
+                    highlightColor: this._options.highlightColor
+                });
                 colorsUpdated = true;
             }
             if (rendererReinitialized || lightsUpdated || colorsUpdated) {

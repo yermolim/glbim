@@ -1,4 +1,4 @@
-import { Mesh, Vector3, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
+import { Mesh, Material, MeshBasicMaterial, MeshStandardMaterial, BufferGeometry, 
   Uint32BufferAttribute, Float32BufferAttribute, Uint8BufferAttribute } from "three";
 
 // #region types
