@@ -1,30 +1,30 @@
 import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
-import { WebGLRenderer, NoToneMapping, sRGBEncoding, 
-  Object3D, Mesh, Color, Matrix4, Vector3 } from "three";
-
+import { Mesh, Color, Matrix4, Vector3 } from "three";
+  
+import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   MeshBgSm, ColoringInfo, PointerEventHelper, ViewerInteractionMode,
   Distance, Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
-import { GltfViewerOptions } from "./gltf-viewer-options";
+
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
+import { PointSnapHelper } from "./helpers/point-snap-helper";
+
 import { ModelLoader } from "./components/model-loader";
 import { CameraControls } from "./components/camera-controls";
-import { Lights } from "./components/lights";
-import { Axes } from "./components/axes";
-import { RenderScene } from "./scenes/render-scene";
-import { SimplifiedScene } from "./scenes/simplified-scene";
+
 import { PickingScene } from "./scenes/picking-scene";
-import { HudScene } from "./scenes/hud/hud-scene";
-import { PointSnapHelper } from "./helpers/point-snap-helper";
+
+import { ScenesService } from "./services/scenes-service";
+import { RenderService } from "./services/render-service";
 
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode,
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };
 
 export class GltfViewer {
   // #region public observables
+  optionsChange$: Observable<GltfViewerOptions>; 
+  
   contextLoss$: Observable<boolean>;
-
-  optionsChange$: Observable<GltfViewerOptions>;  
   lastFrameTime$: Observable<number>;
 
   cameraPositionChange$: Observable<Vec4DoubleCS>;
@@ -50,10 +50,10 @@ export class GltfViewer {
   // #endregion
   
   // #region private rx subjects
-  private _contextLoss = new BehaviorSubject<boolean>(false);  
   private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
   private _selectionChange = new BehaviorSubject<Set<string>>(new Set());
-  private _manualSelectionChange = new Subject<Set<string>>();  
+  private _manualSelectionChange = new Subject<Set<string>>();
+  private _contextLoss = new BehaviorSubject<boolean>(false);  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
   // #endregion
   
@@ -65,19 +65,10 @@ export class GltfViewer {
   private _options: GltfViewerOptions;  
 
   private _loader: ModelLoader;  
-  
-  private _renderer: WebGLRenderer;
-  private _deferRender: number;
-
   private _cameraControls: CameraControls; 
-  private _lights: Lights; 
 
-  private _renderScene: RenderScene; 
-  private _simplifiedScene: SimplifiedScene; 
-  private _hudScene: HudScene; 
-  private _axes: Axes;  
-
-  private _meshesNeedColorUpdate = new Set<MeshBgSm>();
+  private _scenesService: ScenesService;
+  private _renderService: RenderService;
 
   // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
@@ -111,37 +102,23 @@ export class GltfViewer {
 
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
+    
+    this._cameraControls = new CameraControls(this._container, () => {
+      this._renderService?.renderOnCameraMove();
+    }); 
+    this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
 
-    this._lights = new Lights(
-      this._options.usePhysicalLights, 
-      this._options.ambientLightIntensity, 
-      this._options.hemiLightIntensity, 
-      this._options.dirLightIntensity); 
-
+    
     this._pointSnapHelper = new PointSnapHelper();
     this._pickingScene = new PickingScene();
-
-    this._renderScene = new RenderScene({
-      isolationColor: this._options.isolationColor, 
-      isolationOpacity: this._options.isolationOpacity,
-      selectionColor: this._options.selectionColor, 
-      highlightColor: this._options.highlightColor
-    });
-    this._simplifiedScene = new SimplifiedScene();
-
-    this.initHud();
-
-    this.initLoader(dracoDecoderPath);
-
-    this.initRenderer();
     
-    this._axes = new Axes(this._container, 
-      (axis) => this._cameraControls.rotateToFaceTheAxis(axis, true),
-      this._options.axesHelperEnabled,
-      this._options.axesHelperPlacement,
-      this._options.axesHelperSize);
+    this.initLoader(dracoDecoderPath);
+    this.initScenesService();
+    this.initRenderService();
  
-    this._containerResizeObserver = new ResizeObserver(this.resizeRenderer);
+    this._containerResizeObserver = new ResizeObserver(() => {
+      this._renderService?.resizeRenderer();
+    });
     this._containerResizeObserver.observe(this._container);
   }
 
@@ -151,50 +128,42 @@ export class GltfViewer {
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
     this.closeSubjects();  
-    this.removeCanvasEventListeners();
+    this.removeRendererEventListeners();
     
     this._containerResizeObserver?.disconnect();
-    this._containerResizeObserver = null;
+    this._containerResizeObserver = null;    
+
+    this._renderService?.destroy();
+    this._renderService = null; 
     
-    this._cameraControls?.destroy();
-    this._cameraControls = null;
-
-    this._pointSnapHelper?.destroy();
-    this._pointSnapHelper = null;
-
-    this._axes?.destroy();
-    this._axes = null;
-
-    this._hudScene?.destroy();
-    this._hudScene = null;
-
-    this._pickingScene?.destroy();
-    this._pickingScene = null;
-    
-    this._simplifiedScene?.destroy();
-    this._simplifiedScene = null;
-
-    this._renderScene?.destroy();
-    this._renderScene = null;   
+    this._scenesService?.destroy();
+    this._scenesService = null;
 
     this._loader?.destroy();
     this._loader = null;
 
-    this._renderer?.dispose();
-    this._renderer = null;
+    this._pickingScene?.destroy();
+    this._pickingScene = null;
+
+    this._pointSnapHelper?.destroy();
+    this._pointSnapHelper = null; 
+    
+    this._cameraControls?.destroy();
+    this._cameraControls = null;
   }
 
   // #region public interaction 
 
   // common
   /**
-   * update viewer options. not all options can be changed
+   * update viewer options. not all options can be changed after construction
    * @param options 
    * @returns 
    */
   async updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions> {
     const oldOptions = this._options;
     this._options = new GltfViewerOptions(options);
+    this._renderService.options = this._options;
 
     let rendererReinitialized = false;
     let axesHelperUpdated = false;
@@ -204,14 +173,14 @@ export class GltfViewer {
     let sceneUpdated = false;
 
     if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
-      this.initRenderer();
+      this.initRenderService();
       rendererReinitialized = true;
     }
 
     if (this._options.axesHelperEnabled !== oldOptions.axesHelperEnabled
       || this._options.axesHelperPlacement !== oldOptions.axesHelperPlacement
       || this._options.axesHelperSize !== oldOptions.axesHelperSize) {
-      this._axes.updateOptions(this._options.axesHelperEnabled,
+      this._scenesService.axes.updateOptions(this._options.axesHelperEnabled,
         this._options.axesHelperPlacement, this._options.axesHelperSize);
       axesHelperUpdated = true;
     }
@@ -220,8 +189,8 @@ export class GltfViewer {
         || this._options.ambientLightIntensity !== oldOptions.ambientLightIntensity
         || this._options.hemiLightIntensity !== oldOptions.hemiLightIntensity
         || this._options.dirLightIntensity !== oldOptions.dirLightIntensity) {
-      this._renderer.physicallyCorrectLights = this._options.usePhysicalLights;
-      this._lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity,
+      this._renderService.renderer.physicallyCorrectLights = this._options.usePhysicalLights;
+      this._scenesService.lights.update(this._options.usePhysicalLights, this._options.ambientLightIntensity,
         this._options.hemiLightIntensity, this._options.dirLightIntensity);
       lightsUpdated = true;
     }  
@@ -230,7 +199,7 @@ export class GltfViewer {
         || this._options.isolationOpacity !== oldOptions.isolationOpacity
         || this._options.selectionColor !== oldOptions.selectionColor
         || this._options.highlightColor !== oldOptions.highlightColor) {      
-      this._renderScene.updateCommonColors({
+      this._scenesService.renderScene.updateCommonColors({
         isolationColor: this._options.isolationColor, 
         isolationOpacity: this._options.isolationOpacity,
         selectionColor: this._options.selectionColor, 
@@ -240,27 +209,27 @@ export class GltfViewer {
     }
 
     if (rendererReinitialized || lightsUpdated || colorsUpdated) {
-      this._renderScene.updateSceneMaterials();
-      this._simplifiedScene.updateSceneMaterials();
+      this._scenesService.renderScene.updateSceneMaterials();
+      this._scenesService.simplifiedScene.updateSceneMaterials();
       materialsUpdated = true;
     }
 
     if (this._options.meshMergeType !== oldOptions.meshMergeType
         || this._options.fastRenderType !== oldOptions.fastRenderType) {
-      await this.updateRenderSceneAsync();
+      await this._renderService.updateRenderSceneAsync();
       sceneUpdated = true;
     }
     
     if (!(materialsUpdated || sceneUpdated) 
         && axesHelperUpdated) {
-      this.render();
+      this._renderService.render();
     }    
 
     if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
       if (this._options.highlightingEnabled) {        
-        this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
+        this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
       } else {
-        this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
+        this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
       }
     }
 
@@ -282,21 +251,21 @@ export class GltfViewer {
         // TODO?: reset mesh selection
         break;
       case "select_vertex":
-        this._hudScene.pointSnap.reset();
+        this._scenesService.hudScene.pointSnap.reset();
         break;
       case "select_sprite":
-        this._hudScene.markers.highlightMarker(null);
-        this._hudScene.markers.resetSelectedMarkers();
+        this._scenesService.hudScene.markers.highlightMarker(null);
+        this._scenesService.hudScene.markers.resetSelectedMarkers();
         break;
       case "measure_distance":
-        this._hudScene.pointSnap.reset();
-        this._hudScene.distanceMeasurer.reset();
+        this._scenesService.hudScene.pointSnap.reset();
+        this._scenesService.hudScene.distanceMeasurer.reset();
         break;
       default:
         return;
     }
     this._interactionMode = value;
-    this.render();
+    this._renderService.render();
   }  
 
   // models
@@ -385,11 +354,11 @@ export class GltfViewer {
     if (ids?.length) {
       const { found } = this._loader.findMeshesByIds(new Set<string>(ids));     
       if (found.length) {
-        this.render(found);
+        this._renderService.render(found);
         return;
       }
     }
-    this.renderWholeScene();
+    this._renderService.renderWholeScene();
   }
 
   /**
@@ -406,8 +375,8 @@ export class GltfViewer {
    * @param markers marker information objects
    */
   setMarkers(markers: MarkerInfo[]) {
-    this._hudScene?.markers.setMarkers(markers);
-    this.render();
+    this._scenesService.hudScene?.markers.setMarkers(markers);
+    this._renderService.render();
   }
 
   /**
@@ -415,8 +384,8 @@ export class GltfViewer {
    * @param ids marker ids
    */
   selectMarkers(ids: string[]) {   
-    this._hudScene?.markers.setSelectedMarkers(ids, false);
-    this.render();
+    this._scenesService.hudScene?.markers.setSelectedMarkers(ids, false);
+    this._renderService.render();
   }
   // #endregion
 
@@ -438,8 +407,20 @@ export class GltfViewer {
   }
   // #endregion
 
-  // #region canvas event handlers 
-  private onCanvasMouseMove = (e: MouseEvent) => {   
+  // #region renderer
+  private initRenderService() {    
+    if (this._renderService) {
+      this.removeRendererEventListeners();
+      this._renderService.destroy();
+      this._renderService = null;
+    }
+    
+    this._renderService = new RenderService(this._container, this._loader, 
+      this._cameraControls, this._scenesService, this._options, this._lastFrameTime);  
+    this.addRendererEventListeners();
+  }
+
+  private onRendererMouseMove = (e: MouseEvent) => {   
     if (e.buttons) {
       return;
     } 
@@ -468,12 +449,12 @@ export class GltfViewer {
     }, 30);
   };
 
-  private onCanvasPointerDown = (e: PointerEvent) => {
+  private onRendererPointerDown = (e: PointerEvent) => {
     this._pointerEventHelper.downX = e.clientX;
     this._pointerEventHelper.downY = e.clientY;
   };
 
-  private onCanvasPointerUp = (e: PointerEvent) => {
+  private onRendererPointerUp = (e: PointerEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
@@ -511,22 +492,46 @@ export class GltfViewer {
     this._pointerEventHelper.downY = null;
   };
 
-  private addCanvasEventListeners() {
+  private onRendererContextLoss = () => {
+    this._contextLoss.next(true);
+    this._loader?.closeAllModelsAsync();
+  };
+
+  private onRendererContextRestore = () => {
+    this._contextLoss.next(false);     
+  };
+
+  private addRendererEventListeners() {
     const { highlightingEnabled } = this._options;
 
-    this._renderer.domElement.addEventListener("pointerdown", this.onCanvasPointerDown);
-    this._renderer.domElement.addEventListener("pointerup", this.onCanvasPointerUp);
+    this._renderService.renderer.domElement.addEventListener("webglcontextlost", () => this.onRendererContextLoss);    
+    this._renderService.renderer.domElement.addEventListener("webglcontextrestored ", this.onRendererContextRestore); 
+    this._renderService.renderer.domElement.addEventListener("pointerdown", this.onRendererPointerDown);
+    this._renderService.renderer.domElement.addEventListener("pointerup", this.onRendererPointerUp);
     if (highlightingEnabled) {      
-      this._renderer.domElement.addEventListener("mousemove", this.onCanvasMouseMove);
+      this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
     }
   }
 
-  private removeCanvasEventListeners() {    
-    this._renderer.domElement.removeEventListener("pointerdown", this.onCanvasPointerDown);
-    this._renderer.domElement.removeEventListener("pointerup", this.onCanvasPointerUp);   
-    this._renderer.domElement.removeEventListener("mousemove", this.onCanvasMouseMove);
+  private removeRendererEventListeners() {   
+    this._renderService.renderer.domElement.removeEventListener("webglcontextlost", () => this.onRendererContextLoss);    
+    this._renderService.renderer.domElement.removeEventListener("webglcontextrestored ", this.onRendererContextRestore);     
+    this._renderService.renderer.domElement.removeEventListener("pointerdown", this.onRendererPointerDown);
+    this._renderService.renderer.domElement.removeEventListener("pointerup", this.onRendererPointerUp);   
+    this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
   }
   // #endregion
+
+  private initScenesService() {
+    this._scenesService = new ScenesService(this._container, this._cameraControls, this._options);
+    this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$;
+    this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$;
+    this.markersChange$ = this._scenesService.hudScene.markers.markersChange$;
+    this.markersSelectionChange$ = this._scenesService.hudScene.markers.markersSelectionChange$;
+    this.markersManualSelectionChange$ = this._scenesService.hudScene.markers.markersManualSelectionChange$;
+    this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$;
+    this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
+  }
 
   private initLoader(dracoDecoderPath: string) {    
     const wcsToUcsMatrix = new Matrix4();
@@ -537,11 +542,11 @@ export class GltfViewer {
         .invert();
     }
 
-    this._loader = new  ModelLoader(dracoDecoderPath,
+    this._loader = new ModelLoader(dracoDecoderPath,
       async () => {
         this.runQueuedColoring();
         this.runQueuedSelection();
-        await this.updateRenderSceneAsync();
+        await this._renderService.updateRenderSceneAsync();
       },
       (guid: string) => {},
       (guid: string) => {
@@ -565,129 +570,6 @@ export class GltfViewer {
     this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
     this.modelsOpenedChange$ = this._loader.modelsOpenedChange$;  
   }
-
-  // #region renderer
-  private initRenderer() {    
-    if (this._renderer) {
-      this.removeCanvasEventListeners();
-      this._renderer.domElement.remove();
-      this._renderer.dispose();
-      this._renderer.forceContextLoss();
-      this._renderer = null;
-    }
-
-    const { useAntialiasing, usePhysicalLights } = this._options;
-
-    const renderer = new WebGLRenderer({
-      alpha: true, 
-      antialias: useAntialiasing,
-    });
-    renderer.setClearColor(0x000000, 0);
-    renderer.outputEncoding = sRGBEncoding;
-    renderer.toneMapping = NoToneMapping;
-    renderer.physicallyCorrectLights = usePhysicalLights;
-
-    this._renderer = renderer;
-    this.resizeRenderer();
-    this.addCanvasEventListeners();
-
-    if (this._cameraControls) {      
-      this._cameraControls.focusCameraOnObjects(null);
-    } else {
-      this._cameraControls = new CameraControls(this._container, () => this.renderOnCameraMove()); 
-      this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
-    }     
-
-    renderer.domElement.addEventListener("webglcontextlost", () => {
-      this._contextLoss.next(true);
-      this._loader?.closeAllModelsAsync();
-    });
-    
-    renderer.domElement.addEventListener("webglcontextrestored ", () => {
-      this._contextLoss.next(false);      
-    });
-
-    this._container.append(this._renderer.domElement);
-  }
-  
-  private resizeRenderer = () => {
-    const { width, height } = this._container.getBoundingClientRect();
-    this._cameraControls?.resize(width, height);
-    if (this._renderer) {
-      this._renderer.setSize(width, height, false);
-      this.render();   
-    }
-  };
-
-  private async updateRenderSceneAsync(): Promise<void> {
-    await this._renderScene.updateSceneAsync(this._lights.getLights(), 
-      this._loader.loadedMeshesArray, this._loader.loadedModelsArray,
-      this._options.meshMergeType);
-      
-    if (this._options.fastRenderType) {
-      await this._simplifiedScene.updateSceneAsync(this._lights.getCopy(), 
-        this._loader.loadedMeshesArray, 
-        this._options.fastRenderType);
-    } else {
-      this._simplifiedScene.clearScene();
-    }
-
-    this.renderWholeScene();
-  }
-
-  private prepareToRender(focusObjects: Object3D[] = null) {
-    if (focusObjects?.length) {
-      this._cameraControls.focusCameraOnObjects(focusObjects);
-    }
-
-    if (this._meshesNeedColorUpdate.size) {
-      this._renderScene.updateMeshColors(this._meshesNeedColorUpdate);
-      this._meshesNeedColorUpdate.clear();
-    }  
-  }
-
-  private render(focusObjects: Object3D[] = null, fast = false) {
-    this.prepareToRender(focusObjects);
-    requestAnimationFrame(() => { 
-      if (!this._renderer) {
-        return;
-      }
-
-      const start = performance.now();
-
-      if (fast && this._simplifiedScene?.scene) {
-        this._renderer.render(this._simplifiedScene.scene, this._cameraControls.camera);
-      } else if (this._renderScene?.scene) {
-        this._renderer.render(this._renderScene.scene, this._cameraControls.camera);
-      }
-      this._hudScene?.render(this._cameraControls.camera, this._renderer);
-      this._axes?.render(this._cameraControls.camera, this._renderer);
-
-      const frameTime = performance.now() - start;
-      this._lastFrameTime.next(frameTime);
-    });
-  }  
-
-  private renderWholeScene() {    
-    this.render(this._loader.loadedMeshesArray.length ? [this._renderScene.scene] : null);
-  }
-
-  private renderOnCameraMove() {
-    if (this._options.fastRenderType) {
-      if (this._deferRender) {
-        clearTimeout(this._deferRender);
-        this._deferRender = null;
-      }
-      this.render(null, true);
-      this._deferRender = window.setTimeout(() => {
-        this._deferRender = null;
-        this.render();
-      }, 300);
-    } else {
-      this.render();
-    }
-  }
-  // #endregion
 
   // #region item custom coloring
   private runQueuedColoring() {
@@ -714,7 +596,7 @@ export class GltfViewer {
             meshes.forEach(mesh => {
               mesh.userData.colored = true;
               ColorRgbRmo.setCustomToMesh(mesh, customColor);
-              this._meshesNeedColorUpdate.add(mesh);
+              this._renderService.enqueueMeshForColorUpdate(mesh);
               this._coloredMeshes.push(mesh);
             });
           }
@@ -722,14 +604,14 @@ export class GltfViewer {
       }
     }
 
-    this.render();
+    this._renderService.render();
   }
 
   private removeColoring() {
     for (const mesh of this._coloredMeshes) {
       mesh.userData.colored = undefined;
       ColorRgbRmo.deleteFromMesh(mesh, true);
-      this._meshesNeedColorUpdate.add(mesh);
+      this._renderService.enqueueMeshForColorUpdate(mesh);
     }
     this._coloredMeshes.length = 0;
   }
@@ -737,20 +619,20 @@ export class GltfViewer {
 
   // #region picking 
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {  
-    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY); 
-    return this._renderer && this._pickingScene
-      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderer, position)
+    const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY); 
+    return this._renderService.renderer && this._pickingScene
+      ? this._pickingScene.getSourceMeshAt(this._cameraControls.camera, this._renderService.renderer, position)
       : null;
   }
   
   private getSnapPointAt(clientX: number, clientY: number): SnapPoint {
-    const position = PointSnapHelper.convertClientToCanvas(this._renderer, clientX, clientY);
+    const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
     const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraControls.camera,
-      this._renderer, position);
+      this._renderService.renderer, position);
 
     const point = pickingMesh
       ? this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraControls.camera,
-        this._renderer, position, pickingMesh)
+        this._renderService.renderer, position, pickingMesh)
       : null;
 
     const snapPoint = point
@@ -764,77 +646,64 @@ export class GltfViewer {
   // #region hud methods
 
   // common
-  private initHud() {
-    this._hudScene = new HudScene();
-
-    this.snapPointsHighlightChange$ = this._hudScene.pointSnap.snapPointsHighlightChange$;
-    this.snapPointsManualSelectionChange$ = this._hudScene.pointSnap.snapPointsManualSelectionChange$;
-
-    this.markersChange$ = this._hudScene.markers.markersChange$;
-    this.markersSelectionChange$ = this._hudScene.markers.markersSelectionChange$;
-    this.markersManualSelectionChange$ = this._hudScene.markers.markersManualSelectionChange$;
-    this.markersHighlightChange$ = this._hudScene.markers.markersHighlightChange$;
-
-    this.distanceMeasureChange$ = this._hudScene.distanceMeasurer.distanceMeasureChange$;
-  }
 
   // snap points
   private setVertexSnapAtPoint(clientX: number, clientY: number) {    
-    if (!this._renderer || !this._pickingScene) {
+    if (!this._renderService.renderer || !this._pickingScene) {
       return;
     } 
     const snapPoint = this.getSnapPointAt(clientX, clientY);    
-    this._hudScene.pointSnap.setSnapPoint(snapPoint);
-    this.render(); 
+    this._scenesService.hudScene.pointSnap.setSnapPoint(snapPoint);
+    this._renderService.render(); 
   }
   
   private selectVertexAtPoint(clientX: number, clientY: number) {    
-    if (!this._renderer || !this._pickingScene) {
+    if (!this._renderService.renderer || !this._pickingScene) {
       return;
     } 
     const snapPoint = this.getSnapPointAt(clientX, clientY);    
-    this._hudScene.pointSnap.setSelectedSnapPoints(snapPoint ? [snapPoint] : null);
-    this.render(); 
+    this._scenesService.hudScene.pointSnap.setSelectedSnapPoints(snapPoint ? [snapPoint] : null);
+    this._renderService.render(); 
   }
   
   // sprites(markers)
   private highlightSpriteAtPoint(clientX: number, clientY: number) {    
-    if (!this._renderer || !this._pickingScene) {
+    if (!this._renderService.renderer || !this._pickingScene) {
       return;
     } 
 
-    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderer, clientX, clientY);
-    const marker = this._hudScene.markers.getMarkerAtCanvasPoint(point);
-    this._hudScene.markers.highlightMarker(marker);
-    this.render(); 
+    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
+    const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
+    this._scenesService.hudScene.markers.highlightMarker(marker);
+    this._renderService.render(); 
   }
   
   private selectSpriteAtPoint(clientX: number, clientY: number) {    
-    if (!this._renderer || !this._pickingScene) {
+    if (!this._renderService.renderer || !this._pickingScene) {
       return;
     } 
 
-    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderer, clientX, clientY);
-    const marker = this._hudScene.markers.getMarkerAtCanvasPoint(point);
-    this._hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
-    this.render(); 
+    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
+    const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
+    this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
+    this._renderService.render(); 
   }
 
   // distance measure
   private measureDistanceAtPoint(clientX: number, clientY: number) { 
-    if (!this._renderer || !this._pickingScene) {
+    if (!this._renderService.renderer || !this._pickingScene) {
       return;
     }       
     const snapPoint = this.getSnapPointAt(clientX, clientY); 
     const snapPosition = snapPoint?.position.toVec4();
-    this._hudScene.distanceMeasurer.setEndMarker(snapPoint
+    this._scenesService.hudScene.distanceMeasurer.setEndMarker(snapPoint
       ? new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)
       : null); 
-    this.render(); 
-  }  
+    this._renderService.render(); 
+  }
 
   // #endregion
-  
+
   // #region item selection/isolation   
   private runQueuedSelection() {    
     if (this._queuedSelection) {
@@ -853,7 +722,7 @@ export class GltfViewer {
   private removeSelection() {
     for (const mesh of this._selectedMeshes) {
       mesh.userData.selected = undefined;
-      this._meshesNeedColorUpdate.add(mesh);
+      this._renderService.enqueueMeshForColorUpdate(mesh);
     }
     this._selectedMeshes.length = 0;
   }
@@ -861,7 +730,7 @@ export class GltfViewer {
   private removeIsolation() {
     for (const mesh of this._isolatedMeshes) {
       mesh.userData.isolated = undefined;
-      this._meshesNeedColorUpdate.add(mesh);
+      this._renderService.enqueueMeshForColorUpdate(mesh);
     }
     this._isolatedMeshes.length = 0;
   }
@@ -913,7 +782,7 @@ export class GltfViewer {
     
     meshes.forEach(x => {
       x.userData.selected = true;
-      this._meshesNeedColorUpdate.add(x);
+      this._renderService.enqueueMeshForColorUpdate(x);
     });
 
 
@@ -934,16 +803,16 @@ export class GltfViewer {
     this._loader.loadedMeshesArray.forEach(x => {
       if (!x.userData.selected) {
         x.userData.isolated = true;
-        this._meshesNeedColorUpdate.add(x);
+        this._renderService.enqueueMeshForColorUpdate(x);
         this._isolatedMeshes.push(x);
       }
     }); 
-    this.render(this._selectedMeshes);
+    this._renderService.render(this._selectedMeshes);
   }
 
   private emitSelectionChanged(manual: boolean, render: boolean) {
     if (render) {
-      this.render(manual ? null : this._selectedMeshes);
+      this._renderService.render(manual ? null : this._selectedMeshes);
     }
 
     const ids = new Set<string>();
@@ -970,17 +839,17 @@ export class GltfViewer {
     this.removeHighlighting();
     if (mesh) {
       mesh.userData.highlighted = true;
-      this._meshesNeedColorUpdate.add(mesh);
+      this._renderService.enqueueMeshForColorUpdate(mesh);
       this._highlightedMesh = mesh;
     }
-    this.render();
+    this._renderService.render();
   }
 
   private removeHighlighting() {
     if (this._highlightedMesh) {
       const mesh = this._highlightedMesh;
       mesh.userData.highlighted = undefined;
-      this._meshesNeedColorUpdate.add(mesh);
+      this._renderService.enqueueMeshForColorUpdate(mesh);
       this._highlightedMesh = null;
     }
   }
