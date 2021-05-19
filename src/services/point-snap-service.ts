@@ -2,7 +2,7 @@ import { Raycaster, Camera, WebGLRenderer, BufferAttribute,
   Vector2, Vector3, Face, Triangle } from "three";
 import { MeshBgAm } from "../common-types";
 
-export class PointSnapHelper {
+export class PointSnapService {
   private _raycaster: Raycaster;
 
   constructor() {

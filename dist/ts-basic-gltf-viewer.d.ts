@@ -136,7 +136,7 @@ export declare class GltfViewer {
 	private _scenesService;
 	private _renderService;
 	private _pointerEventHelper;
-	private _pointSnapHelper;
+	private _pointSnapService;
 	private _pickingScene;
 	private _queuedColoring;
 	private _queuedSelection;

@@ -7,7 +7,7 @@ import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   Distance, Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
 
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
-import { PointSnapHelper } from "./helpers/point-snap-helper";
+import { PointSnapService } from "./services/point-snap-service";
 
 import { PickingScene } from "./scenes/picking-scene";
 
@@ -70,7 +70,7 @@ export class GltfViewer {
 
   // #region selection/highlighting related fieds
   private _pointerEventHelper = PointerEventHelper.default;
-  private _pointSnapHelper: PointSnapHelper;
+  private _pointSnapService: PointSnapService;
   private _pickingScene: PickingScene;
 
   private _queuedColoring: ColoringInfo[] = null;
@@ -101,9 +101,9 @@ export class GltfViewer {
     this._options = new GltfViewerOptions(options);  
     this._optionsChange.next(this._options);
     
-    this.initCameraService();
-    
-    this._pointSnapHelper = new PointSnapHelper();
+    this.initCameraService();    
+
+    this._pointSnapService = new PointSnapService();
     this._pickingScene = new PickingScene();
     
     this.initLoaderService(dracoDecoderPath);
@@ -139,8 +139,8 @@ export class GltfViewer {
     this._pickingScene?.destroy();
     this._pickingScene = null;
 
-    this._pointSnapHelper?.destroy();
-    this._pointSnapHelper = null; 
+    this._pointSnapService?.destroy();
+    this._pointSnapService = null; 
     
     this._cameraService?.destroy();
     this._cameraService = null;
@@ -620,19 +620,19 @@ export class GltfViewer {
 
   // #region picking 
   private getMeshAt(clientX: number, clientY: number): MeshBgSm {  
-    const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY); 
+    const position = PointSnapService.convertClientToCanvas(this._renderService.renderer, clientX, clientY); 
     return this._renderService.renderer && this._pickingScene
       ? this._pickingScene.getSourceMeshAt(this._cameraService.camera, this._renderService.renderer, position)
       : null;
   }
   
   private getSnapPointAt(clientX: number, clientY: number): SnapPoint {
-    const position = PointSnapHelper.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
+    const position = PointSnapService.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
     const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraService.camera,
       this._renderService.renderer, position);
 
     const point = pickingMesh
-      ? this._pointSnapHelper.getMeshSnapPointAtPosition(this._cameraService.camera,
+      ? this._pointSnapService.getMeshSnapPointAtPosition(this._cameraService.camera,
         this._renderService.renderer, position, pickingMesh)
       : null;
 
@@ -673,7 +673,7 @@ export class GltfViewer {
       return;
     } 
 
-    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
+    const point = PointSnapService.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
     const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
     this._scenesService.hudScene.markers.highlightMarker(marker);
     this._renderService.render(); 
@@ -684,7 +684,7 @@ export class GltfViewer {
       return;
     } 
 
-    const point = PointSnapHelper.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
+    const point = PointSnapService.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
     const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
     this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
     this._renderService.render(); 
