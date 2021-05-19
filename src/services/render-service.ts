@@ -5,7 +5,7 @@ import { GltfViewerOptions } from "../gltf-viewer-options";
 import { MeshBgSm } from "../common-types";
 
 import { CameraControls } from "../components/camera-controls";
-import { ModelLoader } from "../components/model-loader";
+import { ModelLoaderService } from "./model-loader-service";
 
 import { ScenesService } from "./scenes-service";
 
@@ -25,19 +25,19 @@ export class RenderService {
   private _deferRender: number;
   
   private readonly _cameraControls: CameraControls; 
-  private readonly _loader: ModelLoader;  
+  private readonly _loaderService: ModelLoaderService;  
   private readonly _scenesService: ScenesService;
   
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
 
-  constructor(container: HTMLElement, loader: ModelLoader, 
+  constructor(container: HTMLElement, loaderService: ModelLoaderService, 
     cameraControls: CameraControls, scenesService: ScenesService, 
     options: GltfViewerOptions, lastFrameTimeSubject?: BehaviorSubject<number>) {
     if (!container) {
       throw new Error("Container is not defined");
     }
-    if (!loader) {
-      throw new Error("Loader is not defined");
+    if (!loaderService) {
+      throw new Error("LoaderService is not defined");
     }
     if (!cameraControls) {
       throw new Error("CameraControls is not defined");
@@ -50,7 +50,7 @@ export class RenderService {
     }
 
     this._container = container;
-    this._loader = loader;
+    this._loaderService = loaderService;
     this._cameraControls = cameraControls;
     this._scenesService = scenesService;
     this._options = options;
@@ -93,12 +93,12 @@ export class RenderService {
 
   async updateRenderSceneAsync(): Promise<void> {
     await this._scenesService.renderScene.updateSceneAsync(this._scenesService.lights.getLights(), 
-      this._loader.loadedMeshesArray, this._loader.loadedModelsArray,
+      this._loaderService.loadedMeshesArray, this._loaderService.loadedModelsArray,
       this._options.meshMergeType);
       
     if (this._options.fastRenderType) {
       await this._scenesService.simplifiedScene.updateSceneAsync(this._scenesService.lights.getCopy(), 
-        this._loader.loadedMeshesArray, 
+        this._loaderService.loadedMeshesArray, 
         this._options.fastRenderType);
     } else {
       this._scenesService.simplifiedScene.clearScene();
@@ -146,7 +146,7 @@ export class RenderService {
   }  
 
   renderWholeScene() {    
-    this.render(this._loader.loadedMeshesArray.length ? [this._scenesService.renderScene.scene] : null);
+    this.render(this._loaderService.loadedMeshesArray.length ? [this._scenesService.renderScene.scene] : null);
   }
 
   enqueueMeshForColorUpdate(mesh: MeshBgSm) {

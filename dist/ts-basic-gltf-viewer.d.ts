@@ -131,8 +131,8 @@ export declare class GltfViewer {
 	private _container;
 	private _containerResizeObserver;
 	private _options;
-	private _loader;
 	private _cameraControls;
+	private _loaderService;
 	private _scenesService;
 	private _renderService;
 	private _pointerEventHelper;
@@ -170,7 +170,7 @@ export declare class GltfViewer {
 	private addRendererEventListeners;
 	private removeRendererEventListeners;
 	private initScenesService;
-	private initLoader;
+	private initLoaderService;
 	private runQueuedColoring;
 	private resetSelectionAndColorMeshes;
 	private colorMeshes;

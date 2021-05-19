@@ -9,7 +9,7 @@ import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
 import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
 import { PointSnapHelper } from "./helpers/point-snap-helper";
 
-import { ModelLoader } from "./components/model-loader";
+import { ModelLoaderService } from "./services/model-loader-service";
 import { CameraControls } from "./components/camera-controls";
 
 import { PickingScene } from "./scenes/picking-scene";
@@ -64,9 +64,9 @@ export class GltfViewer {
 
   private _options: GltfViewerOptions;  
 
-  private _loader: ModelLoader;  
   private _cameraControls: CameraControls; 
-
+  
+  private _loaderService: ModelLoaderService;  
   private _scenesService: ScenesService;
   private _renderService: RenderService;
 
@@ -112,7 +112,7 @@ export class GltfViewer {
     this._pointSnapHelper = new PointSnapHelper();
     this._pickingScene = new PickingScene();
     
-    this.initLoader(dracoDecoderPath);
+    this.initLoaderService(dracoDecoderPath);
     this.initScenesService();
     this.initRenderService();
  
@@ -139,8 +139,8 @@ export class GltfViewer {
     this._scenesService?.destroy();
     this._scenesService = null;
 
-    this._loader?.destroy();
-    this._loader = null;
+    this._loaderService?.destroy();
+    this._loaderService = null;
 
     this._pickingScene?.destroy();
     this._pickingScene = null;
@@ -275,7 +275,7 @@ export class GltfViewer {
    * @returns 
    */
   async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
-    return this._loader.openModelsAsync(modelInfos);
+    return this._loaderService.openModelsAsync(modelInfos);
   };
 
   /**
@@ -284,7 +284,7 @@ export class GltfViewer {
    * @returns 
    */
   async closeModelsAsync(modelGuids: string[]): Promise<void> {
-    return this._loader.closeModelsAsync(modelGuids);
+    return this._loaderService.closeModelsAsync(modelGuids);
   };
 
   /**
@@ -292,7 +292,7 @@ export class GltfViewer {
    * @returns 
    */
   getOpenedModels(): ModelOpenedInfo[] {
-    return this._loader?.openedModelInfos;
+    return this._loaderService?.openedModelInfos;
   }
 
   /**
@@ -301,7 +301,7 @@ export class GltfViewer {
    * @returns 
    */
   colorItems(coloringInfos: ColoringInfo[]) {
-    if (this._loader.loadingInProgress) {
+    if (this._loaderService.loadingInProgress) {
       this._queuedColoring = coloringInfos;
       return;
     }
@@ -319,7 +319,7 @@ export class GltfViewer {
       return;
     }
 
-    if (this._loader.loadingInProgress) {
+    if (this._loaderService.loadingInProgress) {
       this._queuedSelection = {ids, isolate: false};
       return;
     }
@@ -337,7 +337,7 @@ export class GltfViewer {
       return;
     }
 
-    if (this._loader.loadingInProgress) {
+    if (this._loaderService.loadingInProgress) {
       this._queuedSelection = {ids, isolate: true};
       return;
     }
@@ -352,7 +352,7 @@ export class GltfViewer {
    */
   zoomToItems(ids: string[]) {
     if (ids?.length) {
-      const { found } = this._loader.findMeshesByIds(new Set<string>(ids));     
+      const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));     
       if (found.length) {
         this._renderService.render(found);
         return;
@@ -415,7 +415,7 @@ export class GltfViewer {
       this._renderService = null;
     }
     
-    this._renderService = new RenderService(this._container, this._loader, 
+    this._renderService = new RenderService(this._container, this._loaderService, 
       this._cameraControls, this._scenesService, this._options, this._lastFrameTime);  
     this.addRendererEventListeners();
   }
@@ -494,7 +494,7 @@ export class GltfViewer {
 
   private onRendererContextLoss = () => {
     this._contextLoss.next(true);
-    this._loader?.closeAllModelsAsync();
+    this._loaderService?.closeAllModelsAsync();
   };
 
   private onRendererContextRestore = () => {
@@ -533,7 +533,7 @@ export class GltfViewer {
     this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
   }
 
-  private initLoader(dracoDecoderPath: string) {    
+  private initLoaderService(dracoDecoderPath: string) {    
     const wcsToUcsMatrix = new Matrix4();
     const ucsOrigin = this._options.basePoint;
     if (ucsOrigin) {
@@ -542,7 +542,7 @@ export class GltfViewer {
         .invert();
     }
 
-    this._loader = new ModelLoader(dracoDecoderPath,
+    this._loaderService = new ModelLoaderService(dracoDecoderPath,
       async () => {
         this.runQueuedColoring();
         this.runQueuedSelection();
@@ -564,11 +564,11 @@ export class GltfViewer {
       wcsToUcsMatrix,
     );
 
-    this.loadingStateChange$ = this._loader.loadingStateChange$;
-    this.modelLoadingStart$ = this._loader.modelLoadingStart$;
-    this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
-    this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
-    this.modelsOpenedChange$ = this._loader.modelsOpenedChange$;  
+    this.loadingStateChange$ = this._loaderService.loadingStateChange$;
+    this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
+    this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
+    this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
+    this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;  
   }
 
   // #region item custom coloring
@@ -591,7 +591,7 @@ export class GltfViewer {
         const color = new Color(info.color);
         const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
         info.ids.forEach(x => {
-          const meshes = this._loader.getLoadedMeshesById(x);
+          const meshes = this._loaderService.getLoadedMeshesById(x);
           if (meshes?.length) {
             meshes.forEach(mesh => {
               mesh.userData.colored = true;
@@ -713,7 +713,7 @@ export class GltfViewer {
   }
 
   private findAndSelectMeshes(ids: string[], isolate: boolean) {    
-    const { found } = this._loader.findMeshesByIds(new Set<string>(ids));
+    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     if (found.length) {
       this.selectMeshes(found, false, isolate);
     }
@@ -800,7 +800,7 @@ export class GltfViewer {
       return;
     }
 
-    this._loader.loadedMeshesArray.forEach(x => {
+    this._loaderService.loadedMeshesArray.forEach(x => {
       if (!x.userData.selected) {
         x.userData.isolated = true;
         this._renderService.enqueueMeshForColorUpdate(x);

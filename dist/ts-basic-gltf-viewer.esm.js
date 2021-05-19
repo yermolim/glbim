@@ -325,7 +325,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-class ModelLoader {
+class ModelLoaderService {
     constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null, wcsToUcsMatrix = null) {
         this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
@@ -2678,7 +2678,7 @@ var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class RenderService {
-    constructor(container, loader, cameraControls, scenesService, options, lastFrameTimeSubject) {
+    constructor(container, loaderService, cameraControls, scenesService, options, lastFrameTimeSubject) {
         this._meshesNeedColorUpdate = new Set();
         this.resizeRenderer = () => {
             var _a;
@@ -2692,8 +2692,8 @@ class RenderService {
         if (!container) {
             throw new Error("Container is not defined");
         }
-        if (!loader) {
-            throw new Error("Loader is not defined");
+        if (!loaderService) {
+            throw new Error("LoaderService is not defined");
         }
         if (!cameraControls) {
             throw new Error("CameraControls is not defined");
@@ -2705,7 +2705,7 @@ class RenderService {
             throw new Error("Options is not defined");
         }
         this._container = container;
-        this._loader = loader;
+        this._loaderService = loaderService;
         this._cameraControls = cameraControls;
         this._scenesService = scenesService;
         this._options = options;
@@ -2738,9 +2738,9 @@ class RenderService {
     }
     updateRenderSceneAsync() {
         return __awaiter$1(this, void 0, void 0, function* () {
-            yield this._scenesService.renderScene.updateSceneAsync(this._scenesService.lights.getLights(), this._loader.loadedMeshesArray, this._loader.loadedModelsArray, this._options.meshMergeType);
+            yield this._scenesService.renderScene.updateSceneAsync(this._scenesService.lights.getLights(), this._loaderService.loadedMeshesArray, this._loaderService.loadedModelsArray, this._options.meshMergeType);
             if (this._options.fastRenderType) {
-                yield this._scenesService.simplifiedScene.updateSceneAsync(this._scenesService.lights.getCopy(), this._loader.loadedMeshesArray, this._options.fastRenderType);
+                yield this._scenesService.simplifiedScene.updateSceneAsync(this._scenesService.lights.getCopy(), this._loaderService.loadedMeshesArray, this._options.fastRenderType);
             }
             else {
                 this._scenesService.simplifiedScene.clearScene();
@@ -2785,7 +2785,7 @@ class RenderService {
         });
     }
     renderWholeScene() {
-        this.render(this._loader.loadedMeshesArray.length ? [this._scenesService.renderScene.scene] : null);
+        this.render(this._loaderService.loadedMeshesArray.length ? [this._scenesService.renderScene.scene] : null);
     }
     enqueueMeshForColorUpdate(mesh) {
         this._meshesNeedColorUpdate.add(mesh);
@@ -2894,7 +2894,7 @@ class GltfViewer {
         this.onRendererContextLoss = () => {
             var _a;
             this._contextLoss.next(true);
-            (_a = this._loader) === null || _a === void 0 ? void 0 : _a.closeAllModelsAsync();
+            (_a = this._loaderService) === null || _a === void 0 ? void 0 : _a.closeAllModelsAsync();
         };
         this.onRendererContextRestore = () => {
             this._contextLoss.next(false);
@@ -2913,7 +2913,7 @@ class GltfViewer {
         this.cameraPositionChange$ = this._cameraControls.cameraPositionChange$;
         this._pointSnapHelper = new PointSnapHelper();
         this._pickingScene = new PickingScene();
-        this.initLoader(dracoDecoderPath);
+        this.initLoaderService(dracoDecoderPath);
         this.initScenesService();
         this.initRenderService();
         this._containerResizeObserver = new ResizeObserver(() => {
@@ -2933,8 +2933,8 @@ class GltfViewer {
         this._renderService = null;
         (_c = this._scenesService) === null || _c === void 0 ? void 0 : _c.destroy();
         this._scenesService = null;
-        (_d = this._loader) === null || _d === void 0 ? void 0 : _d.destroy();
-        this._loader = null;
+        (_d = this._loaderService) === null || _d === void 0 ? void 0 : _d.destroy();
+        this._loaderService = null;
         (_e = this._pickingScene) === null || _e === void 0 ? void 0 : _e.destroy();
         this._pickingScene = null;
         (_f = this._pointSnapHelper) === null || _f === void 0 ? void 0 : _f.destroy();
@@ -3035,22 +3035,22 @@ class GltfViewer {
     }
     openModelsAsync(modelInfos) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this._loader.openModelsAsync(modelInfos);
+            return this._loaderService.openModelsAsync(modelInfos);
         });
     }
     ;
     closeModelsAsync(modelGuids) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this._loader.closeModelsAsync(modelGuids);
+            return this._loaderService.closeModelsAsync(modelGuids);
         });
     }
     ;
     getOpenedModels() {
         var _a;
-        return (_a = this._loader) === null || _a === void 0 ? void 0 : _a.openedModelInfos;
+        return (_a = this._loaderService) === null || _a === void 0 ? void 0 : _a.openedModelInfos;
     }
     colorItems(coloringInfos) {
-        if (this._loader.loadingInProgress) {
+        if (this._loaderService.loadingInProgress) {
             this._queuedColoring = coloringInfos;
             return;
         }
@@ -3060,7 +3060,7 @@ class GltfViewer {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
         }
-        if (this._loader.loadingInProgress) {
+        if (this._loaderService.loadingInProgress) {
             this._queuedSelection = { ids, isolate: false };
             return;
         }
@@ -3071,7 +3071,7 @@ class GltfViewer {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
         }
-        if (this._loader.loadingInProgress) {
+        if (this._loaderService.loadingInProgress) {
             this._queuedSelection = { ids, isolate: true };
             return;
         }
@@ -3080,7 +3080,7 @@ class GltfViewer {
     ;
     zoomToItems(ids) {
         if (ids === null || ids === void 0 ? void 0 : ids.length) {
-            const { found } = this._loader.findMeshesByIds(new Set(ids));
+            const { found } = this._loaderService.findMeshesByIds(new Set(ids));
             if (found.length) {
                 this._renderService.render(found);
                 return;
@@ -3121,7 +3121,7 @@ class GltfViewer {
             this._renderService.destroy();
             this._renderService = null;
         }
-        this._renderService = new RenderService(this._container, this._loader, this._cameraControls, this._scenesService, this._options, this._lastFrameTime);
+        this._renderService = new RenderService(this._container, this._loaderService, this._cameraControls, this._scenesService, this._options, this._lastFrameTime);
         this.addRendererEventListeners();
     }
     addRendererEventListeners() {
@@ -3151,7 +3151,7 @@ class GltfViewer {
         this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$;
         this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
     }
-    initLoader(dracoDecoderPath) {
+    initLoaderService(dracoDecoderPath) {
         const wcsToUcsMatrix = new Matrix4();
         const ucsOrigin = this._options.basePoint;
         if (ucsOrigin) {
@@ -3159,7 +3159,7 @@ class GltfViewer {
                 .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
                 .invert();
         }
-        this._loader = new ModelLoader(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
+        this._loaderService = new ModelLoaderService(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
             this.runQueuedColoring();
             this.runQueuedSelection();
             yield this._renderService.updateRenderSceneAsync();
@@ -3173,11 +3173,11 @@ class GltfViewer {
         }, (mesh) => {
             this._pickingScene.remove(mesh);
         }, wcsToUcsMatrix);
-        this.loadingStateChange$ = this._loader.loadingStateChange$;
-        this.modelLoadingStart$ = this._loader.modelLoadingStart$;
-        this.modelLoadingEnd$ = this._loader.modelLoadingEnd$;
-        this.modelLoadingProgress$ = this._loader.modelLoadingProgress$;
-        this.modelsOpenedChange$ = this._loader.modelsOpenedChange$;
+        this.loadingStateChange$ = this._loaderService.loadingStateChange$;
+        this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
+        this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
+        this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
+        this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;
     }
     runQueuedColoring() {
         if (this._queuedColoring) {
@@ -3195,7 +3195,7 @@ class GltfViewer {
                 const color = new Color(info.color);
                 const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
                 info.ids.forEach(x => {
-                    const meshes = this._loader.getLoadedMeshesById(x);
+                    const meshes = this._loaderService.getLoadedMeshesById(x);
                     if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
                         meshes.forEach(mesh => {
                             mesh.userData.colored = true;
@@ -3286,7 +3286,7 @@ class GltfViewer {
         }
     }
     findAndSelectMeshes(ids, isolate) {
-        const { found } = this._loader.findMeshesByIds(new Set(ids));
+        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
         if (found.length) {
             this.selectMeshes(found, false, isolate);
         }
@@ -3360,7 +3360,7 @@ class GltfViewer {
         if (!this._selectedMeshes.length) {
             return;
         }
-        this._loader.loadedMeshesArray.forEach(x => {
+        this._loaderService.loadedMeshesArray.forEach(x => {
             if (!x.userData.selected) {
                 x.userData.isolated = true;
                 this._renderService.enqueueMeshForColorUpdate(x);

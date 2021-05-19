@@ -9,7 +9,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, 
   ModelGeometryInfo, ModelFileInfo, MeshBgSm} from "../common-types";
 
-export class ModelLoader {
+export class ModelLoaderService {
   // #region public observables
   loadingStateChange$: Observable<boolean>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
