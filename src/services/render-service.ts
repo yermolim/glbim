@@ -1,5 +1,5 @@
 import { BehaviorSubject } from "rxjs";
-import { NoToneMapping, Object3D, sRGBEncoding, WebGLRenderer } from "three";
+import { NoToneMapping, Object3D, PerspectiveCamera, sRGBEncoding, WebGLRenderer } from "three";
 
 import { GltfViewerOptions } from "../gltf-viewer-options";
 import { MeshBgSm } from "../common-types";
@@ -28,6 +28,10 @@ export class RenderService {
   private readonly _scenesService: ScenesService;
   
   private _meshesNeedColorUpdate = new Set<MeshBgSm>();
+
+  get camera(): PerspectiveCamera {
+    return this._cameraService.camera;
+  }
 
   constructor(container: HTMLElement, loaderService: ModelLoaderService, 
     cameraService: CameraService, scenesService: ScenesService, 

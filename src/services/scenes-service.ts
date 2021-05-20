@@ -8,6 +8,7 @@ import { RenderScene } from "../scenes/render-scene";
 import { SimplifiedScene } from "../scenes/simplified-scene";
 
 import { CameraService } from "./camera-service";
+
 export class ScenesService {  
   private readonly _options: GltfViewerOptions;
 

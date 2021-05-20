@@ -23,7 +23,7 @@
  */
 
 import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { Raycaster, Vector2, Vector3, Triangle, Scene, Color, WebGLRenderTarget, Mesh, MeshBasicMaterial, NoBlending, DoubleSide, BufferGeometry, MeshStandardMaterial, Box3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, MeshPhongMaterial, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, Matrix4, InstancedBufferAttribute, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping } from 'three';
+import { Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, Matrix4, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
 import { first } from 'rxjs/operators';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
@@ -139,267 +139,6 @@ class Distance {
         this.start = new Vec4(start.x, start.y, start.z);
         this.end = new Vec4(end.x, end.y, end.z);
         this.distance = Vec4.getDistance(this.start, this.end);
-    }
-}
-
-class ColorRgbRmo {
-    constructor(r, g, b, roughness, metalness, opacity, byte = false) {
-        if (byte) {
-            this.r = r / 255;
-            this.g = g / 255;
-            this.b = b / 255;
-            this.roughness = roughness / 255;
-            this.metalness = metalness / 255;
-            this.opacity = opacity / 255;
-        }
-        else {
-            this.r = r;
-            this.g = g;
-            this.b = b;
-            this.roughness = roughness;
-            this.metalness = metalness;
-            this.opacity = opacity;
-        }
-    }
-    get rByte() {
-        return this.r * 255;
-    }
-    get gByte() {
-        return this.g * 255;
-    }
-    get bByte() {
-        return this.b * 255;
-    }
-    get roughnessByte() {
-        return this.roughness * 255;
-    }
-    get metalnessByte() {
-        return this.metalness * 255;
-    }
-    get opacityByte() {
-        return this.opacity * 255;
-    }
-    static createFromMaterial(material) {
-        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
-    }
-    static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
-        mesh[ColorRgbRmo.prop] = null;
-        if (deleteCustom) {
-            mesh[ColorRgbRmo.customProp] = null;
-        }
-        if (deleteDefault) {
-            mesh[ColorRgbRmo.defaultProp] = null;
-        }
-    }
-    static getDefaultFromMesh(mesh) {
-        if (!mesh[ColorRgbRmo.defaultProp]) {
-            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
-        }
-        return mesh[ColorRgbRmo.defaultProp];
-    }
-    static getCustomFromMesh(mesh) {
-        return mesh[ColorRgbRmo.customProp];
-    }
-    static getFromMesh(mesh) {
-        if (mesh[ColorRgbRmo.prop]) {
-            return mesh[ColorRgbRmo.prop];
-        }
-        if (mesh[ColorRgbRmo.customProp]) {
-            return mesh[ColorRgbRmo.customProp];
-        }
-        return ColorRgbRmo.getDefaultFromMesh(mesh);
-    }
-    static setCustomToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.customProp] = rgbRmo;
-    }
-    static setToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.prop] = rgbRmo;
-    }
-    toString() {
-        return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
-    }
-}
-ColorRgbRmo.prop = "rgbrmo";
-ColorRgbRmo.customProp = "rgbrmoC";
-ColorRgbRmo.defaultProp = "rgbrmoD";
-
-class PointSnapService {
-    constructor() {
-        this._raycaster = new Raycaster();
-    }
-    static convertClientToCanvas(renderer, clientX, clientY) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const pixelRatio = renderer.getPixelRatio();
-        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
-        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
-        return new Vector2(x, y);
-    }
-    static convertClientToCanvasZeroCenter(renderer, clientX, clientY) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const pixelRatio = renderer.getPixelRatio();
-        const canvasRatioW = (renderer.domElement.width / rect.width) * pixelRatio || 0;
-        const canvasRatioH = (renderer.domElement.height / rect.height) * pixelRatio || 0;
-        const x = (clientX - rect.left) * canvasRatioW;
-        const y = (clientY - rect.top) * canvasRatioH;
-        const canvasWidth = rect.width * canvasRatioW;
-        const canvasHeight = rect.height * canvasRatioH;
-        const xC = x - canvasWidth / 2;
-        const yC = canvasHeight / 2 - y;
-        return new Vector2(xC, yC);
-    }
-    static convertWorldToCanvas(camera, renderer, point) {
-        const nPoint = new Vector3().copy(point).project(camera);
-        const rect = renderer.domElement.getBoundingClientRect();
-        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-        const x = (nPoint.x + 1) * canvasWidth / 2;
-        const y = (nPoint.y - 1) * canvasHeight / -2;
-        return new Vector2(x, y);
-    }
-    static convertWorldToCanvasZeroCenter(camera, renderer, point) {
-        const nPoint = new Vector3().copy(point).project(camera);
-        if (nPoint.z > 1) {
-            nPoint.x = -nPoint.x;
-            nPoint.y = -nPoint.y;
-        }
-        const rect = renderer.domElement.getBoundingClientRect();
-        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-        const x = nPoint.x * canvasWidth / 2;
-        const y = nPoint.y * canvasHeight / 2;
-        return new Vector2(x, y);
-    }
-    destroy() {
-    }
-    getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
-        if (!mesh) {
-            return null;
-        }
-        const context = renderer.getContext();
-        const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
-        const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
-        return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
-    }
-    getPoint(camera, mesh, mousePoint) {
-        this._raycaster.setFromCamera(mousePoint, camera);
-        const intersection = this._raycaster.intersectObject(mesh)[0];
-        if (!intersection) {
-            return null;
-        }
-        const intersectionPoint = new Vector3().copy(intersection.point);
-        intersection.object.worldToLocal(intersectionPoint);
-        const snapPoint = new Vector3().copy(this.getNearestVertex(mesh, intersectionPoint, intersection.face));
-        if (!snapPoint) {
-            return null;
-        }
-        intersection.object.localToWorld(snapPoint);
-        return snapPoint;
-    }
-    getNearestVertex(mesh, point, face) {
-        const a = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.a);
-        const b = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.b);
-        const c = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.c);
-        const baryPoint = new Vector3();
-        new Triangle(a, b, c).getBarycoord(point, baryPoint);
-        if (baryPoint.x > baryPoint.y && baryPoint.x > baryPoint.z) {
-            return a;
-        }
-        else if (baryPoint.y > baryPoint.x && baryPoint.y > baryPoint.z) {
-            return b;
-        }
-        else if (baryPoint.z > baryPoint.x && baryPoint.z > baryPoint.y) {
-            return c;
-        }
-        else {
-            return null;
-        }
-    }
-}
-
-class PickingScene {
-    constructor() {
-        this._lastPickingColor = 0;
-        this._materials = [];
-        this._releasedMaterials = [];
-        this._pickingMeshById = new Map();
-        this._sourceMeshByPickingColor = new Map();
-        const scene = new Scene();
-        scene.background = new Color(0);
-        this._scene = scene;
-        this._target = new WebGLRenderTarget(1, 1);
-    }
-    destroy() {
-        this._materials.forEach(x => x.dispose());
-        this._materials = null;
-        this._target.dispose();
-        this._target = null;
-    }
-    add(sourceMesh) {
-        const pickingMeshMaterial = this.getMaterial();
-        const colorString = pickingMeshMaterial.color.getHex().toString(16);
-        const pickingMesh = new Mesh(sourceMesh.geometry, pickingMeshMaterial);
-        pickingMesh.userData.sourceId = sourceMesh.userData.id;
-        pickingMesh.userData.sourceUuid = sourceMesh.uuid;
-        pickingMesh.userData.color = colorString;
-        pickingMesh.position.copy(sourceMesh.position);
-        pickingMesh.rotation.copy(sourceMesh.rotation);
-        pickingMesh.scale.copy(sourceMesh.scale);
-        this._scene.add(pickingMesh);
-        this._pickingMeshById.set(sourceMesh.uuid, pickingMesh);
-        this._sourceMeshByPickingColor.set(colorString, sourceMesh);
-    }
-    remove(sourceMesh) {
-        const pickingMesh = this._pickingMeshById.get(sourceMesh.uuid);
-        if (pickingMesh) {
-            this._scene.remove(pickingMesh);
-            this._pickingMeshById.delete(sourceMesh.uuid);
-            this._sourceMeshByPickingColor.delete(pickingMesh.userData.color);
-            this.releaseMaterial(pickingMesh.material);
-        }
-    }
-    getSourceMeshAt(camera, renderer, canvasPosition) {
-        return this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
-    }
-    getPickingMeshAt(camera, renderer, canvasPosition) {
-        const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
-        return sourceMesh
-            ? this._pickingMeshById.get(sourceMesh.uuid)
-            : null;
-    }
-    getSourceMeshAtPosition(camera, renderer, position) {
-        const context = renderer.getContext();
-        camera.setViewOffset(context.drawingBufferWidth, context.drawingBufferHeight, position.x, position.y, 1, 1);
-        renderer.setRenderTarget(this._target);
-        renderer.render(this._scene, camera);
-        renderer.setRenderTarget(null);
-        camera.clearViewOffset();
-        const pixelBuffer = new Uint8Array(4);
-        renderer.readRenderTargetPixels(this._target, 0, 0, 1, 1, pixelBuffer);
-        const hex = ((pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2])).toString(16);
-        const mesh = this._sourceMeshByPickingColor.get(hex);
-        return mesh;
-    }
-    nextPickingColor() {
-        if (this._lastPickingColor === 16777215) {
-            this._lastPickingColor = 0;
-        }
-        return ++this._lastPickingColor;
-    }
-    getMaterial() {
-        if (this._releasedMaterials.length) {
-            return this._releasedMaterials.pop();
-        }
-        const color = new Color(this.nextPickingColor());
-        const material = new MeshBasicMaterial({
-            color: color,
-            blending: NoBlending,
-            side: DoubleSide,
-        });
-        this._materials.push(material);
-        return material;
-    }
-    releaseMaterial(material) {
-        this._releasedMaterials.push(material);
     }
 }
 
@@ -831,6 +570,87 @@ class CameraService {
         }
     }
 }
+
+class ColorRgbRmo {
+    constructor(r, g, b, roughness, metalness, opacity, byte = false) {
+        if (byte) {
+            this.r = r / 255;
+            this.g = g / 255;
+            this.b = b / 255;
+            this.roughness = roughness / 255;
+            this.metalness = metalness / 255;
+            this.opacity = opacity / 255;
+        }
+        else {
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.roughness = roughness;
+            this.metalness = metalness;
+            this.opacity = opacity;
+        }
+    }
+    get rByte() {
+        return this.r * 255;
+    }
+    get gByte() {
+        return this.g * 255;
+    }
+    get bByte() {
+        return this.b * 255;
+    }
+    get roughnessByte() {
+        return this.roughness * 255;
+    }
+    get metalnessByte() {
+        return this.metalness * 255;
+    }
+    get opacityByte() {
+        return this.opacity * 255;
+    }
+    static createFromMaterial(material) {
+        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
+    }
+    static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
+        mesh[ColorRgbRmo.prop] = null;
+        if (deleteCustom) {
+            mesh[ColorRgbRmo.customProp] = null;
+        }
+        if (deleteDefault) {
+            mesh[ColorRgbRmo.defaultProp] = null;
+        }
+    }
+    static getDefaultFromMesh(mesh) {
+        if (!mesh[ColorRgbRmo.defaultProp]) {
+            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+        }
+        return mesh[ColorRgbRmo.defaultProp];
+    }
+    static getCustomFromMesh(mesh) {
+        return mesh[ColorRgbRmo.customProp];
+    }
+    static getFromMesh(mesh) {
+        if (mesh[ColorRgbRmo.prop]) {
+            return mesh[ColorRgbRmo.prop];
+        }
+        if (mesh[ColorRgbRmo.customProp]) {
+            return mesh[ColorRgbRmo.customProp];
+        }
+        return ColorRgbRmo.getDefaultFromMesh(mesh);
+    }
+    static setCustomToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.customProp] = rgbRmo;
+    }
+    static setToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.prop] = rgbRmo;
+    }
+    toString() {
+        return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
+    }
+}
+ColorRgbRmo.prop = "rgbrmo";
+ColorRgbRmo.customProp = "rgbrmoC";
+ColorRgbRmo.defaultProp = "rgbrmoD";
 
 class MaterialBuilder {
     static buildGlobalMaterial() {
@@ -2730,6 +2550,9 @@ class RenderService {
     get renderer() {
         return this._renderer;
     }
+    get camera() {
+        return this._cameraService.camera;
+    }
     destroy() {
         this._renderer.domElement.remove();
         this._renderer.dispose();
@@ -2801,6 +2624,547 @@ class RenderService {
     }
 }
 
+class PickingScene {
+    constructor() {
+        this._lastPickingColor = 0;
+        this._materials = [];
+        this._releasedMaterials = [];
+        this._pickingMeshById = new Map();
+        this._sourceMeshByPickingColor = new Map();
+        const scene = new Scene();
+        scene.background = new Color(0);
+        this._scene = scene;
+        this._target = new WebGLRenderTarget(1, 1);
+    }
+    destroy() {
+        this._materials.forEach(x => x.dispose());
+        this._materials = null;
+        this._target.dispose();
+        this._target = null;
+    }
+    add(sourceMesh) {
+        const pickingMeshMaterial = this.getMaterial();
+        const colorString = pickingMeshMaterial.color.getHex().toString(16);
+        const pickingMesh = new Mesh(sourceMesh.geometry, pickingMeshMaterial);
+        pickingMesh.userData.sourceId = sourceMesh.userData.id;
+        pickingMesh.userData.sourceUuid = sourceMesh.uuid;
+        pickingMesh.userData.color = colorString;
+        pickingMesh.position.copy(sourceMesh.position);
+        pickingMesh.rotation.copy(sourceMesh.rotation);
+        pickingMesh.scale.copy(sourceMesh.scale);
+        this._scene.add(pickingMesh);
+        this._pickingMeshById.set(sourceMesh.uuid, pickingMesh);
+        this._sourceMeshByPickingColor.set(colorString, sourceMesh);
+    }
+    remove(sourceMesh) {
+        const pickingMesh = this._pickingMeshById.get(sourceMesh.uuid);
+        if (pickingMesh) {
+            this._scene.remove(pickingMesh);
+            this._pickingMeshById.delete(sourceMesh.uuid);
+            this._sourceMeshByPickingColor.delete(pickingMesh.userData.color);
+            this.releaseMaterial(pickingMesh.material);
+        }
+    }
+    getSourceMeshAt(camera, renderer, canvasPosition) {
+        return this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
+    }
+    getPickingMeshAt(camera, renderer, canvasPosition) {
+        const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
+        return sourceMesh
+            ? this._pickingMeshById.get(sourceMesh.uuid)
+            : null;
+    }
+    getSourceMeshAtPosition(camera, renderer, position) {
+        const context = renderer.getContext();
+        camera.setViewOffset(context.drawingBufferWidth, context.drawingBufferHeight, position.x, position.y, 1, 1);
+        renderer.setRenderTarget(this._target);
+        renderer.render(this._scene, camera);
+        renderer.setRenderTarget(null);
+        camera.clearViewOffset();
+        const pixelBuffer = new Uint8Array(4);
+        renderer.readRenderTargetPixels(this._target, 0, 0, 1, 1, pixelBuffer);
+        const hex = ((pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2])).toString(16);
+        const mesh = this._sourceMeshByPickingColor.get(hex);
+        return mesh;
+    }
+    nextPickingColor() {
+        if (this._lastPickingColor === 16777215) {
+            this._lastPickingColor = 0;
+        }
+        return ++this._lastPickingColor;
+    }
+    getMaterial() {
+        if (this._releasedMaterials.length) {
+            return this._releasedMaterials.pop();
+        }
+        const color = new Color(this.nextPickingColor());
+        const material = new MeshBasicMaterial({
+            color: color,
+            blending: NoBlending,
+            side: DoubleSide,
+        });
+        this._materials.push(material);
+        return material;
+    }
+    releaseMaterial(material) {
+        this._releasedMaterials.push(material);
+    }
+}
+
+class PointSnapService {
+    constructor() {
+        this._raycaster = new Raycaster();
+    }
+    static convertClientToCanvas(renderer, clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const pixelRatio = renderer.getPixelRatio();
+        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
+        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
+        return new Vector2(x, y);
+    }
+    static convertClientToCanvasZeroCenter(renderer, clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const pixelRatio = renderer.getPixelRatio();
+        const canvasRatioW = (renderer.domElement.width / rect.width) * pixelRatio || 0;
+        const canvasRatioH = (renderer.domElement.height / rect.height) * pixelRatio || 0;
+        const x = (clientX - rect.left) * canvasRatioW;
+        const y = (clientY - rect.top) * canvasRatioH;
+        const canvasWidth = rect.width * canvasRatioW;
+        const canvasHeight = rect.height * canvasRatioH;
+        const xC = x - canvasWidth / 2;
+        const yC = canvasHeight / 2 - y;
+        return new Vector2(xC, yC);
+    }
+    static convertWorldToCanvas(camera, renderer, point) {
+        const nPoint = new Vector3().copy(point).project(camera);
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+        const x = (nPoint.x + 1) * canvasWidth / 2;
+        const y = (nPoint.y - 1) * canvasHeight / -2;
+        return new Vector2(x, y);
+    }
+    static convertWorldToCanvasZeroCenter(camera, renderer, point) {
+        const nPoint = new Vector3().copy(point).project(camera);
+        if (nPoint.z > 1) {
+            nPoint.x = -nPoint.x;
+            nPoint.y = -nPoint.y;
+        }
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
+        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
+        const x = nPoint.x * canvasWidth / 2;
+        const y = nPoint.y * canvasHeight / 2;
+        return new Vector2(x, y);
+    }
+    destroy() {
+    }
+    getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
+        if (!mesh) {
+            return null;
+        }
+        const context = renderer.getContext();
+        const xNormalized = position.x / context.drawingBufferWidth * 2 - 1;
+        const yNormalized = position.y / context.drawingBufferHeight * -2 + 1;
+        return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
+    }
+    getPoint(camera, mesh, mousePoint) {
+        this._raycaster.setFromCamera(mousePoint, camera);
+        const intersection = this._raycaster.intersectObject(mesh)[0];
+        if (!intersection) {
+            return null;
+        }
+        const intersectionPoint = new Vector3().copy(intersection.point);
+        intersection.object.worldToLocal(intersectionPoint);
+        const snapPoint = new Vector3().copy(this.getNearestVertex(mesh, intersectionPoint, intersection.face));
+        if (!snapPoint) {
+            return null;
+        }
+        intersection.object.localToWorld(snapPoint);
+        return snapPoint;
+    }
+    getNearestVertex(mesh, point, face) {
+        const a = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.a);
+        const b = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.b);
+        const c = new Vector3().fromBufferAttribute(mesh.geometry.attributes.position, face.c);
+        const baryPoint = new Vector3();
+        new Triangle(a, b, c).getBarycoord(point, baryPoint);
+        if (baryPoint.x > baryPoint.y && baryPoint.x > baryPoint.z) {
+            return a;
+        }
+        else if (baryPoint.y > baryPoint.x && baryPoint.y > baryPoint.z) {
+            return b;
+        }
+        else if (baryPoint.z > baryPoint.x && baryPoint.z > baryPoint.y) {
+            return c;
+        }
+        else {
+            return null;
+        }
+    }
+}
+
+class PickingService {
+    constructor() {
+        this._pointSnapService = new PointSnapService();
+        this._pickingScene = new PickingScene();
+    }
+    destroy() {
+        var _a, _b;
+        (_a = this._pickingScene) === null || _a === void 0 ? void 0 : _a.destroy();
+        this._pickingScene = null;
+        (_b = this._pointSnapService) === null || _b === void 0 ? void 0 : _b.destroy();
+        this._pointSnapService = null;
+    }
+    addMesh(mesh) {
+        this._pickingScene.add(mesh);
+    }
+    removeMesh(mesh) {
+        this._pickingScene.remove(mesh);
+    }
+    getMeshAt(renderService, clientX, clientY) {
+        const position = PointSnapService.convertClientToCanvas(renderService.renderer, clientX, clientY);
+        return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
+    }
+    getSnapPointAt(renderService, clientX, clientY) {
+        const position = PointSnapService.convertClientToCanvas(renderService.renderer, clientX, clientY);
+        const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
+        const point = pickingMesh
+            ? this._pointSnapService.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
+            : null;
+        const snapPoint = point
+            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
+            : null;
+        return snapPoint;
+    }
+}
+
+class HighlightService {
+    constructor(pickingService) {
+        this._highlightedMeshes = new Set();
+        if (!pickingService) {
+            throw new Error("PickingService is not defined");
+        }
+        this._pickingService = pickingService;
+    }
+    destroy() {
+    }
+    highlightMeshAtPoint(renderService, clientX, clientY) {
+        const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);
+        if (mesh) {
+            this.highlightMeshes(renderService, [mesh]);
+        }
+        else {
+            this.highlightMeshes(renderService, []);
+        }
+    }
+    highlightMeshes(renderService, meshes) {
+        const meshSet = new Set(meshes || []);
+        const addToHighlightList = [];
+        const removeFromHighlightList = [];
+        this._highlightedMeshes.forEach(mesh => {
+            if (!meshSet.has(mesh)) {
+                removeFromHighlightList.push(mesh);
+            }
+        });
+        meshSet.forEach(mesh => {
+            if (!this._highlightedMeshes.has(mesh)) {
+                addToHighlightList.push(mesh);
+            }
+        });
+        removeFromHighlightList.forEach(mesh => {
+            mesh.userData.highlighted = undefined;
+            renderService.enqueueMeshForColorUpdate(mesh);
+            this._highlightedMeshes.delete(mesh);
+        });
+        addToHighlightList.forEach(mesh => {
+            mesh.userData.highlighted = true;
+            renderService.enqueueMeshForColorUpdate(mesh);
+            this._highlightedMeshes.add(mesh);
+        });
+        renderService.render();
+    }
+}
+
+class SelectionService {
+    constructor(loaderService, pickingService) {
+        this._selectionChange = new BehaviorSubject(new Set());
+        this._manualSelectionChange = new Subject();
+        this._queuedSelection = null;
+        this._selectedMeshes = [];
+        this._isolatedMeshes = [];
+        if (!loaderService) {
+            throw new Error("LoaderService is not defined");
+        }
+        if (!pickingService) {
+            throw new Error("PickingService is not defined");
+        }
+        this._loaderService = loaderService;
+        this._pickingService = pickingService;
+        this.selectionChange$ = this._selectionChange.asObservable();
+        this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
+    }
+    get selectedIds() {
+        return this._selectionChange.getValue();
+    }
+    destroy() {
+        this._selectionChange.complete();
+        this._manualSelectionChange.complete();
+    }
+    select(renderService, ids) {
+        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
+            return;
+        }
+        if (this._loaderService.loadingInProgress) {
+            this._queuedSelection = { ids, isolate: false };
+            return;
+        }
+        this.findAndSelectMeshes(renderService, ids, false);
+    }
+    ;
+    isolate(renderService, ids) {
+        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
+            return;
+        }
+        if (this._loaderService.loadingInProgress) {
+            this._queuedSelection = { ids, isolate: true };
+            return;
+        }
+        this.findAndSelectMeshes(renderService, ids, true);
+    }
+    ;
+    isolateSelected(renderService) {
+        if (!this._selectedMeshes.length) {
+            return;
+        }
+        this._loaderService.loadedMeshesArray.forEach(x => {
+            if (!x.userData.selected) {
+                x.userData.isolated = true;
+                renderService.enqueueMeshForColorUpdate(x);
+                this._isolatedMeshes.push(x);
+            }
+        });
+        renderService.render(this._selectedMeshes);
+    }
+    selectMeshAtPoint(renderService, clientX, clientY, keepPreviousSelection) {
+        const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);
+        if (!mesh) {
+            this.selectMeshes(renderService, [], true, false);
+            return;
+        }
+        if (keepPreviousSelection) {
+            if (mesh.userData.selected) {
+                this.removeFromSelection(renderService, mesh);
+            }
+            else {
+                this.addToSelection(renderService, mesh);
+            }
+        }
+        else {
+            this.selectMeshes(renderService, [mesh], true, false);
+        }
+    }
+    runQueuedSelection(renderService) {
+        if (this._queuedSelection) {
+            const { ids, isolate } = this._queuedSelection;
+            this.findAndSelectMeshes(renderService, ids, isolate);
+        }
+    }
+    reset(renderService) {
+        this.removeSelection(renderService);
+        this.removeIsolation(renderService);
+    }
+    removeFromSelectionArrays(modelGuid) {
+        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    }
+    findAndSelectMeshes(renderService, ids, isolate) {
+        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        if (found.length) {
+            this.selectMeshes(renderService, found, false, isolate);
+        }
+    }
+    removeSelection(renderService) {
+        for (const mesh of this._selectedMeshes) {
+            mesh.userData.selected = undefined;
+            renderService.enqueueMeshForColorUpdate(mesh);
+        }
+        this._selectedMeshes.length = 0;
+    }
+    removeIsolation(renderService) {
+        for (const mesh of this._isolatedMeshes) {
+            mesh.userData.isolated = undefined;
+            renderService.enqueueMeshForColorUpdate(mesh);
+        }
+        this._isolatedMeshes.length = 0;
+    }
+    addToSelection(renderService, mesh) {
+        const meshes = [mesh, ...this._selectedMeshes];
+        this.selectMeshes(renderService, meshes, true, false);
+        return true;
+    }
+    removeFromSelection(renderService, mesh) {
+        const meshes = this._selectedMeshes.filter(x => x !== mesh);
+        this.selectMeshes(renderService, meshes, true, false);
+        return true;
+    }
+    selectMeshes(renderService, meshes, manual, isolateSelected) {
+        this.reset(renderService);
+        if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
+            this.emitSelectionChanged(renderService, manual, true);
+            return null;
+        }
+        meshes.forEach(x => {
+            x.userData.selected = true;
+            renderService.enqueueMeshForColorUpdate(x);
+        });
+        this._selectedMeshes = meshes;
+        if (isolateSelected) {
+            this.emitSelectionChanged(renderService, manual, false);
+            this.isolateSelected(renderService);
+        }
+        else {
+            this.emitSelectionChanged(renderService, manual, true);
+        }
+    }
+    emitSelectionChanged(renderService, manual, render) {
+        if (render) {
+            renderService.render(manual ? null : this._selectedMeshes);
+        }
+        const ids = new Set();
+        this._selectedMeshes.forEach(x => ids.add(x.userData.id));
+        this._selectionChange.next(ids);
+        if (manual) {
+            this._manualSelectionChange.next(ids);
+        }
+    }
+}
+
+class ColoringService {
+    constructor(loaderService, selectionService) {
+        this._queuedColoring = null;
+        this._coloredMeshes = [];
+        if (!loaderService) {
+            throw new Error("LoaderService is not defined");
+        }
+        if (!selectionService) {
+            throw new Error("SelectionService is not defined");
+        }
+        this._loaderService = loaderService;
+        this._selectionService = selectionService;
+    }
+    destroy() {
+    }
+    color(renderService, coloringInfos) {
+        if (this._loaderService.loadingInProgress) {
+            this._queuedColoring = coloringInfos;
+            return;
+        }
+        this.resetSelectionAndColorMeshes(renderService, coloringInfos);
+    }
+    runQueuedColoring(renderService) {
+        if (this._queuedColoring) {
+            this.resetSelectionAndColorMeshes(renderService, this._queuedColoring);
+        }
+    }
+    removeFromColoringArrays(modelGuid) {
+        this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    }
+    resetSelectionAndColorMeshes(renderService, coloringInfos) {
+        this._selectionService.reset(renderService);
+        this.colorMeshes(renderService, coloringInfos);
+    }
+    colorMeshes(renderService, coloringInfos) {
+        this.removeColoring(renderService);
+        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
+            for (const info of coloringInfos) {
+                const color = new Color(info.color);
+                const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
+                info.ids.forEach(x => {
+                    const meshes = this._loaderService.getLoadedMeshesById(x);
+                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
+                        meshes.forEach(mesh => {
+                            mesh.userData.colored = true;
+                            ColorRgbRmo.setCustomToMesh(mesh, customColor);
+                            renderService.enqueueMeshForColorUpdate(mesh);
+                            this._coloredMeshes.push(mesh);
+                        });
+                    }
+                });
+            }
+        }
+        renderService.render();
+    }
+    removeColoring(renderService) {
+        for (const mesh of this._coloredMeshes) {
+            mesh.userData.colored = undefined;
+            ColorRgbRmo.deleteFromMesh(mesh, true);
+            renderService.enqueueMeshForColorUpdate(mesh);
+        }
+        this._coloredMeshes.length = 0;
+    }
+}
+
+class HudService {
+    constructor(scenesService, pickingService) {
+        if (!scenesService) {
+            throw new Error("ScenesService is not defined");
+        }
+        if (!pickingService) {
+            throw new Error("PickingService is not defined");
+        }
+        this._scenesService = scenesService;
+        this._pickingService = pickingService;
+    }
+    destroy() {
+    }
+    setVertexSnapAtPoint(renderService, clientX, clientY) {
+        if (!renderService) {
+            return;
+        }
+        const snapPoint = this._pickingService.getSnapPointAt(renderService, clientX, clientY);
+        this._scenesService.hudScene.pointSnap.setSnapPoint(snapPoint);
+        renderService.render();
+    }
+    selectVertexAtPoint(renderService, clientX, clientY) {
+        if (!renderService) {
+            return;
+        }
+        const snapPoint = this._pickingService.getSnapPointAt(renderService, clientX, clientY);
+        this._scenesService.hudScene.pointSnap.setSelectedSnapPoints(snapPoint ? [snapPoint] : null);
+        renderService.render();
+    }
+    highlightSpriteAtPoint(renderService, clientX, clientY) {
+        if (!renderService) {
+            return;
+        }
+        const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+        const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
+        this._scenesService.hudScene.markers.highlightMarker(marker);
+        renderService.render();
+    }
+    selectSpriteAtPoint(renderService, clientX, clientY) {
+        if (!renderService) {
+            return;
+        }
+        const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+        const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
+        this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
+        renderService.render();
+    }
+    measureDistanceAtPoint(renderService, clientX, clientY) {
+        if (!renderService) {
+            return;
+        }
+        const snapPoint = this._pickingService.getSnapPointAt(renderService, clientX, clientY);
+        const snapPosition = snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVec4();
+        this._scenesService.hudScene.distanceMeasurer.setEndMarker(snapPoint
+            ? new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)
+            : null);
+        renderService.render();
+    }
+}
+
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -2813,19 +3177,11 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 class GltfViewer {
     constructor(containerId, dracoDecoderPath, options) {
         this._optionsChange = new BehaviorSubject(null);
-        this._selectionChange = new BehaviorSubject(new Set());
-        this._manualSelectionChange = new Subject();
         this._contextLoss = new BehaviorSubject(false);
         this._lastFrameTime = new BehaviorSubject(0);
         this._subscriptions = [];
-        this._pointerEventHelper = PointerEventHelper.default;
-        this._queuedColoring = null;
-        this._queuedSelection = null;
-        this._highlightedMesh = null;
-        this._selectedMeshes = [];
-        this._isolatedMeshes = [];
-        this._coloredMeshes = [];
         this._interactionMode = "select_mesh";
+        this._pointerEventHelper = PointerEventHelper.default;
         this.onRendererMouseMove = (e) => {
             if (e.buttons) {
                 return;
@@ -2837,17 +3193,17 @@ class GltfViewer {
                 const y = e.clientY;
                 switch (this._interactionMode) {
                     case "select_mesh":
-                        this.highlightMeshAtPoint(x, y);
+                        this._highlightService.highlightMeshAtPoint(this._renderService, x, y);
                         break;
                     case "select_vertex":
-                        this.highlightMeshAtPoint(x, y);
-                        this.setVertexSnapAtPoint(x, y);
+                        this._highlightService.highlightMeshAtPoint(this._renderService, x, y);
+                        this._hudService.setVertexSnapAtPoint(this._renderService, x, y);
                         break;
                     case "select_sprite":
-                        this.highlightSpriteAtPoint(x, y);
+                        this._hudService.highlightSpriteAtPoint(this._renderService, x, y);
                         break;
                     case "measure_distance":
-                        this.setVertexSnapAtPoint(x, y);
+                        this._hudService.setVertexSnapAtPoint(this._renderService, x, y);
                         break;
                 }
             }, 30);
@@ -2867,7 +3223,7 @@ class GltfViewer {
             switch (this._interactionMode) {
                 case "select_mesh":
                     if (this._pointerEventHelper.waitForDouble) {
-                        this.isolateSelectedMeshes();
+                        this._selectionService.isolateSelected(this._renderService);
                         this._pointerEventHelper.waitForDouble = false;
                     }
                     else {
@@ -2875,17 +3231,17 @@ class GltfViewer {
                         setTimeout(() => {
                             this._pointerEventHelper.waitForDouble = false;
                         }, 300);
-                        this.selectMeshAtPoint(x, y, e.ctrlKey);
+                        this._selectionService.selectMeshAtPoint(this._renderService, x, y, e.ctrlKey);
                     }
                     break;
                 case "select_vertex":
-                    this.selectVertexAtPoint(x, y);
+                    this._hudService.selectVertexAtPoint(this._renderService, x, y);
                     break;
                 case "select_sprite":
-                    this.selectSpriteAtPoint(x, y);
+                    this._hudService.selectSpriteAtPoint(this._renderService, x, y);
                     break;
                 case "measure_distance":
-                    this.measureDistanceAtPoint(x, y);
+                    this._hudService.measureDistanceAtPoint(this._renderService, x, y);
                     break;
             }
             this._pointerEventHelper.downX = null;
@@ -2906,11 +3262,14 @@ class GltfViewer {
         }
         this._options = new GltfViewerOptions(options);
         this._optionsChange.next(this._options);
-        this.initCameraService();
-        this._pointSnapService = new PointSnapService();
-        this._pickingScene = new PickingScene();
         this.initLoaderService(dracoDecoderPath);
+        this.initCameraService();
+        this.initPickingService();
+        this.initHighlightService();
+        this.initSelectionService();
+        this.initColoringService();
         this.initScenesService();
+        this.initHudService();
         this.initRenderService();
         this._containerResizeObserver = new ResizeObserver(() => {
             var _a;
@@ -2919,7 +3278,7 @@ class GltfViewer {
         this._containerResizeObserver.observe(this._container);
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
         this.removeRendererEventListeners();
@@ -2927,16 +3286,22 @@ class GltfViewer {
         this._containerResizeObserver = null;
         (_b = this._renderService) === null || _b === void 0 ? void 0 : _b.destroy();
         this._renderService = null;
-        (_c = this._scenesService) === null || _c === void 0 ? void 0 : _c.destroy();
+        (_c = this._hudService) === null || _c === void 0 ? void 0 : _c.destroy();
+        this._hudService = null;
+        (_d = this._scenesService) === null || _d === void 0 ? void 0 : _d.destroy();
         this._scenesService = null;
-        (_d = this._loaderService) === null || _d === void 0 ? void 0 : _d.destroy();
-        this._loaderService = null;
-        (_e = this._pickingScene) === null || _e === void 0 ? void 0 : _e.destroy();
-        this._pickingScene = null;
-        (_f = this._pointSnapService) === null || _f === void 0 ? void 0 : _f.destroy();
-        this._pointSnapService = null;
-        (_g = this._cameraService) === null || _g === void 0 ? void 0 : _g.destroy();
+        (_e = this._coloringService) === null || _e === void 0 ? void 0 : _e.destroy();
+        this._coloringService = null;
+        (_f = this._selectionService) === null || _f === void 0 ? void 0 : _f.destroy();
+        this._selectionService = null;
+        (_g = this._highlightService) === null || _g === void 0 ? void 0 : _g.destroy();
+        this._highlightService = null;
+        (_h = this._pickingService) === null || _h === void 0 ? void 0 : _h.destroy();
+        this._pickingService = null;
+        (_j = this._cameraService) === null || _j === void 0 ? void 0 : _j.destroy();
         this._cameraService = null;
+        (_k = this._loaderService) === null || _k === void 0 ? void 0 : _k.destroy();
+        this._loaderService = null;
     }
     updateOptionsAsync(options) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -3046,32 +3411,14 @@ class GltfViewer {
         return (_a = this._loaderService) === null || _a === void 0 ? void 0 : _a.openedModelInfos;
     }
     colorItems(coloringInfos) {
-        if (this._loaderService.loadingInProgress) {
-            this._queuedColoring = coloringInfos;
-            return;
-        }
-        this.resetSelectionAndColorMeshes(coloringInfos);
+        this._coloringService.color(this._renderService, coloringInfos);
     }
     selectItems(ids) {
-        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
-            return;
-        }
-        if (this._loaderService.loadingInProgress) {
-            this._queuedSelection = { ids, isolate: false };
-            return;
-        }
-        this.findAndSelectMeshes(ids, false);
+        this._selectionService.select(this._renderService, ids);
     }
     ;
     isolateItems(ids) {
-        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
-            return;
-        }
-        if (this._loaderService.loadingInProgress) {
-            this._queuedSelection = { ids, isolate: true };
-            return;
-        }
-        this.findAndSelectMeshes(ids, true);
+        this._selectionService.isolate(this._renderService, ids);
     }
     ;
     zoomToItems(ids) {
@@ -3085,7 +3432,7 @@ class GltfViewer {
         this._renderService.renderWholeScene();
     }
     getSelectedItems() {
-        return this._selectionChange.getValue();
+        return this._selectionService.selectedIds;
     }
     setMarkers(markers) {
         var _a;
@@ -3100,15 +3447,11 @@ class GltfViewer {
     initObservables() {
         this.contextLoss$ = this._contextLoss.asObservable();
         this.optionsChange$ = this._optionsChange.asObservable();
-        this.meshesSelectionChange$ = this._selectionChange.asObservable();
-        this.meshesManualSelectionChange$ = this._manualSelectionChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
     }
     closeSubjects() {
         this._contextLoss.complete();
         this._optionsChange.complete();
-        this._selectionChange.complete();
-        this._manualSelectionChange.complete();
         this._lastFrameTime.complete();
     }
     addRendererEventListeners() {
@@ -3128,6 +3471,32 @@ class GltfViewer {
         this._renderService.renderer.domElement.removeEventListener("pointerup", this.onRendererPointerUp);
         this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
     }
+    initLoaderService(dracoDecoderPath) {
+        const wcsToUcsMatrix = new Matrix4();
+        const ucsOrigin = this._options.basePoint;
+        if (ucsOrigin) {
+            wcsToUcsMatrix
+                .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
+                .invert();
+        }
+        this._loaderService = new ModelLoaderService(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
+            this._coloringService.runQueuedColoring(this._renderService);
+            this._selectionService.runQueuedSelection(this._renderService);
+            yield this._renderService.updateRenderSceneAsync();
+        }), (guid) => { }, (guid) => {
+            this._selectionService.removeFromSelectionArrays(guid);
+            this._coloringService.removeFromColoringArrays(guid);
+        }, (mesh) => {
+            this._pickingService.addMesh(mesh);
+        }, (mesh) => {
+            this._pickingService.removeMesh(mesh);
+        }, wcsToUcsMatrix);
+        this.loadingStateChange$ = this._loaderService.loadingStateChange$;
+        this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
+        this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
+        this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
+        this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;
+    }
     initCameraService() {
         this._cameraService = new CameraService(this._container, () => {
             var _a;
@@ -3135,14 +3504,19 @@ class GltfViewer {
         });
         this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
     }
-    initRenderService() {
-        if (this._renderService) {
-            this.removeRendererEventListeners();
-            this._renderService.destroy();
-            this._renderService = null;
-        }
-        this._renderService = new RenderService(this._container, this._loaderService, this._cameraService, this._scenesService, this._options, this._lastFrameTime);
-        this.addRendererEventListeners();
+    initPickingService() {
+        this._pickingService = new PickingService();
+    }
+    initHighlightService() {
+        this._highlightService = new HighlightService(this._pickingService);
+    }
+    initSelectionService() {
+        this._selectionService = new SelectionService(this._loaderService, this._pickingService);
+        this.meshesSelectionChange$ = this._selectionService.selectionChange$;
+        this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
+    }
+    initColoringService() {
+        this._coloringService = new ColoringService(this._loaderService, this._selectionService);
     }
     initScenesService() {
         this._scenesService = new ScenesService(this._container, this._cameraService, this._options);
@@ -3154,258 +3528,17 @@ class GltfViewer {
         this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$;
         this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
     }
-    initLoaderService(dracoDecoderPath) {
-        const wcsToUcsMatrix = new Matrix4();
-        const ucsOrigin = this._options.basePoint;
-        if (ucsOrigin) {
-            wcsToUcsMatrix
-                .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
-                .invert();
-        }
-        this._loaderService = new ModelLoaderService(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
-            this.runQueuedColoring();
-            this.runQueuedSelection();
-            yield this._renderService.updateRenderSceneAsync();
-        }), (guid) => { }, (guid) => {
-            this._highlightedMesh = null;
-            this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== guid);
-            this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== guid);
-            this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== guid);
-        }, (mesh) => {
-            this._pickingScene.add(mesh);
-        }, (mesh) => {
-            this._pickingScene.remove(mesh);
-        }, wcsToUcsMatrix);
-        this.loadingStateChange$ = this._loaderService.loadingStateChange$;
-        this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
-        this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
-        this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
-        this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;
+    initHudService() {
+        this._hudService = new HudService(this._scenesService, this._pickingService);
     }
-    runQueuedColoring() {
-        if (this._queuedColoring) {
-            this.resetSelectionAndColorMeshes(this._queuedColoring);
+    initRenderService() {
+        if (this._renderService) {
+            this.removeRendererEventListeners();
+            this._renderService.destroy();
+            this._renderService = null;
         }
-    }
-    resetSelectionAndColorMeshes(coloringInfos) {
-        this.resetSelection();
-        this.colorMeshes(coloringInfos);
-    }
-    colorMeshes(coloringInfos) {
-        this.removeColoring();
-        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
-            for (const info of coloringInfos) {
-                const color = new Color(info.color);
-                const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
-                info.ids.forEach(x => {
-                    const meshes = this._loaderService.getLoadedMeshesById(x);
-                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
-                        meshes.forEach(mesh => {
-                            mesh.userData.colored = true;
-                            ColorRgbRmo.setCustomToMesh(mesh, customColor);
-                            this._renderService.enqueueMeshForColorUpdate(mesh);
-                            this._coloredMeshes.push(mesh);
-                        });
-                    }
-                });
-            }
-        }
-        this._renderService.render();
-    }
-    removeColoring() {
-        for (const mesh of this._coloredMeshes) {
-            mesh.userData.colored = undefined;
-            ColorRgbRmo.deleteFromMesh(mesh, true);
-            this._renderService.enqueueMeshForColorUpdate(mesh);
-        }
-        this._coloredMeshes.length = 0;
-    }
-    getMeshAt(clientX, clientY) {
-        const position = PointSnapService.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
-        return this._renderService.renderer && this._pickingScene
-            ? this._pickingScene.getSourceMeshAt(this._cameraService.camera, this._renderService.renderer, position)
-            : null;
-    }
-    getSnapPointAt(clientX, clientY) {
-        const position = PointSnapService.convertClientToCanvas(this._renderService.renderer, clientX, clientY);
-        const pickingMesh = this._pickingScene.getPickingMeshAt(this._cameraService.camera, this._renderService.renderer, position);
-        const point = pickingMesh
-            ? this._pointSnapService.getMeshSnapPointAtPosition(this._cameraService.camera, this._renderService.renderer, position, pickingMesh)
-            : null;
-        const snapPoint = point
-            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
-            : null;
-        return snapPoint;
-    }
-    setVertexSnapAtPoint(clientX, clientY) {
-        if (!this._renderService.renderer || !this._pickingScene) {
-            return;
-        }
-        const snapPoint = this.getSnapPointAt(clientX, clientY);
-        this._scenesService.hudScene.pointSnap.setSnapPoint(snapPoint);
-        this._renderService.render();
-    }
-    selectVertexAtPoint(clientX, clientY) {
-        if (!this._renderService.renderer || !this._pickingScene) {
-            return;
-        }
-        const snapPoint = this.getSnapPointAt(clientX, clientY);
-        this._scenesService.hudScene.pointSnap.setSelectedSnapPoints(snapPoint ? [snapPoint] : null);
-        this._renderService.render();
-    }
-    highlightSpriteAtPoint(clientX, clientY) {
-        if (!this._renderService.renderer || !this._pickingScene) {
-            return;
-        }
-        const point = PointSnapService.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
-        const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
-        this._scenesService.hudScene.markers.highlightMarker(marker);
-        this._renderService.render();
-    }
-    selectSpriteAtPoint(clientX, clientY) {
-        if (!this._renderService.renderer || !this._pickingScene) {
-            return;
-        }
-        const point = PointSnapService.convertClientToCanvasZeroCenter(this._renderService.renderer, clientX, clientY);
-        const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
-        this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
-        this._renderService.render();
-    }
-    measureDistanceAtPoint(clientX, clientY) {
-        if (!this._renderService.renderer || !this._pickingScene) {
-            return;
-        }
-        const snapPoint = this.getSnapPointAt(clientX, clientY);
-        const snapPosition = snapPoint === null || snapPoint === void 0 ? void 0 : snapPoint.position.toVec4();
-        this._scenesService.hudScene.distanceMeasurer.setEndMarker(snapPoint
-            ? new Vector3(snapPosition.x, snapPosition.y, snapPosition.z)
-            : null);
-        this._renderService.render();
-    }
-    runQueuedSelection() {
-        if (this._queuedSelection) {
-            const { ids, isolate } = this._queuedSelection;
-            this.findAndSelectMeshes(ids, isolate);
-        }
-    }
-    findAndSelectMeshes(ids, isolate) {
-        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
-        if (found.length) {
-            this.selectMeshes(found, false, isolate);
-        }
-    }
-    removeSelection() {
-        for (const mesh of this._selectedMeshes) {
-            mesh.userData.selected = undefined;
-            this._renderService.enqueueMeshForColorUpdate(mesh);
-        }
-        this._selectedMeshes.length = 0;
-    }
-    removeIsolation() {
-        for (const mesh of this._isolatedMeshes) {
-            mesh.userData.isolated = undefined;
-            this._renderService.enqueueMeshForColorUpdate(mesh);
-        }
-        this._isolatedMeshes.length = 0;
-    }
-    resetSelection() {
-        this.removeSelection();
-        this.removeIsolation();
-    }
-    selectMeshAtPoint(clientX, clientY, keepPreviousSelection) {
-        const mesh = this.getMeshAt(clientX, clientY);
-        if (!mesh) {
-            this.selectMeshes([], true, false);
-            return;
-        }
-        if (keepPreviousSelection) {
-            if (mesh.userData.selected) {
-                this.removeFromSelection(mesh);
-            }
-            else {
-                this.addToSelection(mesh);
-            }
-        }
-        else {
-            this.selectMeshes([mesh], true, false);
-        }
-    }
-    addToSelection(mesh) {
-        const meshes = [mesh, ...this._selectedMeshes];
-        this.selectMeshes(meshes, true, false);
-        return true;
-    }
-    removeFromSelection(mesh) {
-        const meshes = this._selectedMeshes.filter(x => x !== mesh);
-        this.selectMeshes(meshes, true, false);
-        return true;
-    }
-    selectMeshes(meshes, manual, isolateSelected) {
-        this.resetSelection();
-        if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
-            this.emitSelectionChanged(manual, true);
-            return null;
-        }
-        meshes.forEach(x => {
-            x.userData.selected = true;
-            this._renderService.enqueueMeshForColorUpdate(x);
-        });
-        this._selectedMeshes = meshes;
-        if (isolateSelected) {
-            this.emitSelectionChanged(manual, false);
-            this.isolateSelectedMeshes();
-        }
-        else {
-            this.emitSelectionChanged(manual, true);
-        }
-    }
-    isolateSelectedMeshes() {
-        if (!this._selectedMeshes.length) {
-            return;
-        }
-        this._loaderService.loadedMeshesArray.forEach(x => {
-            if (!x.userData.selected) {
-                x.userData.isolated = true;
-                this._renderService.enqueueMeshForColorUpdate(x);
-                this._isolatedMeshes.push(x);
-            }
-        });
-        this._renderService.render(this._selectedMeshes);
-    }
-    emitSelectionChanged(manual, render) {
-        if (render) {
-            this._renderService.render(manual ? null : this._selectedMeshes);
-        }
-        const ids = new Set();
-        this._selectedMeshes.forEach(x => ids.add(x.userData.id));
-        this._selectionChange.next(ids);
-        if (manual) {
-            this._manualSelectionChange.next(ids);
-        }
-    }
-    highlightMeshAtPoint(clientX, clientY) {
-        const mesh = this.getMeshAt(clientX, clientY);
-        this.highlightItem(mesh);
-    }
-    highlightItem(mesh) {
-        if (mesh === this._highlightedMesh) {
-            return;
-        }
-        this.removeHighlighting();
-        if (mesh) {
-            mesh.userData.highlighted = true;
-            this._renderService.enqueueMeshForColorUpdate(mesh);
-            this._highlightedMesh = mesh;
-        }
-        this._renderService.render();
-    }
-    removeHighlighting() {
-        if (this._highlightedMesh) {
-            const mesh = this._highlightedMesh;
-            mesh.userData.highlighted = undefined;
-            this._renderService.enqueueMeshForColorUpdate(mesh);
-            this._highlightedMesh = null;
-        }
+        this._renderService = new RenderService(this._container, this._loaderService, this._cameraService, this._scenesService, this._options, this._lastFrameTime);
+        this.addRendererEventListeners();
     }
 }
 
