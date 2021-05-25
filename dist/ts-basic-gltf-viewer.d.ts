@@ -100,12 +100,14 @@ export declare class GltfViewerOptions {
 	axesHelperPlacement: CornerName;
 	axesHelperSize: number;
 	basePoint: Vec4DoubleCS;
-	focusOnSelectionEnabled: boolean;
+	selectionAutoFocusEnabled: boolean;
+	cameraControlsDisabled: boolean;
 	constructor(item?: object);
 }
-export declare type ViewerInteractionMode = "select_mesh" | "select_mesh_frame" | "select_vertex" | "select_sprite" | "measure_distance";
+export declare type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 export declare class GltfViewer {
 	optionsChange$: Observable<GltfViewerOptions>;
+	modeChange$: Observable<ViewerInteractionMode>;
 	contextLoss$: Observable<boolean>;
 	lastFrameTime$: Observable<number>;
 	cameraPositionChange$: Observable<Vec4DoubleCS>;
@@ -123,9 +125,6 @@ export declare class GltfViewer {
 	markersSelectionChange$: Observable<MarkerInfo[]>;
 	markersManualSelectionChange$: Observable<MarkerInfo[]>;
 	distanceMeasureChange$: Observable<Distance>;
-	private _optionsChange;
-	private _contextLoss;
-	private _lastFrameTime;
 	private _subscriptions;
 	private _container;
 	private _containerResizeObserver;
@@ -141,6 +140,10 @@ export declare class GltfViewer {
 	private _coloringService;
 	private _hudService;
 	private _pointerEventHelper;
+	private _modeChange;
+	private _optionsChange;
+	private _contextLoss;
+	private _lastFrameTime;
 	constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions);
 	destroy(): void;
 	updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions>;
@@ -157,8 +160,9 @@ export declare class GltfViewer {
 	selectMarkers(ids: string[]): void;
 	private initObservables;
 	private closeSubjects;
-	private onRendererMouseMove;
+	private clearDownPoint;
 	private onRendererPointerDown;
+	private onRendererPointerMove;
 	private onRendererPointerUp;
 	private onRendererContextLoss;
 	private onRendererContextRestore;

@@ -18,11 +18,12 @@ import { HudService } from "./services/hud-service";
 export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo,
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };  
 
-export type ViewerInteractionMode = "select_mesh" | "select_mesh_frame" | "select_vertex" | "select_sprite" | "measure_distance";
+export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 
 export class GltfViewer {
   // #region public observables
   optionsChange$: Observable<GltfViewerOptions>; 
+  modeChange$: Observable<ViewerInteractionMode>; 
   
   contextLoss$: Observable<boolean>;
   lastFrameTime$: Observable<number>;
@@ -49,19 +50,13 @@ export class GltfViewer {
   distanceMeasureChange$: Observable<Distance>;
   // #endregion
   
-  // #region private rx subjects
-  private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
-  private _contextLoss = new BehaviorSubject<boolean>(false);  
-  private _lastFrameTime = new BehaviorSubject<number>(0);  
-  // #endregion
-  
   private _subscriptions: Subscription[] = [];
   
   private _container: HTMLElement;
   private _containerResizeObserver: ResizeObserver;
 
   private _options: GltfViewerOptions;  
-  private _interactionMode: ViewerInteractionMode = "select_mesh";
+  private _interactionMode: ViewerInteractionMode;
 
   private _cameraService: CameraService;   
   private _loaderService: ModelLoaderService;  
@@ -73,7 +68,14 @@ export class GltfViewer {
   private _coloringService: ColoringService;
   private _hudService: HudService;
 
-  private _pointerEventHelper = PointerEventHelper.default;
+  private _pointerEventHelper = PointerEventHelper.default;  
+  
+  // #region private rx subjects
+  private _modeChange = new BehaviorSubject<ViewerInteractionMode>(null);
+  private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
+  private _contextLoss = new BehaviorSubject<boolean>(false);  
+  private _lastFrameTime = new BehaviorSubject<number>(0);  
+  // #endregion
 
   /**
    * 
@@ -107,6 +109,8 @@ export class GltfViewer {
       this._renderService?.resizeRenderer();
     });
     this._containerResizeObserver.observe(this._container);
+
+    this.setInteractionMode("select_mesh");
   }
 
   /**
@@ -220,8 +224,14 @@ export class GltfViewer {
         && axesHelperUpdated) {
       this._renderService.render();
     }    
+
+    if (this._options.cameraControlsDisabled) {
+      this._cameraService.disableControls();
+    } else {
+      this._cameraService.enableControls();
+    }
     
-    this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
+    this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
 
     this._optionsChange.next(this._options);  
     return this._options;
@@ -236,6 +246,8 @@ export class GltfViewer {
     if (this._interactionMode === value) {
       return;
     }
+
+    // disable the previous mode
     switch (this._interactionMode) {
       case "select_mesh":
         // TODO?: reset mesh selection
@@ -252,9 +264,12 @@ export class GltfViewer {
         this._scenesService.hudScene.distanceMeasurer.reset();
         break;
       default:
-        return;
+        // interaction mode was not set
+        break;
     }
+
     this._interactionMode = value;
+    this._modeChange.next(value);
     this._renderService.render();
   }  
 
@@ -358,12 +373,14 @@ export class GltfViewer {
 
   // #region rx
   private initObservables() {
+    this.modeChange$ = this._modeChange.asObservable();
     this.contextLoss$ = this._contextLoss.asObservable();
     this.optionsChange$ = this._optionsChange.asObservable();
     this.lastFrameTime$ = this._lastFrameTime.asObservable();
   }
 
   private closeSubjects() {
+    this._modeChange.complete();
     this._contextLoss.complete();
     this._optionsChange.complete(); 
     this._lastFrameTime.complete();
@@ -371,8 +388,32 @@ export class GltfViewer {
   // #endregion
 
   // #region renderer events
-  private onRendererMouseMove = (e: MouseEvent) => {   
-    if (!this._options.highlightingEnabled || e.buttons) {
+  private clearDownPoint() {    
+    this._pointerEventHelper.downX = null;
+    this._pointerEventHelper.downY = null;
+  }
+
+  private onRendererPointerDown = (e: PointerEvent) => {
+    if (!e.isPrimary || e.button === 1 || e.button === 2) {
+      // ignore all pointer events except the primary one
+      return;
+    }
+    
+    this._pointerEventHelper.touch = e.pointerType === "touch";
+    this._pointerEventHelper.allowArea = e.pointerType !== "touch" || this._options.cameraControlsDisabled;
+    this._pointerEventHelper.downX = e.clientX;
+    this._pointerEventHelper.downY = e.clientY;
+  };
+
+  private onRendererPointerMove = (e: PointerEvent) => {
+    if (!e.isPrimary) {
+      // ignore all pointer events except the primary one
+      return;
+    }
+
+    if (!this._options.highlightingEnabled) {
+      // return if highlighting is disabled
+      // because the further code affects highlighting only
       return;
     } 
 
@@ -384,7 +425,12 @@ export class GltfViewer {
 
       switch (this._interactionMode) {
         case "select_mesh":  
-          this._highlightService.highlightAtPoint(this._renderService, x, y);      
+          const { downX, downY, allowArea } = this._pointerEventHelper;
+          if (downX !== undefined && downX !== null && allowArea) {
+            this._highlightService.highlightInArea(this._renderService, downX, downY, x, y); 
+          } else {
+            this._highlightService.highlightAtPoint(this._renderService, x, y);   
+          }       
           break;
         case "select_vertex":
           this._highlightService.highlightAtPoint(this._renderService, x, y);     
@@ -400,18 +446,34 @@ export class GltfViewer {
     }, 30);
   };
 
-  private onRendererPointerDown = (e: PointerEvent) => {
-    this._pointerEventHelper.downX = e.clientX;
-    this._pointerEventHelper.downY = e.clientY;
-  };
-
   private onRendererPointerUp = (e: PointerEvent) => {
+    if (!e.isPrimary || e.button === 1 || e.button === 2) {
+      // ignore all pointer events except the primary one
+      return;
+    }    
+
     const x = e.clientX;
     const y = e.clientY;
+    const { downX, downY, touch, allowArea, maxDiff } = this._pointerEventHelper;
 
-    if (!this._pointerEventHelper.downX 
-      || Math.abs(x - this._pointerEventHelper.downX) > this._pointerEventHelper.maxDiff
-      || Math.abs(y - this._pointerEventHelper.downY) > this._pointerEventHelper.maxDiff) {
+    if (!downX) {
+      // no 'down' coordinates. the pointer was set down outside the renderer canvas
+      return;
+    }
+
+    if (Math.abs(x - downX) > maxDiff
+      || Math.abs(y - downY) > maxDiff) {
+      // the pointer moved away from the 'down' point.
+
+      if (this._interactionMode === "select_mesh" && allowArea) {
+        // apply area selection if the corresponding mode is set
+        this._selectionService.selectMeshesInArea(this._renderService, 
+          // add to selection if touch action or 'ctrl' key pressed
+          e.ctrlKey || touch,
+          downX, downY, x, y);
+        this._highlightService.clearHighlight(this._renderService);
+      }
+      this.clearDownPoint();
       return;
     }
 
@@ -425,7 +487,9 @@ export class GltfViewer {
           setTimeout(() => {
             this._pointerEventHelper.waitForDouble = false;
           }, 300);
-          this._selectionService.selectMeshAtPoint(this._renderService, x, y, e.ctrlKey);
+          this._selectionService.selectMeshAtPoint(this._renderService, x, y, 
+            // add/remove to/from selection if touch action or 'ctrl' key pressed
+            e.ctrlKey || touch); 
         }      
         break;
       case "select_vertex":
@@ -439,8 +503,7 @@ export class GltfViewer {
         break;
     }
 
-    this._pointerEventHelper.downX = null;
-    this._pointerEventHelper.downY = null;
+    this.clearDownPoint();
   };
 
   private onRendererContextLoss = () => {
@@ -474,6 +537,9 @@ export class GltfViewer {
     this._cameraService = new CameraService(this._container, () => {
       this._renderService?.renderOnCameraMove();
     }); 
+    if (this._options.cameraControlsDisabled) {
+      this._cameraService.disableControls();
+    }
     this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
   }
 
@@ -487,7 +553,7 @@ export class GltfViewer {
 
   private initSelectionService() {    
     this._selectionService = new SelectionService(this._loaderService, this._pickingService);
-    this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
+    this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
     
     this.meshesSelectionChange$ = this._selectionService.selectionChange$;
     this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
@@ -526,7 +592,7 @@ export class GltfViewer {
     this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore); 
     this._renderService.addRendererEventListener("pointerdown", <any>this.onRendererPointerDown); // TODO: edit code to keep typings
     this._renderService.addRendererEventListener("pointerup", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("mousemove", <any>this.onRendererMouseMove); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("pointermove", <any>this.onRendererPointerMove); // TODO: edit code to keep typings
   }
   // #endregion
 }

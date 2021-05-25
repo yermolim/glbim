@@ -242,8 +242,7 @@ export class RenderService {
   }
 
   convertWorldToCanvas(point: Vector3): Vector2 {
-    const nPoint = new Vector3().copy(point).project(this.camera); 
-
+    const nPoint = new Vector3().copy(point).project(this.camera);
     const rect = this.canvas.getBoundingClientRect();
     const canvasWidth = this.canvas.width / (this.canvas.width / rect.width) || 0;
     const canvasHeight = this.canvas.height / (this.canvas.height / rect.height) || 0;

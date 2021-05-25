@@ -1,4 +1,3 @@
-import { first } from "rxjs/operators";
 import { GltfViewer } from "../gltf-viewer";
 import { GltfViewerOptions } from "../gltf-viewer-options";
 

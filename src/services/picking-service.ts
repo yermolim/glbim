@@ -1,8 +1,8 @@
-import { BufferAttribute, Camera, Face, Object3D, Raycaster, Scene, 
+import { BufferAttribute, Camera, Face, Mesh, Raycaster, Scene, 
   Triangle, Vector2, Vector3, WebGLRenderer } from "three";
 
 import { MeshBgAm, MeshBgSm, SnapPoint, Vec4DoubleCS } from "../common-types";
-import { AreaSelector } from "../helpers/area-selector";
+
 import { PickingScene } from "../scenes/picking-scene";
 
 import { ModelLoaderService } from "./model-loader-service";
@@ -17,7 +17,6 @@ export class PickingService {
   }
   
   private readonly _raycaster: Raycaster;
-  private readonly _areaSelector: AreaSelector;
   
   constructor(loaderService: ModelLoaderService) {   
     if (!loaderService) {
@@ -30,7 +29,6 @@ export class PickingService {
 
     this._pickingScene = new PickingScene();
     this._raycaster = new Raycaster();
-    this._areaSelector = new AreaSelector();
   }
 
   destroy() {
@@ -70,25 +68,56 @@ export class PickingService {
   }  
 
   getMeshIdsInArea(renderService: RenderService, 
-    clientMinX: number, clientMinY: number, 
-    clientMaxX: number, clientMaxY: number): string[] {
-      
-    const min = renderService.convertClientToCanvasZeroCenterNormalized(clientMinX, clientMinY);
-    const max = renderService.convertClientToCanvasZeroCenterNormalized(clientMaxX, clientMaxY);
+    clientStartX: number, clientStartY: number, 
+    clientEndX: number, clientEndY: number): string[] {
     
-    const objects = this._areaSelector.select(renderService.camera, this.scene, 
-      new Vector3(min.x, min.y, 0), new Vector3(max.x, max.y, 0));
+    const canvasStart = renderService.convertClientToCanvas(clientStartX, clientStartY);
+    const canvasEnd = renderService.convertClientToCanvas(clientEndX, clientEndY);     
 
-    const ids = objects.map(x => x.userData.id).filter(x => x);
+    const minAreaCX = Math.min(canvasStart.x, canvasEnd.x);
+    const minAreaCY = Math.min(canvasStart.y, canvasEnd.y);
+    const maxAreaCX = Math.max(canvasStart.x, canvasEnd.x);
+    const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);    
+
+    const centerPointTemp = new Vector3();
+    const ids: string[] = [];
+    for (const x of this.scene.children) {
+      if (!(x instanceof Mesh)) {
+        continue;
+      }
+
+      // calculate bounding sphere center of the mesh
+      if (x.geometry.boundingSphere === null) {
+        x.geometry.computeBoundingSphere();
+      }
+
+      // get the transformed center of the mesh
+      centerPointTemp.copy(x.geometry.boundingSphere.center);
+      x.updateMatrixWorld();
+      centerPointTemp.applyMatrix4(x.matrixWorld); 
+
+      // check if the mesh center is inside the area
+      const canvasCoords = renderService.convertWorldToCanvas(centerPointTemp);
+      if (canvasCoords.x < minAreaCX
+        || canvasCoords.x > maxAreaCX
+        || canvasCoords.y < minAreaCY
+        || canvasCoords.y > maxAreaCY) {
+        continue;
+      }
+
+      // add the mesh source id to the array
+      ids.push(x.userData.sourceId);
+    }
+
     return ids;
   }
 
   getMeshesInArea(renderService: RenderService, 
-    clientMinX: number, clientMinY: number, 
-    clientMaxX: number, clientMaxY: number): MeshBgSm[] {
+    clientStartX: number, clientStartY: number, 
+    clientEndX: number, clientEndY: number): MeshBgSm[] {
 
     const ids = this.getMeshIdsInArea(renderService, 
-      clientMinX, clientMinY, clientMaxX, clientMaxY);
+      clientStartX, clientStartY, clientEndX, clientEndY);
     
     const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     return found;

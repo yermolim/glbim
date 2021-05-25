@@ -1,8 +1,8 @@
 import { Observable, BehaviorSubject } from "rxjs";
-import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera } from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera, TOUCH } from "three";
 
 import { AxisName, Vec4DoubleCS } from "../common-types";
+import { CameraControls } from "../helpers/camera-controls";
 
 export class CameraService {
   cameraPositionChange$: Observable<Vec4DoubleCS>;
@@ -13,7 +13,7 @@ export class CameraService {
     return this._camera;
   }
 
-  private _orbitControls: OrbitControls;
+  private _controls: CameraControls;
   private _focusBox = new Box3();
 
   // rotation
@@ -39,16 +39,16 @@ export class CameraService {
     this._cameraPositionChanged = new BehaviorSubject<Vec4DoubleCS>(Vec4DoubleCS.fromVector3(camera.position));
     this.cameraPositionChange$ = this._cameraPositionChanged.asObservable();      
 
-    const orbitControls = new OrbitControls(camera, container);
-    orbitControls.addEventListener("change", this.onCameraPositionChange);
-    orbitControls.update();
+    const controls = new CameraControls(camera, container);
+    controls.addEventListener("change", this.onCameraPositionChange);
+    controls.update();
 
     this._camera = camera;
-    this._orbitControls = orbitControls;
+    this._controls = controls;
   }
 
   destroy() {
-    this._orbitControls.dispose();
+    this._controls.dispose();
     this._cameraPositionChanged.complete();
   }
     
@@ -80,6 +80,18 @@ export class CameraService {
     this.focusCameraOnBox(this._focusBox, offset);
   }  
 
+  enableControls() {
+    this._controls.enablePan = true;
+    this._controls.enableRotate = true;
+    this._controls.enableZoom = true;
+  }
+
+  disableControls() {
+    this._controls.enablePan = false;
+    this._controls.enableRotate = false;
+    this._controls.enableZoom = false;
+  }
+
   private onCameraPositionChange = () => {
     this._cameraPositionChanged.next(Vec4DoubleCS.fromVector3(this._camera.position));
     this._renderCb();
@@ -94,20 +106,20 @@ export class CameraService {
     const fitWidthDistance = fitHeightDistance / this._camera.aspect;
     const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
     
-    const direction = this._orbitControls.target.clone()
+    const direction = this._controls.target.clone()
       .sub(this._camera.position)
       .normalize()
       .multiplyScalar(distance);
 
-    this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
-    this._orbitControls.target.copy(center);
+    this._controls.maxDistance = Math.max(distance * 10, 10000);
+    this._controls.target.copy(center);
     
     this._camera.near = Math.min(distance / 100, 1);
     this._camera.far = Math.max(distance * 100, 10000);
     this._camera.updateProjectionMatrix();
     this._camera.position.copy(center).sub(direction);
 
-    this._orbitControls.update();
+    this._controls.update();
   }
 
   //#region rotation to face the axis
@@ -161,7 +173,7 @@ export class CameraService {
         return;
     }
 
-    this._rPosFocus.copy(this._orbitControls.target);
+    this._rPosFocus.copy(this._controls.target);
     this._rRadius = this._camera.position.distanceTo(this._rPosFocus);
     this._rPosRelCamTarget.multiplyScalar(this._rRadius);
 

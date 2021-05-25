@@ -66,16 +66,6 @@ export class SelectionService {
 
     this.findAndSelectMeshes(renderService, ids, false);
   };
-  
-  selectInArea(renderService: RenderService, 
-    clientMinX: number, clientMinY: number, 
-    clientMaxX: number, clientMaxY: number) {
-
-    const ids = this._pickingService.getMeshIdsInArea(renderService,
-      clientMinX, clientMinY, clientMaxX, clientMaxY);
-    
-    this.select(renderService, ids);
-  }
 
   isolate(renderService: RenderService, ids: string[]) {
     if (!ids?.length) {
@@ -112,14 +102,38 @@ export class SelectionService {
       return;
     }
 
+    let meshes: MeshBgSm[];
     if (keepPreviousSelection) {
       if (mesh.userData.selected) {
-        this.removeFromSelection(renderService, mesh);
+        meshes = this._selectedMeshes.filter(x => x !== mesh);
       } else {        
-        this.addToSelection(renderService, mesh);
+        meshes = [mesh, ...this._selectedMeshes];
       }
     } else {
-      this.selectMeshes(renderService, [mesh], true, false);
+      meshes = [mesh];
+    }
+    
+    this.selectMeshes(renderService, meshes, true, false);
+  }
+  
+  selectMeshesInArea(renderService: RenderService, keepPreviousSelection: boolean,
+    clientMinX: number, clientMinY: number, clientMaxX: number, clientMaxY: number) {
+
+    const ids = this._pickingService.getMeshIdsInArea(renderService,
+      clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
+    
+    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
+    let meshes: MeshBgSm[];
+    if (keepPreviousSelection) {
+      meshes = [...found, ...this._selectedMeshes];
+    } else {
+      meshes = found;
+    }
+
+    if (!meshes?.length) {
+      this.removeSelection(renderService);
+    } else {
+      this.selectMeshes(renderService, meshes, true, false);
     }
   }
 
@@ -172,18 +186,6 @@ export class SelectionService {
     this._isolatedMeshes.length = 0;
   }
 
-  private addToSelection(renderService: RenderService, mesh: MeshBgSm): boolean {   
-    const meshes = [mesh, ...this._selectedMeshes];
-    this.selectMeshes(renderService, meshes, true, false);
-    return true;
-  }
-
-  private removeFromSelection(renderService: RenderService, mesh: Mesh): boolean {
-    const meshes = this._selectedMeshes.filter(x => x !== mesh);
-    this.selectMeshes(renderService, meshes, true, false);
-    return true;
-  }
- 
   private selectMeshes(renderService: RenderService, meshes: MeshBgSm[], 
     manual: boolean, isolateSelected: boolean) { 
       

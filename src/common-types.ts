@@ -85,6 +85,8 @@ export class PointerEventHelper {
   maxDiff: number; 
   mouseMoveTimer: number;
   waitForDouble: boolean;
+  touch: boolean;
+  allowArea: boolean;
 
   static get default(): PointerEventHelper {
     return { 
@@ -92,7 +94,9 @@ export class PointerEventHelper {
       downY: null, 
       maxDiff: 10, 
       mouseMoveTimer: null, 
-      waitForDouble: false 
+      waitForDouble: false,
+      touch: false, 
+      allowArea: true,
     };
   }
 }

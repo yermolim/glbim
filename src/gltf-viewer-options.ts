@@ -4,12 +4,12 @@ export class GltfViewerOptions {
   /**
    * Enable WebGL anti-aliasing 
    */
-  useAntialiasing = false;
+  useAntialiasing = true;
   /**
    * Enable advanced physically correct lights 
    * (the option has no noticeable effect with the currently used materials)
    */
-  usePhysicalLights = false; 
+  usePhysicalLights = true; 
   /**
    * Intensity of the main scene ambient light source
    */
@@ -88,7 +88,12 @@ export class GltfViewerOptions {
   /**
    * defines if the camera focus should move to the programmatically selected items
    */
-  focusOnSelectionEnabled = true;
+  selectionAutoFocusEnabled = true;
+
+  /**
+   * disables panning/zooming and rotating but enables area selection for touch events
+   */
+  cameraControlsDisabled = false;
   
   constructor(item: object = null) {
     if (item != null) {

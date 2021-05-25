@@ -38,6 +38,10 @@ export class HighlightService {
     }
   }
 
+  clearHighlight(renderService: RenderService) {
+    this.highlightMeshes(renderService, []);
+  }
+
   private highlightMeshes(renderService: RenderService, meshes: MeshBgSm[]) {
     const meshSet = new Set<MeshBgSm>(meshes || []);    
 

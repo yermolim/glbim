@@ -23,7 +23,7 @@
  */
 
 import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
-import { Matrix4, Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, Frustum, Line, Points, WebGLRenderTarget, Triangle } from 'three';
+import { Matrix4, Mesh, BufferGeometry, MeshStandardMaterial, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -34,8 +34,8 @@ import { ConvexHull } from 'three/examples/jsm/math/ConvexHull';
 
 class GltfViewerOptions {
     constructor(item = null) {
-        this.useAntialiasing = false;
-        this.usePhysicalLights = false;
+        this.useAntialiasing = true;
+        this.usePhysicalLights = true;
         this.ambientLightIntensity = 1;
         this.hemiLightIntensity = 0.4;
         this.dirLightIntensity = 0.6;
@@ -50,7 +50,8 @@ class GltfViewerOptions {
         this.axesHelperPlacement = "top-right";
         this.axesHelperSize = 128;
         this.basePoint = null;
-        this.focusOnSelectionEnabled = true;
+        this.selectionAutoFocusEnabled = true;
+        this.cameraControlsDisabled = false;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -64,7 +65,9 @@ class PointerEventHelper {
             downY: null,
             maxDiff: 10,
             mouseMoveTimer: null,
-            waitForDouble: false
+            waitForDouble: false,
+            touch: false,
+            allowArea: true,
         };
     }
 }
@@ -463,6 +466,18 @@ class ModelLoaderService {
     }
 }
 
+class CameraControls extends OrbitControls {
+    constructor(camera, domElement) {
+        super(camera, domElement);
+        this.screenSpacePanning = false;
+        this.mouseButtons.LEFT = null;
+        this.mouseButtons.MIDDLE = MOUSE.ROTATE;
+        this.mouseButtons.RIGHT = MOUSE.PAN;
+        this.touches.ONE = TOUCH.ROTATE;
+        this.touches.TWO = TOUCH.DOLLY_PAN;
+    }
+}
+
 class CameraService {
     constructor(container, renderCallback) {
         this._focusBox = new Box3();
@@ -484,17 +499,17 @@ class CameraService {
         camera.lookAt(0, 0, 0);
         this._cameraPositionChanged = new BehaviorSubject(Vec4DoubleCS.fromVector3(camera.position));
         this.cameraPositionChange$ = this._cameraPositionChanged.asObservable();
-        const orbitControls = new OrbitControls(camera, container);
-        orbitControls.addEventListener("change", this.onCameraPositionChange);
-        orbitControls.update();
+        const controls = new CameraControls(camera, container);
+        controls.addEventListener("change", this.onCameraPositionChange);
+        controls.update();
         this._camera = camera;
-        this._orbitControls = orbitControls;
+        this._controls = controls;
     }
     get camera() {
         return this._camera;
     }
     destroy() {
-        this._orbitControls.dispose();
+        this._controls.dispose();
         this._cameraPositionChanged.complete();
     }
     resize(width, height) {
@@ -520,6 +535,16 @@ class CameraService {
         }
         this.focusCameraOnBox(this._focusBox, offset);
     }
+    enableControls() {
+        this._controls.enablePan = true;
+        this._controls.enableRotate = true;
+        this._controls.enableZoom = true;
+    }
+    disableControls() {
+        this._controls.enablePan = false;
+        this._controls.enableRotate = false;
+        this._controls.enableZoom = false;
+    }
     focusCameraOnBox(box, offset) {
         const size = box.getSize(new Vector3());
         const center = box.getCenter(new Vector3());
@@ -527,17 +552,17 @@ class CameraService {
         const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this._camera.fov / 360));
         const fitWidthDistance = fitHeightDistance / this._camera.aspect;
         const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
-        const direction = this._orbitControls.target.clone()
+        const direction = this._controls.target.clone()
             .sub(this._camera.position)
             .normalize()
             .multiplyScalar(distance);
-        this._orbitControls.maxDistance = Math.max(distance * 10, 10000);
-        this._orbitControls.target.copy(center);
+        this._controls.maxDistance = Math.max(distance * 10, 10000);
+        this._controls.target.copy(center);
         this._camera.near = Math.min(distance / 100, 1);
         this._camera.far = Math.max(distance * 100, 10000);
         this._camera.updateProjectionMatrix();
         this._camera.position.copy(center).sub(direction);
-        this._orbitControls.update();
+        this._controls.update();
     }
     prepareRotation(axis, toZUp) {
         switch (axis) {
@@ -592,7 +617,7 @@ class CameraService {
             default:
                 return;
         }
-        this._rPosFocus.copy(this._orbitControls.target);
+        this._rPosFocus.copy(this._controls.target);
         this._rRadius = this._camera.position.distanceTo(this._rPosFocus);
         this._rPosRelCamTarget.multiplyScalar(this._rRadius);
         this._rQcfSource.copy(this._camera.quaternion);
@@ -2774,139 +2799,6 @@ class RenderService {
     }
 }
 
-class AreaSelector {
-    constructor(depth) {
-        this._frustum = new Frustum();
-        this._depth = Number.MAX_VALUE;
-        this._tempPoint = new Vector3();
-        this._startPoint = new Vector3();
-        this._endPoint = new Vector3();
-        this._centerPoint = new Vector3();
-        this._vecNear = new Vector3();
-        this._vecTopLeft = new Vector3();
-        this._vecTopRight = new Vector3();
-        this._vecDownRight = new Vector3();
-        this._vecDownLeft = new Vector3();
-        this._vecFarTopLeft = new Vector3();
-        this._vecFarTopRight = new Vector3();
-        this._vecFarDownRight = new Vector3();
-        this._vecFarDownLeft = new Vector3();
-        this._vectemp1 = new Vector3();
-        this._vectemp2 = new Vector3();
-        this._vectemp3 = new Vector3();
-        if (depth) {
-            this._depth = depth;
-        }
-    }
-    select(camera, scene, startPoint, endPoint) {
-        if (startPoint) {
-            this._startPoint.copy(startPoint);
-        }
-        if (endPoint) {
-            this._endPoint.copy(endPoint);
-        }
-        this.updateFrustum(camera, this._startPoint, this._endPoint);
-        const result = [];
-        this.findObjectInFrustum(scene, result);
-        return result;
-    }
-    updateFrustum(camera, startPoint, endPoint) {
-        if (startPoint.x === endPoint.x) {
-            endPoint.x += Number.EPSILON;
-        }
-        if (startPoint.y === endPoint.y) {
-            endPoint.y += Number.EPSILON;
-        }
-        camera.updateProjectionMatrix();
-        camera.updateMatrixWorld();
-        if (camera instanceof PerspectiveCamera) {
-            this._tempPoint.copy(startPoint);
-            this._tempPoint.x = Math.min(startPoint.x, endPoint.x);
-            this._tempPoint.y = Math.max(startPoint.y, endPoint.y);
-            endPoint.x = Math.max(startPoint.x, endPoint.x);
-            endPoint.y = Math.min(startPoint.y, endPoint.y);
-            this._vecNear.setFromMatrixPosition(camera.matrixWorld);
-            this._vecTopLeft.copy(this._tempPoint);
-            this._vecTopRight.set(endPoint.x, this._tempPoint.y, 0);
-            this._vecDownRight.copy(endPoint);
-            this._vecDownLeft.set(this._tempPoint.x, endPoint.y, 0);
-            this._vecTopLeft.unproject(camera);
-            this._vecTopRight.unproject(camera);
-            this._vecDownRight.unproject(camera);
-            this._vecDownLeft.unproject(camera);
-            this._vectemp1.copy(this._vecTopLeft).sub(this._vecNear);
-            this._vectemp2.copy(this._vecTopRight).sub(this._vecNear);
-            this._vectemp3.copy(this._vecDownRight).sub(this._vecNear);
-            this._vectemp1.normalize();
-            this._vectemp2.normalize();
-            this._vectemp3.normalize();
-            this._vectemp1.multiplyScalar(this._depth);
-            this._vectemp2.multiplyScalar(this._depth);
-            this._vectemp3.multiplyScalar(this._depth);
-            this._vectemp1.add(this._vecNear);
-            this._vectemp2.add(this._vecNear);
-            this._vectemp3.add(this._vecNear);
-            const planes = this._frustum.planes;
-            planes[0].setFromCoplanarPoints(this._vecNear, this._vecTopLeft, this._vecTopRight);
-            planes[1].setFromCoplanarPoints(this._vecNear, this._vecTopRight, this._vecDownRight);
-            planes[2].setFromCoplanarPoints(this._vecDownRight, this._vecDownLeft, this._vecNear);
-            planes[3].setFromCoplanarPoints(this._vecDownLeft, this._vecTopLeft, this._vecNear);
-            planes[4].setFromCoplanarPoints(this._vecTopRight, this._vecDownRight, this._vecDownLeft);
-            planes[5].setFromCoplanarPoints(this._vectemp3, this._vectemp2, this._vectemp1);
-            planes[5].normal.multiplyScalar(-1);
-        }
-        else if (camera instanceof OrthographicCamera) {
-            const left = Math.min(startPoint.x, endPoint.x);
-            const top = Math.max(startPoint.y, endPoint.y);
-            const right = Math.max(startPoint.x, endPoint.x);
-            const down = Math.min(startPoint.y, endPoint.y);
-            this._vecTopLeft.set(left, top, -1);
-            this._vecTopRight.set(right, top, -1);
-            this._vecDownRight.set(right, down, -1);
-            this._vecDownLeft.set(left, down, -1);
-            this._vecFarTopLeft.set(left, top, 1);
-            this._vecFarTopRight.set(right, top, 1);
-            this._vecFarDownRight.set(right, down, 1);
-            this._vecFarDownLeft.set(left, down, 1);
-            this._vecTopLeft.unproject(camera);
-            this._vecTopRight.unproject(camera);
-            this._vecDownRight.unproject(camera);
-            this._vecDownLeft.unproject(camera);
-            this._vecFarTopLeft.unproject(camera);
-            this._vecFarTopRight.unproject(camera);
-            this._vecFarDownRight.unproject(camera);
-            this._vecFarDownLeft.unproject(camera);
-            const planes = this._frustum.planes;
-            planes[0].setFromCoplanarPoints(this._vecTopLeft, this._vecFarTopLeft, this._vecFarTopRight);
-            planes[1].setFromCoplanarPoints(this._vecTopRight, this._vecFarTopRight, this._vecFarDownRight);
-            planes[2].setFromCoplanarPoints(this._vecFarDownRight, this._vecFarDownLeft, this._vecDownLeft);
-            planes[3].setFromCoplanarPoints(this._vecFarDownLeft, this._vecFarTopLeft, this._vecTopLeft);
-            planes[4].setFromCoplanarPoints(this._vecTopRight, this._vecDownRight, this._vecDownLeft);
-            planes[5].setFromCoplanarPoints(this._vecFarDownRight, this._vecFarTopRight, this._vecFarTopLeft);
-            planes[5].normal.multiplyScalar(-1);
-        }
-    }
-    findObjectInFrustum(object, targetArray) {
-        if (object instanceof Mesh || object instanceof Line || object instanceof Points) {
-            if (object.material !== undefined) {
-                if (object.geometry.boundingSphere === null) {
-                    object.geometry.computeBoundingSphere();
-                }
-                this._centerPoint.copy(object.geometry.boundingSphere.center);
-                this._centerPoint.applyMatrix4(object.matrixWorld);
-                if (this._frustum.containsPoint(this._centerPoint)) {
-                    targetArray.push(object);
-                }
-            }
-        }
-        if (object.children.length > 0) {
-            for (let x = 0; x < object.children.length; x++) {
-                this.findObjectInFrustum(object.children[x], targetArray);
-            }
-        }
-    }
-}
-
 class PickingScene {
     constructor() {
         this._materials = [];
@@ -3014,7 +2906,6 @@ class PickingService {
         this._loaderService.addMeshCallback("mesh-unloaded", this.onLoaderMeshUnloaded);
         this._pickingScene = new PickingScene();
         this._raycaster = new Raycaster();
-        this._areaSelector = new AreaSelector();
     }
     get scene() {
         return this._pickingScene.scene;
@@ -3047,15 +2938,38 @@ class PickingService {
             : null;
         return snapPoint;
     }
-    getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
-        const min = renderService.convertClientToCanvasZeroCenterNormalized(clientMinX, clientMinY);
-        const max = renderService.convertClientToCanvasZeroCenterNormalized(clientMaxX, clientMaxY);
-        const objects = this._areaSelector.select(renderService.camera, this.scene, new Vector3(min.x, min.y, 0), new Vector3(max.x, max.y, 0));
-        const ids = objects.map(x => x.userData.id).filter(x => x);
+    getMeshIdsInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY) {
+        const canvasStart = renderService.convertClientToCanvas(clientStartX, clientStartY);
+        const canvasEnd = renderService.convertClientToCanvas(clientEndX, clientEndY);
+        const minAreaCX = Math.min(canvasStart.x, canvasEnd.x);
+        const minAreaCY = Math.min(canvasStart.y, canvasEnd.y);
+        const maxAreaCX = Math.max(canvasStart.x, canvasEnd.x);
+        const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);
+        const centerPointTemp = new Vector3();
+        const ids = [];
+        for (const x of this.scene.children) {
+            if (!(x instanceof Mesh)) {
+                continue;
+            }
+            if (x.geometry.boundingSphere === null) {
+                x.geometry.computeBoundingSphere();
+            }
+            centerPointTemp.copy(x.geometry.boundingSphere.center);
+            x.updateMatrixWorld();
+            centerPointTemp.applyMatrix4(x.matrixWorld);
+            const canvasCoords = renderService.convertWorldToCanvas(centerPointTemp);
+            if (canvasCoords.x < minAreaCX
+                || canvasCoords.x > maxAreaCX
+                || canvasCoords.y < minAreaCY
+                || canvasCoords.y > maxAreaCY) {
+                continue;
+            }
+            ids.push(x.userData.sourceId);
+        }
         return ids;
     }
-    getMeshesInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
-        const ids = this.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
+    getMeshesInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY) {
+        const ids = this.getMeshIdsInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY);
         const { found } = this._loaderService.findMeshesByIds(new Set(ids));
         return found;
     }
@@ -3126,6 +3040,9 @@ class HighlightService {
         else {
             this.highlightMeshes(renderService, []);
         }
+    }
+    clearHighlight(renderService) {
+        this.highlightMeshes(renderService, []);
     }
     highlightMeshes(renderService, meshes) {
         const meshSet = new Set(meshes || []);
@@ -3200,10 +3117,6 @@ class SelectionService {
         this.findAndSelectMeshes(renderService, ids, false);
     }
     ;
-    selectInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
-        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
-        this.select(renderService, ids);
-    }
     isolate(renderService, ids) {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
@@ -3234,16 +3147,35 @@ class SelectionService {
             this.selectMeshes(renderService, [], true, false);
             return;
         }
+        let meshes;
         if (keepPreviousSelection) {
             if (mesh.userData.selected) {
-                this.removeFromSelection(renderService, mesh);
+                meshes = this._selectedMeshes.filter(x => x !== mesh);
             }
             else {
-                this.addToSelection(renderService, mesh);
+                meshes = [mesh, ...this._selectedMeshes];
             }
         }
         else {
-            this.selectMeshes(renderService, [mesh], true, false);
+            meshes = [mesh];
+        }
+        this.selectMeshes(renderService, meshes, true, false);
+    }
+    selectMeshesInArea(renderService, keepPreviousSelection, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
+        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        let meshes;
+        if (keepPreviousSelection) {
+            meshes = [...found, ...this._selectedMeshes];
+        }
+        else {
+            meshes = found;
+        }
+        if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
+            this.removeSelection(renderService);
+        }
+        else {
+            this.selectMeshes(renderService, meshes, true, false);
         }
     }
     runQueuedSelection(renderService) {
@@ -3279,16 +3211,6 @@ class SelectionService {
             renderService.enqueueMeshForColorUpdate(mesh);
         }
         this._isolatedMeshes.length = 0;
-    }
-    addToSelection(renderService, mesh) {
-        const meshes = [mesh, ...this._selectedMeshes];
-        this.selectMeshes(renderService, meshes, true, false);
-        return true;
-    }
-    removeFromSelection(renderService, mesh) {
-        const meshes = this._selectedMeshes.filter(x => x !== mesh);
-        this.selectMeshes(renderService, meshes, true, false);
-        return true;
     }
     selectMeshes(renderService, meshes, manual, isolateSelected) {
         this.reset(renderService);
@@ -3465,14 +3387,26 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 };
 class GltfViewer {
     constructor(containerId, dracoDecoderPath, options) {
+        this._subscriptions = [];
+        this._pointerEventHelper = PointerEventHelper.default;
+        this._modeChange = new BehaviorSubject(null);
         this._optionsChange = new BehaviorSubject(null);
         this._contextLoss = new BehaviorSubject(false);
         this._lastFrameTime = new BehaviorSubject(0);
-        this._subscriptions = [];
-        this._interactionMode = "select_mesh";
-        this._pointerEventHelper = PointerEventHelper.default;
-        this.onRendererMouseMove = (e) => {
-            if (!this._options.highlightingEnabled || e.buttons) {
+        this.onRendererPointerDown = (e) => {
+            if (!e.isPrimary || e.button === 1 || e.button === 2) {
+                return;
+            }
+            this._pointerEventHelper.touch = e.pointerType === "touch";
+            this._pointerEventHelper.allowArea = e.pointerType !== "touch" || this._options.cameraControlsDisabled;
+            this._pointerEventHelper.downX = e.clientX;
+            this._pointerEventHelper.downY = e.clientY;
+        };
+        this.onRendererPointerMove = (e) => {
+            if (!e.isPrimary) {
+                return;
+            }
+            if (!this._options.highlightingEnabled) {
                 return;
             }
             clearTimeout(this._pointerEventHelper.mouseMoveTimer);
@@ -3482,7 +3416,13 @@ class GltfViewer {
                 const y = e.clientY;
                 switch (this._interactionMode) {
                     case "select_mesh":
-                        this._highlightService.highlightAtPoint(this._renderService, x, y);
+                        const { downX, downY, allowArea } = this._pointerEventHelper;
+                        if (downX !== undefined && downX !== null && allowArea) {
+                            this._highlightService.highlightInArea(this._renderService, downX, downY, x, y);
+                        }
+                        else {
+                            this._highlightService.highlightAtPoint(this._renderService, x, y);
+                        }
                         break;
                     case "select_vertex":
                         this._highlightService.highlightAtPoint(this._renderService, x, y);
@@ -3497,16 +3437,23 @@ class GltfViewer {
                 }
             }, 30);
         };
-        this.onRendererPointerDown = (e) => {
-            this._pointerEventHelper.downX = e.clientX;
-            this._pointerEventHelper.downY = e.clientY;
-        };
         this.onRendererPointerUp = (e) => {
+            if (!e.isPrimary || e.button === 1 || e.button === 2) {
+                return;
+            }
             const x = e.clientX;
             const y = e.clientY;
-            if (!this._pointerEventHelper.downX
-                || Math.abs(x - this._pointerEventHelper.downX) > this._pointerEventHelper.maxDiff
-                || Math.abs(y - this._pointerEventHelper.downY) > this._pointerEventHelper.maxDiff) {
+            const { downX, downY, touch, allowArea, maxDiff } = this._pointerEventHelper;
+            if (!downX) {
+                return;
+            }
+            if (Math.abs(x - downX) > maxDiff
+                || Math.abs(y - downY) > maxDiff) {
+                if (this._interactionMode === "select_mesh" && allowArea) {
+                    this._selectionService.selectMeshesInArea(this._renderService, e.ctrlKey || touch, downX, downY, x, y);
+                    this._highlightService.clearHighlight(this._renderService);
+                }
+                this.clearDownPoint();
                 return;
             }
             switch (this._interactionMode) {
@@ -3520,7 +3467,7 @@ class GltfViewer {
                         setTimeout(() => {
                             this._pointerEventHelper.waitForDouble = false;
                         }, 300);
-                        this._selectionService.selectMeshAtPoint(this._renderService, x, y, e.ctrlKey);
+                        this._selectionService.selectMeshAtPoint(this._renderService, x, y, e.ctrlKey || touch);
                     }
                     break;
                 case "select_vertex":
@@ -3533,8 +3480,7 @@ class GltfViewer {
                     this._hudService.measureDistanceAtPoint(this._renderService, x, y);
                     break;
             }
-            this._pointerEventHelper.downX = null;
-            this._pointerEventHelper.downY = null;
+            this.clearDownPoint();
         };
         this.onRendererContextLoss = () => {
             var _a;
@@ -3565,6 +3511,7 @@ class GltfViewer {
             (_a = this._renderService) === null || _a === void 0 ? void 0 : _a.resizeRenderer();
         });
         this._containerResizeObserver.observe(this._container);
+        this.setInteractionMode("select_mesh");
     }
     destroy() {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
@@ -3646,7 +3593,13 @@ class GltfViewer {
                 && axesHelperUpdated) {
                 this._renderService.render();
             }
-            this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
+            if (this._options.cameraControlsDisabled) {
+                this._cameraService.disableControls();
+            }
+            else {
+                this._cameraService.enableControls();
+            }
+            this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
             this._optionsChange.next(this._options);
             return this._options;
         });
@@ -3669,10 +3622,9 @@ class GltfViewer {
                 this._scenesService.hudScene.pointSnap.reset();
                 this._scenesService.hudScene.distanceMeasurer.reset();
                 break;
-            default:
-                return;
         }
         this._interactionMode = value;
+        this._modeChange.next(value);
         this._renderService.render();
     }
     openModelsAsync(modelInfos) {
@@ -3726,14 +3678,20 @@ class GltfViewer {
         this._renderService.render();
     }
     initObservables() {
+        this.modeChange$ = this._modeChange.asObservable();
         this.contextLoss$ = this._contextLoss.asObservable();
         this.optionsChange$ = this._optionsChange.asObservable();
         this.lastFrameTime$ = this._lastFrameTime.asObservable();
     }
     closeSubjects() {
+        this._modeChange.complete();
         this._contextLoss.complete();
         this._optionsChange.complete();
         this._lastFrameTime.complete();
+    }
+    clearDownPoint() {
+        this._pointerEventHelper.downX = null;
+        this._pointerEventHelper.downY = null;
     }
     initLoaderService(dracoDecoderPath) {
         this._loaderService = new ModelLoaderService(dracoDecoderPath, this._options.basePoint);
@@ -3753,6 +3711,9 @@ class GltfViewer {
             var _a;
             (_a = this._renderService) === null || _a === void 0 ? void 0 : _a.renderOnCameraMove();
         });
+        if (this._options.cameraControlsDisabled) {
+            this._cameraService.disableControls();
+        }
         this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
     }
     initPickingService() {
@@ -3763,7 +3724,7 @@ class GltfViewer {
     }
     initSelectionService() {
         this._selectionService = new SelectionService(this._loaderService, this._pickingService);
-        this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
+        this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
         this.meshesSelectionChange$ = this._selectionService.selectionChange$;
         this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
     }
@@ -3793,7 +3754,7 @@ class GltfViewer {
         this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore);
         this._renderService.addRendererEventListener("pointerdown", this.onRendererPointerDown);
         this._renderService.addRendererEventListener("pointerup", this.onRendererPointerUp);
-        this._renderService.addRendererEventListener("mousemove", this.onRendererMouseMove);
+        this._renderService.addRendererEventListener("pointermove", this.onRendererPointerMove);
     }
 }
 
