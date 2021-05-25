@@ -22,9 +22,8 @@
  * SOFTWARE
  */
 
-import { BehaviorSubject, Subject, AsyncSubject } from 'rxjs';
-import { Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, Matrix4, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
-import { first } from 'rxjs/operators';
+import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
+import { Matrix4, Mesh, BufferGeometry, MeshStandardMaterial, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, Frustum, Line, Points, WebGLRenderTarget, Triangle } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -51,6 +50,7 @@ class GltfViewerOptions {
         this.axesHelperPlacement = "top-right";
         this.axesHelperSize = 128;
         this.basePoint = null;
+        this.focusOnSelectionEnabled = true;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -152,7 +152,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class ModelLoaderService {
-    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null, wcsToUcsMatrix = null) {
+    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null, basePoint = null) {
         this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
@@ -171,6 +171,12 @@ class ModelLoaderService {
         this.onModelUnloaded = onModelUnloaded;
         this.onMeshLoaded = onMeshLoaded;
         this.onMeshUnloaded = onMeshUnloaded;
+        const wcsToUcsMatrix = new Matrix4();
+        if (basePoint) {
+            wcsToUcsMatrix
+                .makeTranslation(basePoint.x, basePoint.y_Yup, basePoint.z_Yup)
+                .invert();
+        }
         this._wcsToUcsMatrix = wcsToUcsMatrix;
         this.loadingStateChange$ = this._loadingStateChange.asObservable();
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
@@ -228,7 +234,7 @@ class ModelLoaderService {
                     resultSubject.next(result);
                     resultSubject.complete();
                 }));
-                promises.push(resultSubject.pipe(first()).toPromise());
+                promises.push(firstValueFrom(resultSubject));
             });
             this.processLoadingQueueAsync();
             const overallResult = yield Promise.all(promises);
@@ -249,7 +255,7 @@ class ModelLoaderService {
                     resultSubject.next(true);
                     resultSubject.complete();
                 }));
-                promises.push(resultSubject.pipe(first()).toPromise());
+                promises.push(firstValueFrom(resultSubject));
             });
             this.processLoadingQueueAsync();
             yield Promise.all(promises);
@@ -2499,6 +2505,7 @@ var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _argu
 };
 class RenderService {
     constructor(container, loaderService, cameraService, scenesService, options, lastFrameTimeSubject) {
+        this._rendererEventListeners = new Map();
         this._meshesNeedColorUpdate = new Set();
         this.resizeRenderer = () => {
             var _a;
@@ -2550,14 +2557,46 @@ class RenderService {
     get renderer() {
         return this._renderer;
     }
+    get canvas() {
+        return this._renderer.domElement;
+    }
     get camera() {
         return this._cameraService.camera;
     }
     destroy() {
+        this.removeAllRendererEventListeners();
         this._renderer.domElement.remove();
         this._renderer.dispose();
         this._renderer.forceContextLoss();
         this._renderer = null;
+    }
+    addRendererEventListener(type, listener) {
+        const existingListenersForType = this._rendererEventListeners.get(type);
+        if (existingListenersForType) {
+            if (existingListenersForType.has(listener)) {
+                return;
+            }
+            existingListenersForType.add(listener);
+        }
+        else {
+            this._rendererEventListeners.set(type, new Set([listener]));
+        }
+        this._renderer.domElement.addEventListener(type, listener);
+    }
+    ;
+    removeRendererEventListener(type, listener) {
+        this._renderer.domElement.removeEventListener(type, listener);
+        const existingListenersForType = this._rendererEventListeners.get(type);
+        if (existingListenersForType) {
+            existingListenersForType.delete(listener);
+        }
+    }
+    ;
+    removeAllRendererEventListeners() {
+        this._rendererEventListeners.forEach((v, k) => {
+            v.forEach(x => this._renderer.domElement.removeEventListener(k, x));
+        });
+        this._rendererEventListeners.clear();
     }
     updateRenderSceneAsync() {
         return __awaiter$1(this, void 0, void 0, function* () {
@@ -2613,6 +2652,61 @@ class RenderService {
     enqueueMeshForColorUpdate(mesh) {
         this._meshesNeedColorUpdate.add(mesh);
     }
+    convertClientToCanvas(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        const pixelRatio = this.renderer.getPixelRatio();
+        const x = (clientX - rect.left) * (this.canvas.width / rect.width) * pixelRatio || 0;
+        const y = (clientY - rect.top) * (this.canvas.height / rect.height) * pixelRatio || 0;
+        return new Vector2(x, y);
+    }
+    convertClientToCanvasZeroCenter(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        const pixelRatio = this.renderer.getPixelRatio();
+        const canvasRatioW = (this.canvas.width / rect.width) * pixelRatio || 0;
+        const canvasRatioH = (this.canvas.height / rect.height) * pixelRatio || 0;
+        const x = (clientX - rect.left) * canvasRatioW;
+        const y = (clientY - rect.top) * canvasRatioH;
+        const canvasHalfWidth = rect.width * canvasRatioW / 2;
+        const canvasHalfHeight = rect.height * canvasRatioH / 2;
+        const xC = x - canvasHalfWidth;
+        const yC = canvasHalfHeight - y;
+        return new Vector2(xC, yC);
+    }
+    convertClientToCanvasZeroCenterNormalized(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        const pixelRatio = this.renderer.getPixelRatio();
+        const canvasRatioW = (this.canvas.width / rect.width) * pixelRatio || 0;
+        const canvasRatioH = (this.canvas.height / rect.height) * pixelRatio || 0;
+        const x = (clientX - rect.left) * canvasRatioW;
+        const y = (clientY - rect.top) * canvasRatioH;
+        const canvasHalfWidth = rect.width * canvasRatioW / 2;
+        const canvasHalfHeight = rect.height * canvasRatioH / 2;
+        const xC = (x - canvasHalfWidth) / canvasHalfWidth;
+        const yC = (canvasHalfHeight - y) / canvasHalfHeight;
+        return new Vector2(xC, yC);
+    }
+    convertWorldToCanvas(point) {
+        const nPoint = new Vector3().copy(point).project(this.camera);
+        const rect = this.canvas.getBoundingClientRect();
+        const canvasWidth = this.canvas.width / (this.canvas.width / rect.width) || 0;
+        const canvasHeight = this.canvas.height / (this.canvas.height / rect.height) || 0;
+        const x = (nPoint.x + 1) * canvasWidth / 2;
+        const y = (nPoint.y - 1) * canvasHeight / -2;
+        return new Vector2(x, y);
+    }
+    convertWorldToCanvasZeroCenter(point) {
+        const nPoint = new Vector3().copy(point).project(this.camera);
+        if (nPoint.z > 1) {
+            nPoint.x = -nPoint.x;
+            nPoint.y = -nPoint.y;
+        }
+        const rect = this.canvas.getBoundingClientRect();
+        const canvasWidth = this.canvas.width / (this.canvas.width / rect.width) || 0;
+        const canvasHeight = this.canvas.height / (this.canvas.height / rect.height) || 0;
+        const x = nPoint.x * canvasWidth / 2;
+        const y = nPoint.y * canvasHeight / 2;
+        return new Vector2(x, y);
+    }
     prepareToRender(focusObjects = null) {
         if (focusObjects === null || focusObjects === void 0 ? void 0 : focusObjects.length) {
             this._cameraService.focusCameraOnObjects(focusObjects);
@@ -2624,17 +2718,153 @@ class RenderService {
     }
 }
 
+class AreaSelector {
+    constructor(depth) {
+        this._frustum = new Frustum();
+        this._depth = Number.MAX_VALUE;
+        this._tempPoint = new Vector3();
+        this._startPoint = new Vector3();
+        this._endPoint = new Vector3();
+        this._centerPoint = new Vector3();
+        this._vecNear = new Vector3();
+        this._vecTopLeft = new Vector3();
+        this._vecTopRight = new Vector3();
+        this._vecDownRight = new Vector3();
+        this._vecDownLeft = new Vector3();
+        this._vecFarTopLeft = new Vector3();
+        this._vecFarTopRight = new Vector3();
+        this._vecFarDownRight = new Vector3();
+        this._vecFarDownLeft = new Vector3();
+        this._vectemp1 = new Vector3();
+        this._vectemp2 = new Vector3();
+        this._vectemp3 = new Vector3();
+        if (depth) {
+            this._depth = depth;
+        }
+    }
+    select(camera, scene, startPoint, endPoint) {
+        if (startPoint) {
+            this._startPoint.copy(startPoint);
+        }
+        if (endPoint) {
+            this._endPoint.copy(endPoint);
+        }
+        this.updateFrustum(camera, this._startPoint, this._endPoint);
+        const result = [];
+        this.findObjectInFrustum(scene, result);
+        return result;
+    }
+    updateFrustum(camera, startPoint, endPoint) {
+        if (startPoint.x === endPoint.x) {
+            endPoint.x += Number.EPSILON;
+        }
+        if (startPoint.y === endPoint.y) {
+            endPoint.y += Number.EPSILON;
+        }
+        camera.updateProjectionMatrix();
+        camera.updateMatrixWorld();
+        if (camera instanceof PerspectiveCamera) {
+            this._tempPoint.copy(startPoint);
+            this._tempPoint.x = Math.min(startPoint.x, endPoint.x);
+            this._tempPoint.y = Math.max(startPoint.y, endPoint.y);
+            endPoint.x = Math.max(startPoint.x, endPoint.x);
+            endPoint.y = Math.min(startPoint.y, endPoint.y);
+            this._vecNear.setFromMatrixPosition(camera.matrixWorld);
+            this._vecTopLeft.copy(this._tempPoint);
+            this._vecTopRight.set(endPoint.x, this._tempPoint.y, 0);
+            this._vecDownRight.copy(endPoint);
+            this._vecDownLeft.set(this._tempPoint.x, endPoint.y, 0);
+            this._vecTopLeft.unproject(camera);
+            this._vecTopRight.unproject(camera);
+            this._vecDownRight.unproject(camera);
+            this._vecDownLeft.unproject(camera);
+            this._vectemp1.copy(this._vecTopLeft).sub(this._vecNear);
+            this._vectemp2.copy(this._vecTopRight).sub(this._vecNear);
+            this._vectemp3.copy(this._vecDownRight).sub(this._vecNear);
+            this._vectemp1.normalize();
+            this._vectemp2.normalize();
+            this._vectemp3.normalize();
+            this._vectemp1.multiplyScalar(this._depth);
+            this._vectemp2.multiplyScalar(this._depth);
+            this._vectemp3.multiplyScalar(this._depth);
+            this._vectemp1.add(this._vecNear);
+            this._vectemp2.add(this._vecNear);
+            this._vectemp3.add(this._vecNear);
+            const planes = this._frustum.planes;
+            planes[0].setFromCoplanarPoints(this._vecNear, this._vecTopLeft, this._vecTopRight);
+            planes[1].setFromCoplanarPoints(this._vecNear, this._vecTopRight, this._vecDownRight);
+            planes[2].setFromCoplanarPoints(this._vecDownRight, this._vecDownLeft, this._vecNear);
+            planes[3].setFromCoplanarPoints(this._vecDownLeft, this._vecTopLeft, this._vecNear);
+            planes[4].setFromCoplanarPoints(this._vecTopRight, this._vecDownRight, this._vecDownLeft);
+            planes[5].setFromCoplanarPoints(this._vectemp3, this._vectemp2, this._vectemp1);
+            planes[5].normal.multiplyScalar(-1);
+        }
+        else if (camera instanceof OrthographicCamera) {
+            const left = Math.min(startPoint.x, endPoint.x);
+            const top = Math.max(startPoint.y, endPoint.y);
+            const right = Math.max(startPoint.x, endPoint.x);
+            const down = Math.min(startPoint.y, endPoint.y);
+            this._vecTopLeft.set(left, top, -1);
+            this._vecTopRight.set(right, top, -1);
+            this._vecDownRight.set(right, down, -1);
+            this._vecDownLeft.set(left, down, -1);
+            this._vecFarTopLeft.set(left, top, 1);
+            this._vecFarTopRight.set(right, top, 1);
+            this._vecFarDownRight.set(right, down, 1);
+            this._vecFarDownLeft.set(left, down, 1);
+            this._vecTopLeft.unproject(camera);
+            this._vecTopRight.unproject(camera);
+            this._vecDownRight.unproject(camera);
+            this._vecDownLeft.unproject(camera);
+            this._vecFarTopLeft.unproject(camera);
+            this._vecFarTopRight.unproject(camera);
+            this._vecFarDownRight.unproject(camera);
+            this._vecFarDownLeft.unproject(camera);
+            const planes = this._frustum.planes;
+            planes[0].setFromCoplanarPoints(this._vecTopLeft, this._vecFarTopLeft, this._vecFarTopRight);
+            planes[1].setFromCoplanarPoints(this._vecTopRight, this._vecFarTopRight, this._vecFarDownRight);
+            planes[2].setFromCoplanarPoints(this._vecFarDownRight, this._vecFarDownLeft, this._vecDownLeft);
+            planes[3].setFromCoplanarPoints(this._vecFarDownLeft, this._vecFarTopLeft, this._vecTopLeft);
+            planes[4].setFromCoplanarPoints(this._vecTopRight, this._vecDownRight, this._vecDownLeft);
+            planes[5].setFromCoplanarPoints(this._vecFarDownRight, this._vecFarTopRight, this._vecFarTopLeft);
+            planes[5].normal.multiplyScalar(-1);
+        }
+    }
+    findObjectInFrustum(object, targetArray) {
+        if (object instanceof Mesh || object instanceof Line || object instanceof Points) {
+            if (object.material !== undefined) {
+                if (object.geometry.boundingSphere === null) {
+                    object.geometry.computeBoundingSphere();
+                }
+                this._centerPoint.copy(object.geometry.boundingSphere.center);
+                this._centerPoint.applyMatrix4(object.matrixWorld);
+                if (this._frustum.containsPoint(this._centerPoint)) {
+                    targetArray.push(object);
+                }
+            }
+        }
+        if (object.children.length > 0) {
+            for (let x = 0; x < object.children.length; x++) {
+                this.findObjectInFrustum(object.children[x], targetArray);
+            }
+        }
+    }
+}
+
 class PickingScene {
     constructor() {
-        this._lastPickingColor = 0;
         this._materials = [];
         this._releasedMaterials = [];
         this._pickingMeshById = new Map();
         this._sourceMeshByPickingColor = new Map();
+        this._lastPickingColor = 0;
         const scene = new Scene();
         scene.background = new Color(0);
         this._scene = scene;
         this._target = new WebGLRenderTarget(1, 1);
+    }
+    get scene() {
+        return this._scene;
     }
     destroy() {
         this._materials.forEach(x => x.dispose());
@@ -2642,6 +2872,7 @@ class PickingScene {
         this._target.dispose();
         this._target = null;
     }
+    ;
     add(sourceMesh) {
         const pickingMeshMaterial = this.getMaterial();
         const colorString = pickingMeshMaterial.color.getHex().toString(16);
@@ -2711,53 +2942,47 @@ class PickingScene {
     }
 }
 
-class PointSnapService {
+class PickingService {
     constructor() {
+        this._pickingScene = new PickingScene();
         this._raycaster = new Raycaster();
+        this._areaSelector = new AreaSelector();
     }
-    static convertClientToCanvas(renderer, clientX, clientY) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const pixelRatio = renderer.getPixelRatio();
-        const x = (clientX - rect.left) * (renderer.domElement.width / rect.width) * pixelRatio || 0;
-        const y = (clientY - rect.top) * (renderer.domElement.height / rect.height) * pixelRatio || 0;
-        return new Vector2(x, y);
-    }
-    static convertClientToCanvasZeroCenter(renderer, clientX, clientY) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const pixelRatio = renderer.getPixelRatio();
-        const canvasRatioW = (renderer.domElement.width / rect.width) * pixelRatio || 0;
-        const canvasRatioH = (renderer.domElement.height / rect.height) * pixelRatio || 0;
-        const x = (clientX - rect.left) * canvasRatioW;
-        const y = (clientY - rect.top) * canvasRatioH;
-        const canvasWidth = rect.width * canvasRatioW;
-        const canvasHeight = rect.height * canvasRatioH;
-        const xC = x - canvasWidth / 2;
-        const yC = canvasHeight / 2 - y;
-        return new Vector2(xC, yC);
-    }
-    static convertWorldToCanvas(camera, renderer, point) {
-        const nPoint = new Vector3().copy(point).project(camera);
-        const rect = renderer.domElement.getBoundingClientRect();
-        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-        const x = (nPoint.x + 1) * canvasWidth / 2;
-        const y = (nPoint.y - 1) * canvasHeight / -2;
-        return new Vector2(x, y);
-    }
-    static convertWorldToCanvasZeroCenter(camera, renderer, point) {
-        const nPoint = new Vector3().copy(point).project(camera);
-        if (nPoint.z > 1) {
-            nPoint.x = -nPoint.x;
-            nPoint.y = -nPoint.y;
-        }
-        const rect = renderer.domElement.getBoundingClientRect();
-        const canvasWidth = renderer.domElement.width / (renderer.domElement.width / rect.width) || 0;
-        const canvasHeight = renderer.domElement.height / (renderer.domElement.height / rect.height) || 0;
-        const x = nPoint.x * canvasWidth / 2;
-        const y = nPoint.y * canvasHeight / 2;
-        return new Vector2(x, y);
+    get scene() {
+        return this._pickingScene.scene;
     }
     destroy() {
+        var _a;
+        (_a = this._pickingScene) === null || _a === void 0 ? void 0 : _a.destroy();
+        this._pickingScene = null;
+    }
+    addMesh(mesh) {
+        this._pickingScene.add(mesh);
+    }
+    removeMesh(mesh) {
+        this._pickingScene.remove(mesh);
+    }
+    getMeshAt(renderService, clientX, clientY) {
+        const position = renderService.convertClientToCanvas(clientX, clientY);
+        return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
+    }
+    getSnapPointAt(renderService, clientX, clientY) {
+        const position = renderService.convertClientToCanvas(clientX, clientY);
+        const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
+        const point = pickingMesh
+            ? this.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
+            : null;
+        const snapPoint = point
+            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
+            : null;
+        return snapPoint;
+    }
+    getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+        const min = renderService.convertClientToCanvasZeroCenterNormalized(clientMinX, clientMinY);
+        const max = renderService.convertClientToCanvasZeroCenterNormalized(clientMaxX, clientMaxY);
+        const objects = this._areaSelector.select(renderService.camera, this.scene, new Vector3(min.x, min.y, 0), new Vector3(max.x, max.y, 0));
+        const ids = objects.map(x => x.userData.id).filter(x => x);
+        return ids;
     }
     getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
         if (!mesh) {
@@ -2804,52 +3029,26 @@ class PointSnapService {
     }
 }
 
-class PickingService {
-    constructor() {
-        this._pointSnapService = new PointSnapService();
-        this._pickingScene = new PickingScene();
-    }
-    destroy() {
-        var _a, _b;
-        (_a = this._pickingScene) === null || _a === void 0 ? void 0 : _a.destroy();
-        this._pickingScene = null;
-        (_b = this._pointSnapService) === null || _b === void 0 ? void 0 : _b.destroy();
-        this._pointSnapService = null;
-    }
-    addMesh(mesh) {
-        this._pickingScene.add(mesh);
-    }
-    removeMesh(mesh) {
-        this._pickingScene.remove(mesh);
-    }
-    getMeshAt(renderService, clientX, clientY) {
-        const position = PointSnapService.convertClientToCanvas(renderService.renderer, clientX, clientY);
-        return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
-    }
-    getSnapPointAt(renderService, clientX, clientY) {
-        const position = PointSnapService.convertClientToCanvas(renderService.renderer, clientX, clientY);
-        const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
-        const point = pickingMesh
-            ? this._pointSnapService.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
-            : null;
-        const snapPoint = point
-            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
-            : null;
-        return snapPoint;
-    }
-}
-
 class HighlightService {
-    constructor(pickingService) {
+    constructor(loaderService, pickingService) {
         this._highlightedMeshes = new Set();
+        if (!loaderService) {
+            throw new Error("LoaderService is not defined");
+        }
         if (!pickingService) {
             throw new Error("PickingService is not defined");
         }
+        this._loaderService = loaderService;
         this._pickingService = pickingService;
     }
     destroy() {
     }
-    highlightMeshAtPoint(renderService, clientX, clientY) {
+    highlightInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
+        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        this.highlightMeshes(renderService, found);
+    }
+    highlightAtPoint(renderService, clientX, clientY) {
         const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);
         if (mesh) {
             this.highlightMeshes(renderService, [mesh]);
@@ -2893,6 +3092,7 @@ class SelectionService {
         this._queuedSelection = null;
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
+        this._focusOnProgrammaticSelection = true;
         if (!loaderService) {
             throw new Error("LoaderService is not defined");
         }
@@ -2903,6 +3103,9 @@ class SelectionService {
         this._pickingService = pickingService;
         this.selectionChange$ = this._selectionChange.asObservable();
         this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
+    }
+    set focusOnProgrammaticSelection(value) {
+        this._focusOnProgrammaticSelection = value;
     }
     get selectedIds() {
         return this._selectionChange.getValue();
@@ -2922,6 +3125,10 @@ class SelectionService {
         this.findAndSelectMeshes(renderService, ids, false);
     }
     ;
+    selectInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
+        this.select(renderService, ids);
+    }
     isolate(renderService, ids) {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
@@ -3029,7 +3236,9 @@ class SelectionService {
     }
     emitSelectionChanged(renderService, manual, render) {
         if (render) {
-            renderService.render(manual ? null : this._selectedMeshes);
+            renderService.render(manual || !this._focusOnProgrammaticSelection
+                ? null
+                : this._selectedMeshes);
         }
         const ids = new Set();
         this._selectedMeshes.forEach(x => ids.add(x.userData.id));
@@ -3138,7 +3347,7 @@ class HudService {
         if (!renderService) {
             return;
         }
-        const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+        const point = renderService.convertClientToCanvasZeroCenter(clientX, clientY);
         const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
         this._scenesService.hudScene.markers.highlightMarker(marker);
         renderService.render();
@@ -3147,7 +3356,7 @@ class HudService {
         if (!renderService) {
             return;
         }
-        const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+        const point = renderService.convertClientToCanvasZeroCenter(clientX, clientY);
         const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
         this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
         renderService.render();
@@ -3183,7 +3392,7 @@ class GltfViewer {
         this._interactionMode = "select_mesh";
         this._pointerEventHelper = PointerEventHelper.default;
         this.onRendererMouseMove = (e) => {
-            if (e.buttons) {
+            if (!this._options.highlightingEnabled || e.buttons) {
                 return;
             }
             clearTimeout(this._pointerEventHelper.mouseMoveTimer);
@@ -3193,10 +3402,10 @@ class GltfViewer {
                 const y = e.clientY;
                 switch (this._interactionMode) {
                     case "select_mesh":
-                        this._highlightService.highlightMeshAtPoint(this._renderService, x, y);
+                        this._highlightService.highlightAtPoint(this._renderService, x, y);
                         break;
                     case "select_vertex":
-                        this._highlightService.highlightMeshAtPoint(this._renderService, x, y);
+                        this._highlightService.highlightAtPoint(this._renderService, x, y);
                         this._hudService.setVertexSnapAtPoint(this._renderService, x, y);
                         break;
                     case "select_sprite":
@@ -3281,7 +3490,6 @@ class GltfViewer {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
-        this.removeRendererEventListeners();
         (_a = this._containerResizeObserver) === null || _a === void 0 ? void 0 : _a.disconnect();
         this._containerResizeObserver = null;
         (_b = this._renderService) === null || _b === void 0 ? void 0 : _b.destroy();
@@ -3358,14 +3566,7 @@ class GltfViewer {
                 && axesHelperUpdated) {
                 this._renderService.render();
             }
-            if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
-                if (this._options.highlightingEnabled) {
-                    this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
-                }
-                else {
-                    this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
-                }
-            }
+            this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
             this._optionsChange.next(this._options);
             return this._options;
         });
@@ -3454,31 +3655,7 @@ class GltfViewer {
         this._optionsChange.complete();
         this._lastFrameTime.complete();
     }
-    addRendererEventListeners() {
-        const { highlightingEnabled } = this._options;
-        this._renderService.renderer.domElement.addEventListener("webglcontextlost", () => this.onRendererContextLoss);
-        this._renderService.renderer.domElement.addEventListener("webglcontextrestored ", this.onRendererContextRestore);
-        this._renderService.renderer.domElement.addEventListener("pointerdown", this.onRendererPointerDown);
-        this._renderService.renderer.domElement.addEventListener("pointerup", this.onRendererPointerUp);
-        if (highlightingEnabled) {
-            this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
-        }
-    }
-    removeRendererEventListeners() {
-        this._renderService.renderer.domElement.removeEventListener("webglcontextlost", () => this.onRendererContextLoss);
-        this._renderService.renderer.domElement.removeEventListener("webglcontextrestored ", this.onRendererContextRestore);
-        this._renderService.renderer.domElement.removeEventListener("pointerdown", this.onRendererPointerDown);
-        this._renderService.renderer.domElement.removeEventListener("pointerup", this.onRendererPointerUp);
-        this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
-    }
     initLoaderService(dracoDecoderPath) {
-        const wcsToUcsMatrix = new Matrix4();
-        const ucsOrigin = this._options.basePoint;
-        if (ucsOrigin) {
-            wcsToUcsMatrix
-                .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
-                .invert();
-        }
         this._loaderService = new ModelLoaderService(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
             this._coloringService.runQueuedColoring(this._renderService);
             this._selectionService.runQueuedSelection(this._renderService);
@@ -3490,7 +3667,7 @@ class GltfViewer {
             this._pickingService.addMesh(mesh);
         }, (mesh) => {
             this._pickingService.removeMesh(mesh);
-        }, wcsToUcsMatrix);
+        }, this._options.basePoint);
         this.loadingStateChange$ = this._loaderService.loadingStateChange$;
         this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
         this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
@@ -3508,10 +3685,11 @@ class GltfViewer {
         this._pickingService = new PickingService();
     }
     initHighlightService() {
-        this._highlightService = new HighlightService(this._pickingService);
+        this._highlightService = new HighlightService(this._loaderService, this._pickingService);
     }
     initSelectionService() {
         this._selectionService = new SelectionService(this._loaderService, this._pickingService);
+        this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
         this.meshesSelectionChange$ = this._selectionService.selectionChange$;
         this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
     }
@@ -3533,12 +3711,15 @@ class GltfViewer {
     }
     initRenderService() {
         if (this._renderService) {
-            this.removeRendererEventListeners();
             this._renderService.destroy();
             this._renderService = null;
         }
         this._renderService = new RenderService(this._container, this._loaderService, this._cameraService, this._scenesService, this._options, this._lastFrameTime);
-        this.addRendererEventListeners();
+        this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);
+        this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore);
+        this._renderService.addRendererEventListener("pointerdown", this.onRendererPointerDown);
+        this._renderService.addRendererEventListener("pointerup", this.onRendererPointerUp);
+        this._renderService.addRendererEventListener("mousemove", this.onRendererMouseMove);
     }
 }
 

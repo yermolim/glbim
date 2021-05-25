@@ -4,16 +4,20 @@ import { Scene, Mesh, Color, Vector2, PerspectiveCamera,
 import { MeshBgBm, MeshBgSm } from "../common-types";
 
 export class PickingScene {
-  private _scene: Scene;
+  private readonly _scene: Scene;
+  get scene(): Scene {
+    return this._scene;
+  }
+
   private _target: WebGLRenderTarget;
-
-  private _lastPickingColor = 0;
-
+  
   private _materials: MeshBasicMaterial[] = [];
   private _releasedMaterials: MeshBasicMaterial[] = [];
-
+  
   private _pickingMeshById = new Map<string, MeshBgBm>();
   private _sourceMeshByPickingColor = new Map<string, MeshBgSm>();
+  
+  private _lastPickingColor = 0;
 
   constructor() { 
     const scene = new Scene();
@@ -29,7 +33,7 @@ export class PickingScene {
 
     this._target.dispose();
     this._target = null;
-  }
+  };
   
   add(sourceMesh: MeshBgSm) {
     const pickingMeshMaterial = this.getMaterial();

@@ -1,4 +1,5 @@
 import { BehaviorSubject, Observable, Subject } from "rxjs";
+
 import { Mesh } from "three";
 
 import { MeshBgSm } from "../common-types";
@@ -36,6 +37,7 @@ export class SelectionService {
     if (!pickingService) {
       throw new Error("PickingService is not defined");
     }
+
     this._loaderService = loaderService;
     this._pickingService = pickingService;
     
@@ -60,6 +62,16 @@ export class SelectionService {
 
     this.findAndSelectMeshes(renderService, ids, false);
   };
+  
+  selectInArea(renderService: RenderService, 
+    clientMinX: number, clientMinY: number, 
+    clientMaxX: number, clientMaxY: number) {
+
+    const ids = this._pickingService.getMeshIdsInArea(renderService,
+      clientMinX, clientMinY, clientMaxX, clientMaxY);
+    
+    this.select(renderService, ids);
+  }
 
   isolate(renderService: RenderService, ids: string[]) {
     if (!ids?.length) {
@@ -128,6 +140,7 @@ export class SelectionService {
     this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
   }
 
+  //#region private
   private findAndSelectMeshes(renderService: RenderService, ids: string[], isolate: boolean) {    
     const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     if (found.length) {
@@ -203,4 +216,5 @@ export class SelectionService {
       this._manualSelectionChange.next(ids);
     }
   }
+  //#endregion
 }

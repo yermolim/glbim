@@ -114,8 +114,7 @@ export class GltfViewer {
    */
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
-    this.closeSubjects();  
-    this.removeRendererEventListeners();
+    this.closeSubjects();
     
     this._containerResizeObserver?.disconnect();
     this._containerResizeObserver = null;    
@@ -221,14 +220,6 @@ export class GltfViewer {
         && axesHelperUpdated) {
       this._renderService.render();
     }    
-
-    if (this._options.highlightingEnabled !== oldOptions.highlightingEnabled) {
-      if (this._options.highlightingEnabled) {        
-        this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
-      } else {
-        this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
-      }
-    }
     
     this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
 
@@ -381,7 +372,7 @@ export class GltfViewer {
 
   // #region renderer events
   private onRendererMouseMove = (e: MouseEvent) => {   
-    if (e.buttons) {
+    if (!this._options.highlightingEnabled || e.buttons) {
       return;
     } 
 
@@ -393,10 +384,10 @@ export class GltfViewer {
 
       switch (this._interactionMode) {
         case "select_mesh":  
-          this._highlightService.highlightMeshAtPoint(this._renderService, x, y);      
+          this._highlightService.highlightAtPoint(this._renderService, x, y);      
           break;
         case "select_vertex":
-          this._highlightService.highlightMeshAtPoint(this._renderService, x, y);     
+          this._highlightService.highlightAtPoint(this._renderService, x, y);     
           this._hudService.setVertexSnapAtPoint(this._renderService, x, y);
           break;
         case "select_sprite":
@@ -460,26 +451,6 @@ export class GltfViewer {
   private onRendererContextRestore = () => {
     this._contextLoss.next(false);     
   };
-
-  private addRendererEventListeners() {
-    const { highlightingEnabled } = this._options;
-
-    this._renderService.renderer.domElement.addEventListener("webglcontextlost", () => this.onRendererContextLoss);    
-    this._renderService.renderer.domElement.addEventListener("webglcontextrestored ", this.onRendererContextRestore); 
-    this._renderService.renderer.domElement.addEventListener("pointerdown", this.onRendererPointerDown);
-    this._renderService.renderer.domElement.addEventListener("pointerup", this.onRendererPointerUp);
-    if (highlightingEnabled) {      
-      this._renderService.renderer.domElement.addEventListener("mousemove", this.onRendererMouseMove);
-    }
-  }
-
-  private removeRendererEventListeners() {   
-    this._renderService.renderer.domElement.removeEventListener("webglcontextlost", () => this.onRendererContextLoss);    
-    this._renderService.renderer.domElement.removeEventListener("webglcontextrestored ", this.onRendererContextRestore);     
-    this._renderService.renderer.domElement.removeEventListener("pointerdown", this.onRendererPointerDown);
-    this._renderService.renderer.domElement.removeEventListener("pointerup", this.onRendererPointerUp);   
-    this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
-  }
   // #endregion
 
   // #region services initialization
@@ -523,7 +494,7 @@ export class GltfViewer {
   }
 
   private initHighlightService() {
-    this._highlightService = new HighlightService(this._pickingService);
+    this._highlightService = new HighlightService(this._loaderService, this._pickingService);
   }
 
   private initSelectionService() {    
@@ -556,14 +527,18 @@ export class GltfViewer {
 
   private initRenderService() {    
     if (this._renderService) {
-      this.removeRendererEventListeners();
       this._renderService.destroy();
       this._renderService = null;
     }
     
     this._renderService = new RenderService(this._container, this._loaderService, 
       this._cameraService, this._scenesService, this._options, this._lastFrameTime);  
-    this.addRendererEventListeners();
+      
+    this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);    
+    this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore); 
+    this._renderService.addRendererEventListener("pointerdown", <any>this.onRendererPointerDown); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("pointerup", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("mousemove", <any>this.onRendererMouseMove); // TODO: edit code to keep typings
   }
   // #endregion
 }

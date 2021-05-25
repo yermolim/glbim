@@ -5,7 +5,6 @@ import { Observable } from 'rxjs';
 export declare type MeshMergeType = "scene" | "model" | "model+" | null;
 export declare type FastRenderType = "ch" | "aabb" | "ombb" | null;
 export declare type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-export declare type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 export declare type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 export interface ModelFileInfo {
 	url: string;
@@ -101,8 +100,10 @@ export declare class GltfViewerOptions {
 	axesHelperPlacement: CornerName;
 	axesHelperSize: number;
 	basePoint: Vec4DoubleCS;
+	focusOnSelectionEnabled: boolean;
 	constructor(item?: object);
 }
+export declare type ViewerInteractionMode = "select_mesh" | "select_mesh_frame" | "select_vertex" | "select_sprite" | "measure_distance";
 export declare class GltfViewer {
 	optionsChange$: Observable<GltfViewerOptions>;
 	contextLoss$: Observable<boolean>;
@@ -161,8 +162,6 @@ export declare class GltfViewer {
 	private onRendererPointerUp;
 	private onRendererContextLoss;
 	private onRendererContextRestore;
-	private addRendererEventListeners;
-	private removeRendererEventListeners;
 	private initLoaderService;
 	private initCameraService;
 	private initPickingService;

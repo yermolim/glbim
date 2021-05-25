@@ -1,7 +1,6 @@
 import { Vector3 } from "three";
 
 import { PickingService } from "./picking-service";
-import { PointSnapService } from "./point-snap-service";
 import { RenderService } from "./render-service";
 import { ScenesService } from "./scenes-service";
 
@@ -49,7 +48,7 @@ export class HudService {
       return;
     } 
 
-    const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+    const point = renderService.convertClientToCanvasZeroCenter(clientX, clientY);
     const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
     this._scenesService.hudScene.markers.highlightMarker(marker);
     renderService.render(); 
@@ -60,7 +59,7 @@ export class HudService {
       return;
     } 
 
-    const point = PointSnapService.convertClientToCanvasZeroCenter(renderService.renderer, clientX, clientY);
+    const point = renderService.convertClientToCanvasZeroCenter(clientX, clientY);
     const marker = this._scenesService.hudScene.markers.getMarkerAtCanvasPoint(point);
     this._scenesService.hudScene.markers.setSelectedMarkers(marker ? [marker.id] : null, true);
     renderService.render(); 

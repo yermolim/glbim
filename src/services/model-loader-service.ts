@@ -1,5 +1,4 @@
-import { Observable, Subject, BehaviorSubject, AsyncSubject } from "rxjs";
-import { first } from "rxjs/operators";
+import { Observable, Subject, BehaviorSubject, AsyncSubject, firstValueFrom } from "rxjs";
 
 import { Mesh, MeshStandardMaterial, BufferGeometry, Matrix4 } from "three";
 // eslint-disable-next-line import/named
@@ -133,7 +132,7 @@ export class ModelLoaderService {
         resultSubject.next(result);
         resultSubject.complete();
       });
-      promises.push(resultSubject.pipe(first()).toPromise());
+      promises.push(firstValueFrom(resultSubject));
     });
     this.processLoadingQueueAsync();
 
@@ -154,7 +153,7 @@ export class ModelLoaderService {
         resultSubject.next(true);
         resultSubject.complete();
       });
-      promises.push(resultSubject.pipe(first()).toPromise());
+      promises.push(firstValueFrom(resultSubject));
     });    
     this.processLoadingQueueAsync();
     

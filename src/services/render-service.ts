@@ -1,5 +1,6 @@
 import { BehaviorSubject } from "rxjs";
-import { NoToneMapping, Object3D, PerspectiveCamera, sRGBEncoding, WebGLRenderer } from "three";
+import { NoToneMapping, Object3D, PerspectiveCamera, 
+  sRGBEncoding, Vector2, Vector3, WebGLRenderer } from "three";
 
 import { GltfViewerOptions } from "../gltf-viewer-options";
 import { MeshBgSm } from "../common-types";
@@ -11,6 +12,10 @@ import { ScenesService } from "./scenes-service";
 export class RenderService { 
   private readonly _lastFrameTimeSubject: BehaviorSubject<number>;  
   private readonly _container: HTMLElement;
+  
+  private readonly _cameraService: CameraService; 
+  private readonly _loaderService: ModelLoaderService;  
+  private readonly _scenesService: ScenesService;
 
   private _options: GltfViewerOptions;    
   set options(value: GltfViewerOptions) {
@@ -21,17 +26,18 @@ export class RenderService {
   get renderer(): WebGLRenderer {
     return this._renderer;
   }
-  private _deferRender: number;
-  
-  private readonly _cameraService: CameraService; 
-  private readonly _loaderService: ModelLoaderService;  
-  private readonly _scenesService: ScenesService;
-  
-  private _meshesNeedColorUpdate = new Set<MeshBgSm>();
+  get canvas(): HTMLCanvasElement {
+    return this._renderer.domElement;
+  }
 
   get camera(): PerspectiveCamera {
     return this._cameraService.camera;
   }
+
+  private _rendererEventListeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
+  
+  private _deferRender: number;
+  private _meshesNeedColorUpdate = new Set<MeshBgSm>();
 
   constructor(container: HTMLElement, loaderService: ModelLoaderService, 
     cameraService: CameraService, scenesService: ScenesService, 
@@ -79,6 +85,8 @@ export class RenderService {
   }
 
   destroy() {
+    this.removeAllRendererEventListeners();
+
     this._renderer.domElement.remove();
     this._renderer.dispose();
     this._renderer.forceContextLoss();
@@ -92,8 +100,42 @@ export class RenderService {
       this._renderer.setSize(width, height, false);
       this.render();   
     }
+  };  
+
+  //#region event listeners
+  addRendererEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const existingListenersForType = this._rendererEventListeners.get(type);
+    if (existingListenersForType) {
+      if (existingListenersForType.has(listener)) {
+        // same listener for the same event type is already present.
+        return;
+      }
+      existingListenersForType.add(listener);
+    } else {
+      this._rendererEventListeners.set(type, new Set<EventListenerOrEventListenerObject>([listener]));
+    }
+
+    this._renderer.domElement.addEventListener(type, listener);
+  };
+  
+  removeRendererEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    this._renderer.domElement.removeEventListener(type, listener);
+    
+    const existingListenersForType = this._rendererEventListeners.get(type);
+    if (existingListenersForType) {
+      existingListenersForType.delete(listener);
+    }
   };
 
+  removeAllRendererEventListeners() {
+    this._rendererEventListeners.forEach((v, k) => {      
+      v.forEach(x => this._renderer.domElement.removeEventListener(k, x));
+    });
+    this._rendererEventListeners.clear();
+  }
+  //#endregion
+
+  //#region public render
   async updateRenderSceneAsync(): Promise<void> {
     await this._scenesService.renderScene.updateSceneAsync(this._scenesService.lights.getLights(), 
       this._loaderService.loadedMeshesArray, this._loaderService.loadedModelsArray,
@@ -155,6 +197,80 @@ export class RenderService {
   enqueueMeshForColorUpdate(mesh: MeshBgSm) {
     this._meshesNeedColorUpdate.add(mesh);
   }
+  //#endregion  
+  
+  //#region coordinates conversion
+  convertClientToCanvas(clientX: number, clientY: number): Vector2 {    
+    const rect = this.canvas.getBoundingClientRect();
+    const pixelRatio = this.renderer.getPixelRatio();
+    const x = (clientX - rect.left) * (this.canvas.width / rect.width) * pixelRatio || 0;
+    const y = (clientY - rect.top) * (this.canvas.height / rect.height) * pixelRatio || 0;
+
+    return new Vector2(x, y);
+  }  
+
+  convertClientToCanvasZeroCenter(clientX: number, clientY: number): Vector2 {    
+    const rect = this.canvas.getBoundingClientRect();
+    const pixelRatio = this.renderer.getPixelRatio();
+    const canvasRatioW = (this.canvas.width / rect.width) * pixelRatio || 0;
+    const canvasRatioH = (this.canvas.height / rect.height) * pixelRatio || 0;
+    const x = (clientX - rect.left) * canvasRatioW;
+    const y = (clientY - rect.top) * canvasRatioH; 
+    
+    const canvasHalfWidth = rect.width * canvasRatioW / 2;
+    const canvasHalfHeight = rect.height * canvasRatioH / 2;    
+    const xC =  x - canvasHalfWidth;
+    const yC =  canvasHalfHeight - y;
+
+    return new Vector2(xC, yC);
+  }
+  
+  convertClientToCanvasZeroCenterNormalized(clientX: number, clientY: number): Vector2 {    
+    const rect = this.canvas.getBoundingClientRect();
+    const pixelRatio = this.renderer.getPixelRatio();
+    const canvasRatioW = (this.canvas.width / rect.width) * pixelRatio || 0;
+    const canvasRatioH = (this.canvas.height / rect.height) * pixelRatio || 0;
+    const x = (clientX - rect.left) * canvasRatioW;
+    const y = (clientY - rect.top) * canvasRatioH; 
+    
+    const canvasHalfWidth = rect.width * canvasRatioW / 2;
+    const canvasHalfHeight = rect.height * canvasRatioH / 2;    
+    const xC =  (x - canvasHalfWidth) / canvasHalfWidth;
+    const yC =  (canvasHalfHeight - y) / canvasHalfHeight;
+
+    return new Vector2(xC, yC);
+  }
+
+  convertWorldToCanvas(point: Vector3): Vector2 {
+    const nPoint = new Vector3().copy(point).project(this.camera); 
+
+    const rect = this.canvas.getBoundingClientRect();
+    const canvasWidth = this.canvas.width / (this.canvas.width / rect.width) || 0;
+    const canvasHeight = this.canvas.height / (this.canvas.height / rect.height) || 0;
+    const x = (nPoint.x + 1) * canvasWidth / 2;
+    const y = (nPoint.y - 1) * canvasHeight / -2;
+
+    return new Vector2(x, y);
+  }
+  
+  convertWorldToCanvasZeroCenter(point: Vector3): Vector2 {
+    const nPoint = new Vector3().copy(point).project(this.camera);     
+
+    // primitive hack to keep point in the right direction if it is outside of camera coverage
+    if (nPoint.z > 1) {
+      nPoint.x = - nPoint.x;
+      nPoint.y = - nPoint.y;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const canvasWidth = this.canvas.width / (this.canvas.width / rect.width) || 0;
+    const canvasHeight = this.canvas.height / (this.canvas.height / rect.height) || 0;
+    const x = nPoint.x * canvasWidth / 2;
+    const y = nPoint.y * canvasHeight / 2;
+
+    return new Vector2(x, y);
+  }
+  //#endregion
 
   private prepareToRender(focusObjects: Object3D[] = null) {
     if (focusObjects?.length) {
