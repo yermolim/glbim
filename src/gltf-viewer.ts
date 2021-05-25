@@ -1,15 +1,9 @@
-import { Observable, Subscription, Subject, BehaviorSubject } from "rxjs";
-import { Mesh, Color, Matrix4, Vector3 } from "three";
-  
+import { Observable, Subscription, BehaviorSubject } from "rxjs";
+
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, ViewerInteractionMode,
-  Distance, Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
-
-import { ColorRgbRmo } from "./helpers/color-rgb-rmo";
-import { PointSnapService } from "./services/point-snap-service";
-
-import { PickingScene } from "./scenes/picking-scene";
+  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, 
+  Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
 
 import { ModelLoaderService } from "./services/model-loader-service";
 import { CameraService } from "./services/camera-service";
@@ -21,8 +15,10 @@ import { SelectionService } from "./services/selection-service";
 import { ColoringService } from "./services/coloring-service";
 import { HudService } from "./services/hud-service";
 
-export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode,
-  Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };
+export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo,
+  Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };  
+
+export type ViewerInteractionMode = "select_mesh" | "select_mesh_frame" | "select_vertex" | "select_sprite" | "measure_distance";
 
 export class GltfViewer {
   // #region public observables
@@ -233,6 +229,8 @@ export class GltfViewer {
         this._renderService.renderer.domElement.removeEventListener("mousemove", this.onRendererMouseMove);
       }
     }
+    
+    this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
 
     this._optionsChange.next(this._options);  
     return this._options;
@@ -485,15 +483,7 @@ export class GltfViewer {
   // #endregion
 
   // #region services initialization
-  private initLoaderService(dracoDecoderPath: string) {    
-    const wcsToUcsMatrix = new Matrix4();
-    const ucsOrigin = this._options.basePoint;
-    if (ucsOrigin) {
-      wcsToUcsMatrix
-        .makeTranslation(ucsOrigin.x, ucsOrigin.y_Yup, ucsOrigin.z_Yup)
-        .invert();
-    }
-
+  private initLoaderService(dracoDecoderPath: string) {
     this._loaderService = new ModelLoaderService(dracoDecoderPath,
       async () => {
         this._coloringService.runQueuedColoring(this._renderService);
@@ -511,7 +501,7 @@ export class GltfViewer {
       (mesh: MeshBgSm) => {
         this._pickingService.removeMesh(mesh);
       },
-      wcsToUcsMatrix,
+      this._options.basePoint,
     );
 
     this.loadingStateChange$ = this._loaderService.loadingStateChange$;
@@ -538,6 +528,7 @@ export class GltfViewer {
 
   private initSelectionService() {    
     this._selectionService = new SelectionService(this._loaderService, this._pickingService);
+    this._selectionService.focusOnProgrammaticSelection = this._options.focusOnSelectionEnabled;
     
     this.meshesSelectionChange$ = this._selectionService.selectionChange$;
     this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;

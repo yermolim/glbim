@@ -16,8 +16,6 @@ export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-righ
 
 export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
 
-export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
-
 export type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 // #endregion
 

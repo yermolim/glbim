@@ -7,7 +7,7 @@ import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, 
-  ModelGeometryInfo, ModelFileInfo, MeshBgSm} from "../common-types";
+  ModelGeometryInfo, ModelFileInfo, MeshBgSm, Vec4DoubleCS} from "../common-types";
 
 export class ModelLoaderService {
   // #region public observables
@@ -69,14 +69,20 @@ export class ModelLoaderService {
     onModelUnloaded: (guid: string) => void = null,
     onMeshLoaded: (m: MeshBgSm) => void = null,
     onMeshUnloaded: (m: MeshBgSm) => void = null,
-    wcsToUcsMatrix: Matrix4 = null) {
+    basePoint: Vec4DoubleCS = null) {
 
     this.onQueueLoaded = onQueueLoaded;
     this.onModelLoaded = onModelLoaded;
     this.onModelUnloaded = onModelUnloaded;
     this.onMeshLoaded = onMeshLoaded;
     this.onMeshUnloaded = onMeshUnloaded;
-
+    
+    const wcsToUcsMatrix = new Matrix4();
+    if (basePoint) {
+      wcsToUcsMatrix
+        .makeTranslation(basePoint.x, basePoint.y_Yup, basePoint.z_Yup)
+        .invert();
+    }
     this._wcsToUcsMatrix = wcsToUcsMatrix;
     
     this.loadingStateChange$ = this._loadingStateChange.asObservable();

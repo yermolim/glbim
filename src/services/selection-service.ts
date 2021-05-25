@@ -20,6 +20,11 @@ export class SelectionService {
   private _selectedMeshes: MeshBgSm[] = [];
   private _isolatedMeshes: MeshBgSm[] = [];
 
+  private _focusOnProgrammaticSelection = true;
+  set focusOnProgrammaticSelection(value: boolean) {
+    this._focusOnProgrammaticSelection = value;
+  }
+
   get selectedIds(): Set<string> {    
     return this._selectionChange.getValue();
   }
@@ -185,7 +190,9 @@ export class SelectionService {
 
   private emitSelectionChanged(renderService: RenderService, manual: boolean, render: boolean) {
     if (render) {
-      renderService.render(manual ? null : this._selectedMeshes);
+      renderService.render(manual || !this._focusOnProgrammaticSelection 
+        ? null 
+        : this._selectedMeshes);
     }
 
     const ids = new Set<string>();
