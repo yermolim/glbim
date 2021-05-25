@@ -1,24 +1,18 @@
 import { MeshBgSm } from "../common-types";
 
-import { ModelLoaderService } from "./model-loader-service";
 import { PickingService } from "./picking-service";
 import { RenderService } from "./render-service";
 
 export class HighlightService {
-  private readonly _loaderService: ModelLoaderService;
   private readonly _pickingService: PickingService;
   
   private readonly _highlightedMeshes = new Set<MeshBgSm>();
 
-  constructor(loaderService: ModelLoaderService, pickingService: PickingService) {
-    if (!loaderService) {
-      throw new Error("LoaderService is not defined");
-    }
+  constructor(pickingService: PickingService) {
     if (!pickingService) {
       throw new Error("PickingService is not defined");
     }
 
-    this._loaderService = loaderService;
     this._pickingService = pickingService;
   }
 
@@ -30,10 +24,8 @@ export class HighlightService {
     clientMinX: number, clientMinY: number, 
     clientMaxX: number, clientMaxY: number) {
 
-    const ids = this._pickingService.getMeshIdsInArea(renderService,
+    const found = this._pickingService.getMeshesInArea(renderService,
       clientMinX, clientMinY, clientMaxX, clientMaxY);
-    
-    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     this.highlightMeshes(renderService, found);
   }
   

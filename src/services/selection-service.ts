@@ -40,6 +40,8 @@ export class SelectionService {
 
     this._loaderService = loaderService;
     this._pickingService = pickingService;
+
+    this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
     
     this.selectionChange$ = this._selectionChange.asObservable();
     this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
@@ -48,6 +50,8 @@ export class SelectionService {
   destroy() {
     this._selectionChange.complete();
     this._manualSelectionChange.complete();
+    
+    this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
   }
 
   select(renderService: RenderService, ids: string[]) {
@@ -141,6 +145,10 @@ export class SelectionService {
   }
 
   //#region private
+  private onLoaderModelUnloaded = (modelGuid: string) => {    
+    this.removeFromSelectionArrays(modelGuid);
+  };
+
   private findAndSelectMeshes(renderService: RenderService, ids: string[], isolate: boolean) {    
     const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     if (found.length) {

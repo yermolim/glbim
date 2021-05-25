@@ -56,25 +56,14 @@ export class ModelLoaderService {
 
   private _wcsToUcsMatrix: Matrix4;
 
-  private onQueueLoaded: () => Promise<any>;
-  private onModelLoaded: (guid: string) => void;
-  private onModelUnloaded: (guid: string) => void;
-  private onMeshLoaded: (m: MeshBgSm) => void;
-  private onMeshUnloaded: (m: MeshBgSm) => void;
+  private _onQueueLoaded = new Set<() => Promise<void>>();
+  private _onModelLoaded = new Set<(guid: string) => void>();
+  private _onModelUnloaded = new Set<(guid: string) => void>();
+  private _onMeshLoaded = new Set<(m: MeshBgSm) => void>();
+  private _onMeshUnloaded = new Set<(m: MeshBgSm) => void>();
   
   constructor(dracoDecoderPath: string,
-    onQueueLoaded: () => Promise<any> = null,
-    onModelLoaded: (guid: string) => void = null,
-    onModelUnloaded: (guid: string) => void = null,
-    onMeshLoaded: (m: MeshBgSm) => void = null,
-    onMeshUnloaded: (m: MeshBgSm) => void = null,
     basePoint: Vec4DoubleCS = null) {
-
-    this.onQueueLoaded = onQueueLoaded;
-    this.onModelLoaded = onModelLoaded;
-    this.onModelUnloaded = onModelUnloaded;
-    this.onMeshLoaded = onMeshLoaded;
-    this.onMeshUnloaded = onMeshUnloaded;
     
     const wcsToUcsMatrix = new Matrix4();
     if (basePoint) {
@@ -105,7 +94,7 @@ export class ModelLoaderService {
     this._modelLoadingStart.complete();
     this._modelLoadingProgress.complete();
     this._modelLoadingEnd.complete();
-    this._modelsOpenedChange.complete();  
+    this._modelsOpenedChange.complete();
     
     this._loadedMeshes?.forEach(x => {
       x.geometry.dispose();
@@ -115,6 +104,63 @@ export class ModelLoaderService {
     this._loader.dracoLoader?.dispose();  
     this._loader = null;
   }
+
+  //#region callbacks
+  addQueueCallback(type: "queue-loaded", cb: () => Promise<void>) {
+    switch (type) {
+      case "queue-loaded":
+        this._onQueueLoaded.add(cb);
+        return;
+    }
+  }
+
+  addModelCallback(type: "model-loaded" | "model-unloaded", 
+    cb: (guid: string) => void) {    
+    switch (type) {
+      case "model-loaded":
+        this._onModelLoaded.add(cb);
+        return;
+      case "model-unloaded":
+        this._onModelUnloaded.add(cb);
+        return;
+    }
+  }
+  
+  addMeshCallback(type: "mesh-loaded" | "mesh-unloaded", 
+    cb: (m: MeshBgSm) => void) {    
+    switch (type) {
+      case "mesh-loaded":
+        this._onMeshLoaded.add(cb);
+        return;
+      case "mesh-unloaded":
+        this._onMeshUnloaded.add(cb);
+        return;
+    }
+  }
+
+  removeCallback(type: "queue-loaded" 
+  | "model-loaded" | "model-unloaded" 
+  | "mesh-loaded" | "mesh-unloaded",
+  cb: any) {
+    switch (type) {
+      case "queue-loaded":
+        this._onQueueLoaded.delete(cb);
+        return;
+      case "model-loaded":
+        this._onModelLoaded.delete(cb);
+        return;
+      case "model-unloaded":
+        this._onModelUnloaded.delete(cb);
+        return;
+      case "mesh-loaded":
+        this._onMeshLoaded.delete(cb);
+        return;
+      case "mesh-unloaded":
+        this._onMeshUnloaded.delete(cb);
+        return;
+    }
+  }
+  //#endregion
   
   async openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]> {
     if (!modelInfos?.length) {
@@ -202,8 +248,10 @@ export class ModelLoaderService {
     
     this.updateModelsDataArrays();
     
-    if (this.onQueueLoaded) {
-      await this.onQueueLoaded();
+    if (this._onQueueLoaded.size) {
+      for (const callback of this._onQueueLoaded) {
+        await callback();
+      }
     }
 
     this.emitOpenedModelsChanged();
@@ -274,8 +322,10 @@ export class ModelLoaderService {
         meshes.push(x);
         handles.add(x.name);
 
-        if (this.onMeshLoaded) {
-          this.onMeshLoaded(x);
+        if (this._onMeshLoaded.size) {
+          for (const callback of this._onMeshLoaded) {
+            callback(x);
+          }
         }
       }
     });
@@ -284,8 +334,10 @@ export class ModelLoaderService {
     this._loadedModels.add(modelInfo);
     this._loadedModelsByGuid.set(modelGuid, modelInfo);
     
-    if (this.onModelLoaded) {
-      this.onModelLoaded(modelGuid);
+    if (this._onModelLoaded.size) {
+      for (const callback of this._onModelLoaded) {
+        callback(modelGuid);
+      }
     }
   }
 
@@ -299,8 +351,10 @@ export class ModelLoaderService {
       this._loadedMeshes.delete(x); 
       this._loadedMeshesById.delete(x.userData.id);
 
-      if (this.onMeshUnloaded) {
-        this.onMeshUnloaded(x);
+      if (this._onMeshUnloaded.size) {
+        for (const callback of this._onMeshUnloaded) {
+          callback(x);
+        }
       }
       
       x.geometry?.dispose();
@@ -309,8 +363,10 @@ export class ModelLoaderService {
     this._loadedModels.delete(modelData);
     this._loadedModelsByGuid.delete(modelGuid);
 
-    if (this.onModelUnloaded) {
-      this.onModelUnloaded(modelGuid);
+    if (this._onModelUnloaded.size) {
+      for (const callback of this._onModelUnloaded) {
+        callback(modelGuid);
+      }
     }
   }
 

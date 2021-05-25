@@ -3,11 +3,14 @@ import { BufferAttribute, Camera, Face, Object3D, Raycaster, Scene,
 
 import { MeshBgAm, MeshBgSm, SnapPoint, Vec4DoubleCS } from "../common-types";
 import { AreaSelector } from "../helpers/area-selector";
-
 import { PickingScene } from "../scenes/picking-scene";
+
+import { ModelLoaderService } from "./model-loader-service";
 import { RenderService } from "./render-service";
 
 export class PickingService {
+  private readonly _loaderService: ModelLoaderService;
+
   private _pickingScene: PickingScene;
   get scene(): Scene {
     return this._pickingScene.scene;
@@ -16,13 +19,24 @@ export class PickingService {
   private readonly _raycaster: Raycaster;
   private readonly _areaSelector: AreaSelector;
   
-  constructor() {    
+  constructor(loaderService: ModelLoaderService) {   
+    if (!loaderService) {
+      throw new Error("LoaderService is not defined");
+    }
+    
+    this._loaderService = loaderService;
+    this._loaderService.addMeshCallback("mesh-loaded", this.onLoaderMeshLoaded);
+    this._loaderService.addMeshCallback("mesh-unloaded", this.onLoaderMeshUnloaded);
+
     this._pickingScene = new PickingScene();
     this._raycaster = new Raycaster();
     this._areaSelector = new AreaSelector();
   }
 
   destroy() {
+    this._loaderService.removeCallback("mesh-loaded", this.onLoaderMeshLoaded);
+    this._loaderService.removeCallback("mesh-unloaded", this.onLoaderMeshUnloaded);
+
     this._pickingScene?.destroy();
     this._pickingScene = null;
   }
@@ -68,6 +82,25 @@ export class PickingService {
     const ids = objects.map(x => x.userData.id).filter(x => x);
     return ids;
   }
+
+  getMeshesInArea(renderService: RenderService, 
+    clientMinX: number, clientMinY: number, 
+    clientMaxX: number, clientMaxY: number): MeshBgSm[] {
+
+    const ids = this.getMeshIdsInArea(renderService, 
+      clientMinX, clientMinY, clientMaxX, clientMaxY);
+    
+    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
+    return found;
+  }
+  
+  private onLoaderMeshLoaded = (mesh: MeshBgSm) => {    
+    this.addMesh(mesh);
+  };
+
+  private onLoaderMeshUnloaded = (mesh: MeshBgSm) => {    
+    this.removeMesh(mesh);
+  };
   
   private getMeshSnapPointAtPosition(camera: Camera, renderer: WebGLRenderer, 
     position: Vector2, mesh: MeshBgAm): Vector3 {

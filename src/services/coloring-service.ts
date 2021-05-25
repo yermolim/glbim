@@ -25,10 +25,12 @@ export class ColoringService {
 
     this._loaderService = loaderService;
     this._selectionService = selectionService;
+    
+    this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
   }
 
   destroy() {
-
+    this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
   }
 
   color(renderService: RenderService, coloringInfos: ColoringInfo[]) {
@@ -53,6 +55,10 @@ export class ColoringService {
   removeFromColoringArrays(modelGuid: string) {
     this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
   }
+
+  private onLoaderModelUnloaded = (modelGuid: string) => {    
+    this.removeFromColoringArrays(modelGuid);
+  };
 
   private resetSelectionAndColorMeshes(renderService: RenderService, coloringInfos: ColoringInfo[]) {    
     this._selectionService.reset(renderService);

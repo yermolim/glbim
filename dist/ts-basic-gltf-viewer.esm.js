@@ -152,7 +152,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class ModelLoaderService {
-    constructor(dracoDecoderPath, onQueueLoaded = null, onModelLoaded = null, onModelUnloaded = null, onMeshLoaded = null, onMeshUnloaded = null, basePoint = null) {
+    constructor(dracoDecoderPath, basePoint = null) {
         this._loadingStateChange = new BehaviorSubject(false);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
@@ -166,11 +166,11 @@ class ModelLoaderService {
         this._loadedMeshesById = new Map();
         this._loadedModelsArray = [];
         this._loadedMeshesArray = [];
-        this.onQueueLoaded = onQueueLoaded;
-        this.onModelLoaded = onModelLoaded;
-        this.onModelUnloaded = onModelUnloaded;
-        this.onMeshLoaded = onMeshLoaded;
-        this.onMeshUnloaded = onMeshUnloaded;
+        this._onQueueLoaded = new Set();
+        this._onModelLoaded = new Set();
+        this._onModelUnloaded = new Set();
+        this._onMeshLoaded = new Set();
+        this._onMeshUnloaded = new Set();
         const wcsToUcsMatrix = new Matrix4();
         if (basePoint) {
             wcsToUcsMatrix
@@ -217,6 +217,52 @@ class ModelLoaderService {
         });
         (_b = this._loader.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
         this._loader = null;
+    }
+    addQueueCallback(type, cb) {
+        switch (type) {
+            case "queue-loaded":
+                this._onQueueLoaded.add(cb);
+                return;
+        }
+    }
+    addModelCallback(type, cb) {
+        switch (type) {
+            case "model-loaded":
+                this._onModelLoaded.add(cb);
+                return;
+            case "model-unloaded":
+                this._onModelUnloaded.add(cb);
+                return;
+        }
+    }
+    addMeshCallback(type, cb) {
+        switch (type) {
+            case "mesh-loaded":
+                this._onMeshLoaded.add(cb);
+                return;
+            case "mesh-unloaded":
+                this._onMeshUnloaded.add(cb);
+                return;
+        }
+    }
+    removeCallback(type, cb) {
+        switch (type) {
+            case "queue-loaded":
+                this._onQueueLoaded.delete(cb);
+                return;
+            case "model-loaded":
+                this._onModelLoaded.delete(cb);
+                return;
+            case "model-unloaded":
+                this._onModelUnloaded.delete(cb);
+                return;
+            case "mesh-loaded":
+                this._onMeshLoaded.delete(cb);
+                return;
+            case "mesh-unloaded":
+                this._onMeshUnloaded.delete(cb);
+                return;
+        }
     }
     openModelsAsync(modelInfos) {
         return __awaiter$4(this, void 0, void 0, function* () {
@@ -299,8 +345,10 @@ class ModelLoaderService {
                 yield action();
             }
             this.updateModelsDataArrays();
-            if (this.onQueueLoaded) {
-                yield this.onQueueLoaded();
+            if (this._onQueueLoaded.size) {
+                for (const callback of this._onQueueLoaded) {
+                    yield callback();
+                }
             }
             this.emitOpenedModelsChanged();
             this._loadingStateChange.next(false);
@@ -362,16 +410,20 @@ class ModelLoaderService {
                 }
                 meshes.push(x);
                 handles.add(x.name);
-                if (this.onMeshLoaded) {
-                    this.onMeshLoaded(x);
+                if (this._onMeshLoaded.size) {
+                    for (const callback of this._onMeshLoaded) {
+                        callback(x);
+                    }
                 }
             }
         });
         const modelInfo = { name, meshes, handles };
         this._loadedModels.add(modelInfo);
         this._loadedModelsByGuid.set(modelGuid, modelInfo);
-        if (this.onModelLoaded) {
-            this.onModelLoaded(modelGuid);
+        if (this._onModelLoaded.size) {
+            for (const callback of this._onModelLoaded) {
+                callback(modelGuid);
+            }
         }
     }
     removeModelFromLoaded(modelGuid) {
@@ -383,15 +435,19 @@ class ModelLoaderService {
             var _a;
             this._loadedMeshes.delete(x);
             this._loadedMeshesById.delete(x.userData.id);
-            if (this.onMeshUnloaded) {
-                this.onMeshUnloaded(x);
+            if (this._onMeshUnloaded.size) {
+                for (const callback of this._onMeshUnloaded) {
+                    callback(x);
+                }
             }
             (_a = x.geometry) === null || _a === void 0 ? void 0 : _a.dispose();
         });
         this._loadedModels.delete(modelData);
         this._loadedModelsByGuid.delete(modelGuid);
-        if (this.onModelUnloaded) {
-            this.onModelUnloaded(modelGuid);
+        if (this._onModelUnloaded.size) {
+            for (const callback of this._onModelUnloaded) {
+                callback(modelGuid);
+            }
         }
     }
     updateModelsDataArrays() {
@@ -2943,7 +2999,19 @@ class PickingScene {
 }
 
 class PickingService {
-    constructor() {
+    constructor(loaderService) {
+        this.onLoaderMeshLoaded = (mesh) => {
+            this.addMesh(mesh);
+        };
+        this.onLoaderMeshUnloaded = (mesh) => {
+            this.removeMesh(mesh);
+        };
+        if (!loaderService) {
+            throw new Error("LoaderService is not defined");
+        }
+        this._loaderService = loaderService;
+        this._loaderService.addMeshCallback("mesh-loaded", this.onLoaderMeshLoaded);
+        this._loaderService.addMeshCallback("mesh-unloaded", this.onLoaderMeshUnloaded);
         this._pickingScene = new PickingScene();
         this._raycaster = new Raycaster();
         this._areaSelector = new AreaSelector();
@@ -2953,6 +3021,8 @@ class PickingService {
     }
     destroy() {
         var _a;
+        this._loaderService.removeCallback("mesh-loaded", this.onLoaderMeshLoaded);
+        this._loaderService.removeCallback("mesh-unloaded", this.onLoaderMeshUnloaded);
         (_a = this._pickingScene) === null || _a === void 0 ? void 0 : _a.destroy();
         this._pickingScene = null;
     }
@@ -2983,6 +3053,11 @@ class PickingService {
         const objects = this._areaSelector.select(renderService.camera, this.scene, new Vector3(min.x, min.y, 0), new Vector3(max.x, max.y, 0));
         const ids = objects.map(x => x.userData.id).filter(x => x);
         return ids;
+    }
+    getMeshesInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+        const ids = this.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
+        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        return found;
     }
     getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
         if (!mesh) {
@@ -3030,22 +3105,17 @@ class PickingService {
 }
 
 class HighlightService {
-    constructor(loaderService, pickingService) {
+    constructor(pickingService) {
         this._highlightedMeshes = new Set();
-        if (!loaderService) {
-            throw new Error("LoaderService is not defined");
-        }
         if (!pickingService) {
             throw new Error("PickingService is not defined");
         }
-        this._loaderService = loaderService;
         this._pickingService = pickingService;
     }
     destroy() {
     }
     highlightInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) {
-        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
-        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        const found = this._pickingService.getMeshesInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY);
         this.highlightMeshes(renderService, found);
     }
     highlightAtPoint(renderService, clientX, clientY) {
@@ -3093,6 +3163,9 @@ class SelectionService {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._focusOnProgrammaticSelection = true;
+        this.onLoaderModelUnloaded = (modelGuid) => {
+            this.removeFromSelectionArrays(modelGuid);
+        };
         if (!loaderService) {
             throw new Error("LoaderService is not defined");
         }
@@ -3101,6 +3174,7 @@ class SelectionService {
         }
         this._loaderService = loaderService;
         this._pickingService = pickingService;
+        this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
         this.selectionChange$ = this._selectionChange.asObservable();
         this.manualSelectionChange$ = this._manualSelectionChange.asObservable();
     }
@@ -3113,6 +3187,7 @@ class SelectionService {
     destroy() {
         this._selectionChange.complete();
         this._manualSelectionChange.complete();
+        this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
     }
     select(renderService, ids) {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
@@ -3253,6 +3328,9 @@ class ColoringService {
     constructor(loaderService, selectionService) {
         this._queuedColoring = null;
         this._coloredMeshes = [];
+        this.onLoaderModelUnloaded = (modelGuid) => {
+            this.removeFromColoringArrays(modelGuid);
+        };
         if (!loaderService) {
             throw new Error("LoaderService is not defined");
         }
@@ -3261,8 +3339,10 @@ class ColoringService {
         }
         this._loaderService = loaderService;
         this._selectionService = selectionService;
+        this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
     }
     destroy() {
+        this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
     }
     color(renderService, coloringInfos) {
         if (this._loaderService.loadingInProgress) {
@@ -3656,18 +3736,12 @@ class GltfViewer {
         this._lastFrameTime.complete();
     }
     initLoaderService(dracoDecoderPath) {
-        this._loaderService = new ModelLoaderService(dracoDecoderPath, () => __awaiter(this, void 0, void 0, function* () {
+        this._loaderService = new ModelLoaderService(dracoDecoderPath, this._options.basePoint);
+        this._loaderService.addQueueCallback("queue-loaded", () => __awaiter(this, void 0, void 0, function* () {
             this._coloringService.runQueuedColoring(this._renderService);
             this._selectionService.runQueuedSelection(this._renderService);
             yield this._renderService.updateRenderSceneAsync();
-        }), (guid) => { }, (guid) => {
-            this._selectionService.removeFromSelectionArrays(guid);
-            this._coloringService.removeFromColoringArrays(guid);
-        }, (mesh) => {
-            this._pickingService.addMesh(mesh);
-        }, (mesh) => {
-            this._pickingService.removeMesh(mesh);
-        }, this._options.basePoint);
+        }));
         this.loadingStateChange$ = this._loaderService.loadingStateChange$;
         this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
         this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
@@ -3682,10 +3756,10 @@ class GltfViewer {
         this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
     }
     initPickingService() {
-        this._pickingService = new PickingService();
+        this._pickingService = new PickingService(this._loaderService);
     }
     initHighlightService() {
-        this._highlightService = new HighlightService(this._loaderService, this._pickingService);
+        this._highlightService = new HighlightService(this._pickingService);
     }
     initSelectionService() {
         this._selectionService = new SelectionService(this._loaderService, this._pickingService);

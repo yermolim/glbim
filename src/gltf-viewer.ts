@@ -455,25 +455,13 @@ export class GltfViewer {
 
   // #region services initialization
   private initLoaderService(dracoDecoderPath: string) {
-    this._loaderService = new ModelLoaderService(dracoDecoderPath,
+    this._loaderService = new ModelLoaderService(dracoDecoderPath, this._options.basePoint);
+    this._loaderService.addQueueCallback("queue-loaded", 
       async () => {
         this._coloringService.runQueuedColoring(this._renderService);
         this._selectionService.runQueuedSelection(this._renderService);
         await this._renderService.updateRenderSceneAsync();
-      },
-      (guid: string) => {},
-      (guid: string) => {
-        this._selectionService.removeFromSelectionArrays(guid);
-        this._coloringService.removeFromColoringArrays(guid);
-      },
-      (mesh: MeshBgSm) => {        
-        this._pickingService.addMesh(mesh);
-      },
-      (mesh: MeshBgSm) => {
-        this._pickingService.removeMesh(mesh);
-      },
-      this._options.basePoint,
-    );
+      });
 
     this.loadingStateChange$ = this._loaderService.loadingStateChange$;
     this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
@@ -490,11 +478,11 @@ export class GltfViewer {
   }
 
   private initPickingService() {
-    this._pickingService = new PickingService(); 
+    this._pickingService = new PickingService(this._loaderService); 
   }
 
   private initHighlightService() {
-    this._highlightService = new HighlightService(this._loaderService, this._pickingService);
+    this._highlightService = new HighlightService(this._pickingService);
   }
 
   private initSelectionService() {    
