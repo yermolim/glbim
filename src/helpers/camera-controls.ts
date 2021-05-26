@@ -5,7 +5,7 @@ export class CameraControls extends OrbitControls {
   constructor(camera: Camera, domElement: HTMLElement) {
     super(camera, domElement);
 
-    this.screenSpacePanning = false; // pan orthogonal to world-space direction camera.up
+    this.screenSpacePanning = true;
 
     this.mouseButtons.LEFT = null;
     this.mouseButtons.MIDDLE = MOUSE.ROTATE;

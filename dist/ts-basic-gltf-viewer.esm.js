@@ -504,7 +504,7 @@ class ModelLoaderService {
 class CameraControls extends OrbitControls {
     constructor(camera, domElement) {
         super(camera, domElement);
-        this.screenSpacePanning = false;
+        this.screenSpacePanning = true;
         this.mouseButtons.LEFT = null;
         this.mouseButtons.MIDDLE = MOUSE.ROTATE;
         this.mouseButtons.RIGHT = MOUSE.PAN;
