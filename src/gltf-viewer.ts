@@ -427,17 +427,19 @@ export class GltfViewer {
 
     const x = e.clientX;
     const y = e.clientY;
-    const { downX, downY, allowArea, maxDiff } = this._pointerEventHelper;
-    if (this._interactionMode === "select_mesh"
-      && allowArea
-      && downX !== undefined && downX !== null && allowArea
-      && (Math.abs(x - downX) > maxDiff || Math.abs(y - downY) > maxDiff)) {
-      this._selectionFrame.show(this._container, downX, downY, x, y);
+    if (this._interactionMode === "select_mesh") {
+      const { downX, downY, allowArea, maxDiff } = this._pointerEventHelper;
+      if (allowArea
+        && downX !== undefined && downX !== null && allowArea
+        && (Math.abs(x - downX) > maxDiff || Math.abs(y - downY) > maxDiff)) {
+        this._selectionFrame.show(this._container, downX, downY, x, y);
+      }
     }
 
     clearTimeout(this._pointerEventHelper.mouseMoveTimer);
     this._pointerEventHelper.mouseMoveTimer = null;
-    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
+    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {      
+      const { downX, downY, allowArea } = this._pointerEventHelper;
       switch (this._interactionMode) {
         case "select_mesh":
           if (downX !== undefined && downX !== null && allowArea) {
@@ -467,6 +469,7 @@ export class GltfViewer {
     }    
 
     this._selectionFrame.hide();
+    this._highlightService.clearHighlight(this._renderService);
 
     const x = e.clientX;
     const y = e.clientY;
@@ -497,7 +500,6 @@ export class GltfViewer {
         // apply area selection if the corresponding mode is set
         this._selectionService.selectMeshesInArea(this._renderService, 
           previousSelection, downX, downY, x, y);
-        this._highlightService.clearHighlight(this._renderService);
       }
       this.clearDownPoint();
       return;
