@@ -140,6 +140,7 @@ export declare class GltfViewer {
 	private _coloringService;
 	private _hudService;
 	private _pointerEventHelper;
+	private _selectionFrame;
 	private _modeChange;
 	private _optionsChange;
 	private _contextLoss;

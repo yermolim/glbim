@@ -145,6 +145,41 @@ class Distance {
     }
 }
 
+class SelectionFrame {
+    constructor() {
+        const frame = document.createElement("div");
+        frame.style.position = "absolute";
+        frame.style.borderStyle = "dashed";
+        frame.style.borderWidth = "2px";
+        frame.style.borderColor = "dodgerblue";
+        frame.style.background = "rgba(30, 144, 255, 0.1)";
+        frame.style.pointerEvents = "none";
+        this._element = frame;
+    }
+    destroy() {
+        this._element.remove();
+        this._element = null;
+    }
+    show(container, x1, y1, x2, y2) {
+        if (!this._element) {
+            return;
+        }
+        const xMin = Math.min(x1, x2);
+        const yMin = Math.min(y1, y2);
+        const xMax = Math.max(x1, x2);
+        const yMax = Math.max(y1, y2);
+        const { top, left } = container.getBoundingClientRect();
+        this._element.style.left = xMin - left + "px";
+        this._element.style.top = yMin - top + "px";
+        this._element.style.width = xMax - xMin + "px";
+        this._element.style.height = yMax - yMin + "px";
+        container.append(this._element);
+    }
+    hide() {
+        this._element.remove();
+    }
+}
+
 var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -3409,14 +3444,20 @@ class GltfViewer {
             if (!this._options.highlightingEnabled) {
                 return;
             }
+            const x = e.clientX;
+            const y = e.clientY;
+            const { downX, downY, allowArea, maxDiff } = this._pointerEventHelper;
+            if (this._interactionMode === "select_mesh"
+                && allowArea
+                && downX !== undefined && downX !== null && allowArea
+                && (Math.abs(x - downX) > maxDiff || Math.abs(y - downY) > maxDiff)) {
+                this._selectionFrame.show(this._container, downX, downY, x, y);
+            }
             clearTimeout(this._pointerEventHelper.mouseMoveTimer);
             this._pointerEventHelper.mouseMoveTimer = null;
             this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
-                const x = e.clientX;
-                const y = e.clientY;
                 switch (this._interactionMode) {
                     case "select_mesh":
-                        const { downX, downY, allowArea } = this._pointerEventHelper;
                         if (downX !== undefined && downX !== null && allowArea) {
                             this._highlightService.highlightInArea(this._renderService, downX, downY, x, y);
                         }
@@ -3441,6 +3482,7 @@ class GltfViewer {
             if (!e.isPrimary || e.button === 1 || e.button === 2) {
                 return;
             }
+            this._selectionFrame.hide();
             const x = e.clientX;
             const y = e.clientY;
             const { downX, downY, touch, allowArea, maxDiff } = this._pointerEventHelper;
@@ -3511,31 +3553,34 @@ class GltfViewer {
             (_a = this._renderService) === null || _a === void 0 ? void 0 : _a.resizeRenderer();
         });
         this._containerResizeObserver.observe(this._container);
+        this._selectionFrame = new SelectionFrame();
         this.setInteractionMode("select_mesh");
     }
     destroy() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         this._subscriptions.forEach(x => x.unsubscribe());
         this.closeSubjects();
-        (_a = this._containerResizeObserver) === null || _a === void 0 ? void 0 : _a.disconnect();
+        this._selectionFrame.destroy();
+        this._selectionFrame = null;
+        this._containerResizeObserver.disconnect();
         this._containerResizeObserver = null;
-        (_b = this._renderService) === null || _b === void 0 ? void 0 : _b.destroy();
+        (_a = this._renderService) === null || _a === void 0 ? void 0 : _a.destroy();
         this._renderService = null;
-        (_c = this._hudService) === null || _c === void 0 ? void 0 : _c.destroy();
+        (_b = this._hudService) === null || _b === void 0 ? void 0 : _b.destroy();
         this._hudService = null;
-        (_d = this._scenesService) === null || _d === void 0 ? void 0 : _d.destroy();
+        (_c = this._scenesService) === null || _c === void 0 ? void 0 : _c.destroy();
         this._scenesService = null;
-        (_e = this._coloringService) === null || _e === void 0 ? void 0 : _e.destroy();
+        (_d = this._coloringService) === null || _d === void 0 ? void 0 : _d.destroy();
         this._coloringService = null;
-        (_f = this._selectionService) === null || _f === void 0 ? void 0 : _f.destroy();
+        (_e = this._selectionService) === null || _e === void 0 ? void 0 : _e.destroy();
         this._selectionService = null;
-        (_g = this._highlightService) === null || _g === void 0 ? void 0 : _g.destroy();
+        (_f = this._highlightService) === null || _f === void 0 ? void 0 : _f.destroy();
         this._highlightService = null;
-        (_h = this._pickingService) === null || _h === void 0 ? void 0 : _h.destroy();
+        (_g = this._pickingService) === null || _g === void 0 ? void 0 : _g.destroy();
         this._pickingService = null;
-        (_j = this._cameraService) === null || _j === void 0 ? void 0 : _j.destroy();
+        (_h = this._cameraService) === null || _h === void 0 ? void 0 : _h.destroy();
         this._cameraService = null;
-        (_k = this._loaderService) === null || _k === void 0 ? void 0 : _k.destroy();
+        (_j = this._loaderService) === null || _j === void 0 ? void 0 : _j.destroy();
         this._loaderService = null;
     }
     updateOptionsAsync(options) {
@@ -3753,8 +3798,10 @@ class GltfViewer {
         this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);
         this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore);
         this._renderService.addRendererEventListener("pointerdown", this.onRendererPointerDown);
-        this._renderService.addRendererEventListener("pointerup", this.onRendererPointerUp);
         this._renderService.addRendererEventListener("pointermove", this.onRendererPointerMove);
+        this._renderService.addRendererEventListener("pointerup", this.onRendererPointerUp);
+        this._renderService.addRendererEventListener("pointerout", this.onRendererPointerUp);
+        this._renderService.addRendererEventListener("pointerleave", this.onRendererPointerUp);
     }
 }
 

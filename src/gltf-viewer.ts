@@ -2,8 +2,9 @@ import { Observable, Subscription, BehaviorSubject } from "rxjs";
 
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
-  MeshBgSm, ColoringInfo, PointerEventHelper, Distance, 
+  ColoringInfo, PointerEventHelper, Distance, 
   Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
+import { SelectionFrame } from "./components/selection-frame";
 
 import { ModelLoaderService } from "./services/model-loader-service";
 import { CameraService } from "./services/camera-service";
@@ -69,6 +70,8 @@ export class GltfViewer {
   private _hudService: HudService;
 
   private _pointerEventHelper = PointerEventHelper.default;  
+
+  private _selectionFrame: SelectionFrame;
   
   // #region private rx subjects
   private _modeChange = new BehaviorSubject<ViewerInteractionMode>(null);
@@ -110,6 +113,8 @@ export class GltfViewer {
     });
     this._containerResizeObserver.observe(this._container);
 
+    this._selectionFrame = new SelectionFrame();
+
     this.setInteractionMode("select_mesh");
   }
 
@@ -119,8 +124,11 @@ export class GltfViewer {
   destroy() {   
     this._subscriptions.forEach(x => x.unsubscribe()); 
     this.closeSubjects();
+
+    this._selectionFrame.destroy();
+    this._selectionFrame = null;
     
-    this._containerResizeObserver?.disconnect();
+    this._containerResizeObserver.disconnect();
     this._containerResizeObserver = null;    
 
     // destroying services in the reverse order of ther creation
@@ -417,15 +425,21 @@ export class GltfViewer {
       return;
     } 
 
+    const x = e.clientX;
+    const y = e.clientY;
+    const { downX, downY, allowArea, maxDiff } = this._pointerEventHelper;
+    if (this._interactionMode === "select_mesh"
+      && allowArea
+      && downX !== undefined && downX !== null && allowArea
+      && (Math.abs(x - downX) > maxDiff || Math.abs(y - downY) > maxDiff)) {
+      this._selectionFrame.show(this._container, downX, downY, x, y);
+    }
+
     clearTimeout(this._pointerEventHelper.mouseMoveTimer);
     this._pointerEventHelper.mouseMoveTimer = null;
     this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
-      const x = e.clientX;
-      const y = e.clientY;
-
       switch (this._interactionMode) {
-        case "select_mesh":  
-          const { downX, downY, allowArea } = this._pointerEventHelper;
+        case "select_mesh":
           if (downX !== undefined && downX !== null && allowArea) {
             this._highlightService.highlightInArea(this._renderService, downX, downY, x, y); 
           } else {
@@ -451,6 +465,8 @@ export class GltfViewer {
       // ignore all pointer events except the primary one
       return;
     }    
+
+    this._selectionFrame.hide();
 
     const x = e.clientX;
     const y = e.clientY;
@@ -591,8 +607,10 @@ export class GltfViewer {
     this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);    
     this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore); 
     this._renderService.addRendererEventListener("pointerdown", <any>this.onRendererPointerDown); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("pointerup", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
     this._renderService.addRendererEventListener("pointermove", <any>this.onRendererPointerMove); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("pointerup", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("pointerout", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("pointerleave", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
   }
   // #endregion
 }
