@@ -9,7 +9,7 @@ Features:
 - optional render speed optimization while moving/rotating camera by using simplified background scene
 - assigning different colors to groups of model meshes
 - selection of model meshes from code by mesh ids (a combination of internal model UUID and mesh 'name' field used as id) with auto centering camera on selection
-- mouse and touch support (pointer events used): OrbitControls navigation; single (tap/click) and multiple (ctrl + click) manual selection of model meshes (fast GPU picking used); isolation of selected meshes (double-tap/click); highlighting model meshes on hover
+- mouse and touch support (pointer events used): OrbitControls navigation; single (tap/click) and multiple (ctrl + click) manual selection of model meshes (fast GPU picking used); isolation of selected meshes (double-tap/click); highlighting model meshes on hover; area selection
 - notification of changes in opened models and mesh selection using rxjs subjects
 - options change at runtime
 - custom axes helper with camera rotation on axis label click
