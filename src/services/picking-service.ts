@@ -38,14 +38,6 @@ export class PickingService {
     this._pickingScene?.destroy();
     this._pickingScene = null;
   }
-
-  addMesh(mesh: MeshBgSm) {        
-    this._pickingScene.add(mesh);
-  }
-
-  removeMesh(mesh: MeshBgSm) {
-    this._pickingScene.remove(mesh);
-  }
   
   getMeshAt(renderService: RenderService, clientX: number, clientY: number): MeshBgSm {  
     const position = renderService.convertClientToCanvas(clientX, clientY); 
@@ -121,6 +113,14 @@ export class PickingService {
     
     const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     return found;
+  }
+
+  private addMesh(mesh: MeshBgSm) {        
+    this._pickingScene.add(mesh);
+  }
+
+  private removeMesh(mesh: MeshBgSm) {
+    this._pickingScene.remove(mesh);
   }
   
   private onLoaderMeshLoaded = (mesh: MeshBgSm) => {    

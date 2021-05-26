@@ -3174,7 +3174,9 @@ class SelectionService {
                 this._isolatedMeshes.push(x);
             }
         });
-        renderService.render(this._selectedMeshes);
+        renderService.render(!this._focusOnProgrammaticSelection
+            ? null
+            : this._selectedMeshes);
     }
     selectMeshAtPoint(renderService, clientX, clientY, keepPreviousSelection) {
         const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);

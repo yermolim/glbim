@@ -92,7 +92,9 @@ export class SelectionService {
         this._isolatedMeshes.push(x);
       }
     }); 
-    renderService.render(this._selectedMeshes);
+    renderService.render(!this._focusOnProgrammaticSelection 
+      ? null 
+      : this._selectedMeshes);
   }
 
   selectMeshAtPoint(renderService: RenderService, clientX: number, clientY: number, keepPreviousSelection: boolean) {
