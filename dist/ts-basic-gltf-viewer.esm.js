@@ -2838,7 +2838,7 @@ class PickingScene {
     constructor() {
         this._materials = [];
         this._releasedMaterials = [];
-        this._pickingMeshById = new Map();
+        this._pickingMeshBySourceMesh = new Map();
         this._sourceMeshByPickingColor = new Map();
         this._lastPickingColor = 0;
         const scene = new Scene();
@@ -2854,6 +2854,8 @@ class PickingScene {
         this._materials = null;
         this._target.dispose();
         this._target = null;
+        this._pickingMeshBySourceMesh.clear();
+        this._sourceMeshByPickingColor.clear();
     }
     ;
     add(sourceMesh) {
@@ -2867,14 +2869,14 @@ class PickingScene {
         pickingMesh.rotation.copy(sourceMesh.rotation);
         pickingMesh.scale.copy(sourceMesh.scale);
         this._scene.add(pickingMesh);
-        this._pickingMeshById.set(sourceMesh.uuid, pickingMesh);
+        this._pickingMeshBySourceMesh.set(sourceMesh, pickingMesh);
         this._sourceMeshByPickingColor.set(colorString, sourceMesh);
     }
     remove(sourceMesh) {
-        const pickingMesh = this._pickingMeshById.get(sourceMesh.uuid);
+        const pickingMesh = this._pickingMeshBySourceMesh.get(sourceMesh);
         if (pickingMesh) {
             this._scene.remove(pickingMesh);
-            this._pickingMeshById.delete(sourceMesh.uuid);
+            this._pickingMeshBySourceMesh.delete(sourceMesh);
             this._sourceMeshByPickingColor.delete(pickingMesh.userData.color);
             this.releaseMaterial(pickingMesh.material);
         }
@@ -2885,11 +2887,15 @@ class PickingScene {
     getPickingMeshAt(camera, renderer, canvasPosition) {
         const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
         return sourceMesh
-            ? this._pickingMeshById.get(sourceMesh.uuid)
+            ? this._pickingMeshBySourceMesh.get(sourceMesh)
             : null;
     }
     getSourceMeshAtPosition(camera, renderer, position) {
         const context = renderer.getContext();
+        this._pickingMeshBySourceMesh.forEach((picking, source) => {
+            var _a;
+            picking.visible = !!((_a = ColorRgbRmo.getFromMesh(source)) === null || _a === void 0 ? void 0 : _a.opacity);
+        });
         camera.setViewOffset(context.drawingBufferWidth, context.drawingBufferHeight, position.x, position.y, 1, 1);
         renderer.setRenderTarget(this._target);
         renderer.render(this._scene, camera);
@@ -2952,12 +2958,6 @@ class PickingService {
         (_a = this._pickingScene) === null || _a === void 0 ? void 0 : _a.destroy();
         this._pickingScene = null;
     }
-    addMesh(mesh) {
-        this._pickingScene.add(mesh);
-    }
-    removeMesh(mesh) {
-        this._pickingScene.remove(mesh);
-    }
     getMeshAt(renderService, clientX, clientY) {
         const position = renderService.convertClientToCanvas(clientX, clientY);
         return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
@@ -3007,6 +3007,12 @@ class PickingService {
         const ids = this.getMeshIdsInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY);
         const { found } = this._loaderService.findMeshesByIds(new Set(ids));
         return found;
+    }
+    addMesh(mesh) {
+        this._pickingScene.add(mesh);
+    }
+    removeMesh(mesh) {
+        this._pickingScene.remove(mesh);
     }
     getMeshSnapPointAtPosition(camera, renderer, position, mesh) {
         if (!mesh) {
@@ -3116,7 +3122,7 @@ class SelectionService {
         this._isolatedMeshes = [];
         this._focusOnProgrammaticSelection = true;
         this.onLoaderModelUnloaded = (modelGuid) => {
-            this.removeFromSelectionArrays(modelGuid);
+            this.removeModelMeshesFromSelectionArrays(modelGuid);
         };
         if (!loaderService) {
             throw new Error("LoaderService is not defined");
@@ -3178,10 +3184,10 @@ class SelectionService {
             ? null
             : this._selectedMeshes);
     }
-    selectMeshAtPoint(renderService, clientX, clientY, keepPreviousSelection) {
+    selectMeshAtPoint(renderService, keepPreviousSelection, clientX, clientY) {
         const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);
         if (!mesh) {
-            this.selectMeshes(renderService, [], true, false);
+            this.applySelection(renderService, [], true, false);
             return;
         }
         let meshes;
@@ -3196,7 +3202,7 @@ class SelectionService {
         else {
             meshes = [mesh];
         }
-        this.selectMeshes(renderService, meshes, true, false);
+        this.applySelection(renderService, meshes, true, false);
     }
     selectMeshesInArea(renderService, previousSelection, clientMinX, clientMinY, clientMaxX, clientMaxY) {
         const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
@@ -3213,10 +3219,10 @@ class SelectionService {
             meshes = found;
         }
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
-            this.removeSelection(renderService);
+            this.clearSelection(renderService);
         }
         else {
-            this.selectMeshes(renderService, meshes, true, false);
+            this.applySelection(renderService, meshes, true, false);
         }
     }
     runQueuedSelection(renderService) {
@@ -3226,34 +3232,30 @@ class SelectionService {
         }
     }
     reset(renderService) {
-        this.removeSelection(renderService);
-        this.removeIsolation(renderService);
-    }
-    removeFromSelectionArrays(modelGuid) {
-        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+        this.clearSelection(renderService);
+        this.clearIsolation(renderService);
     }
     findAndSelectMeshes(renderService, ids, isolate) {
         const { found } = this._loaderService.findMeshesByIds(new Set(ids));
         if (found.length) {
-            this.selectMeshes(renderService, found, false, isolate);
+            this.applySelection(renderService, found, false, isolate);
         }
     }
-    removeSelection(renderService) {
+    clearSelection(renderService) {
         for (const mesh of this._selectedMeshes) {
             mesh.userData.selected = undefined;
             renderService.enqueueMeshForColorUpdate(mesh);
         }
         this._selectedMeshes.length = 0;
     }
-    removeIsolation(renderService) {
+    clearIsolation(renderService) {
         for (const mesh of this._isolatedMeshes) {
             mesh.userData.isolated = undefined;
             renderService.enqueueMeshForColorUpdate(mesh);
         }
         this._isolatedMeshes.length = 0;
     }
-    selectMeshes(renderService, meshes, manual, isolateSelected) {
+    applySelection(renderService, meshes, manual, isolateSelected) {
         this.reset(renderService);
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
             this.emitSelectionChanged(renderService, manual, true);
@@ -3271,6 +3273,10 @@ class SelectionService {
         else {
             this.emitSelectionChanged(renderService, manual, true);
         }
+    }
+    removeModelMeshesFromSelectionArrays(modelGuid) {
+        this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+        this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
     }
     emitSelectionChanged(renderService, manual, render) {
         if (render) {
@@ -3527,7 +3533,7 @@ class GltfViewer {
                         setTimeout(() => {
                             this._pointerEventHelper.waitForDouble = false;
                         }, 300);
-                        this._selectionService.selectMeshAtPoint(this._renderService, x, y, e.ctrlKey || touch);
+                        this._selectionService.selectMeshAtPoint(this._renderService, e.ctrlKey || touch, x, y);
                     }
                     break;
                 case "select_vertex":

@@ -1,7 +1,5 @@
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 
-import { Mesh } from "three";
-
 import { MeshBgSm } from "../common-types";
 
 import { ModelLoaderService } from "./model-loader-service";
@@ -97,10 +95,11 @@ export class SelectionService {
       : this._selectedMeshes);
   }
 
-  selectMeshAtPoint(renderService: RenderService, clientX: number, clientY: number, keepPreviousSelection: boolean) {
+  selectMeshAtPoint(renderService: RenderService, keepPreviousSelection: boolean, 
+    clientX: number, clientY: number) {
     const mesh = this._pickingService.getMeshAt(renderService, clientX, clientY);
     if (!mesh) {
-      this.selectMeshes(renderService, [], true, false);
+      this.applySelection(renderService, [], true, false);
       return;
     }
 
@@ -115,7 +114,7 @@ export class SelectionService {
       meshes = [mesh];
     }
     
-    this.selectMeshes(renderService, meshes, true, false);
+    this.applySelection(renderService, meshes, true, false);
   }
   
   selectMeshesInArea(renderService: RenderService, previousSelection: "remove" | "keep" | "subtract",
@@ -136,9 +135,9 @@ export class SelectionService {
     }
 
     if (!meshes?.length) {
-      this.removeSelection(renderService);
+      this.clearSelection(renderService);
     } else {
-      this.selectMeshes(renderService, meshes, true, false);
+      this.applySelection(renderService, meshes, true, false);
     }
   }
 
@@ -150,32 +149,23 @@ export class SelectionService {
   }
 
   reset(renderService: RenderService) {    
-    this.removeSelection(renderService);
-    this.removeIsolation(renderService);
-  }
-
-  /**
-   * remove all meshes with the specified model GUID from the selection arrays
-   * @param modelGuid GUID of model, which meshes must be removed from the selection arrays
-   */
-  removeFromSelectionArrays(modelGuid: string) {    
-    this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
-    this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    this.clearSelection(renderService);
+    this.clearIsolation(renderService);
   }
 
   //#region private
   private onLoaderModelUnloaded = (modelGuid: string) => {    
-    this.removeFromSelectionArrays(modelGuid);
+    this.removeModelMeshesFromSelectionArrays(modelGuid);
   };
 
   private findAndSelectMeshes(renderService: RenderService, ids: string[], isolate: boolean) {    
     const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
     if (found.length) {
-      this.selectMeshes(renderService, found, false, isolate);
+      this.applySelection(renderService, found, false, isolate);
     }
   }
 
-  private removeSelection(renderService: RenderService) {
+  private clearSelection(renderService: RenderService) {
     for (const mesh of this._selectedMeshes) {
       mesh.userData.selected = undefined;
       renderService.enqueueMeshForColorUpdate(mesh);
@@ -183,7 +173,7 @@ export class SelectionService {
     this._selectedMeshes.length = 0;
   }
 
-  private removeIsolation(renderService: RenderService) {
+  private clearIsolation(renderService: RenderService) {
     for (const mesh of this._isolatedMeshes) {
       mesh.userData.isolated = undefined;
       renderService.enqueueMeshForColorUpdate(mesh);
@@ -191,7 +181,7 @@ export class SelectionService {
     this._isolatedMeshes.length = 0;
   }
 
-  private selectMeshes(renderService: RenderService, meshes: MeshBgSm[], 
+  private applySelection(renderService: RenderService, meshes: MeshBgSm[], 
     manual: boolean, isolateSelected: boolean) { 
       
     this.reset(renderService);
@@ -214,6 +204,15 @@ export class SelectionService {
     } else {
       this.emitSelectionChanged(renderService, manual, true);
     }
+  }
+
+  /**
+   * remove all meshes with the specified model GUID from the selection arrays
+   * @param modelGuid GUID of model, which meshes must be removed from the selection arrays
+   */
+  private removeModelMeshesFromSelectionArrays(modelGuid: string) {    
+    this._selectedMeshes = this._selectedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
+    this._isolatedMeshes = this._isolatedMeshes.filter(x => x.userData.modelGuid !== modelGuid);
   }
 
   private emitSelectionChanged(renderService: RenderService, manual: boolean, render: boolean) {

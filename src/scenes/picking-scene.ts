@@ -2,6 +2,7 @@ import { Scene, Mesh, Color, Vector2, PerspectiveCamera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
 import { MeshBgBm, MeshBgSm } from "../common-types";
+import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
 export class PickingScene {
   private readonly _scene: Scene;
@@ -14,7 +15,7 @@ export class PickingScene {
   private _materials: MeshBasicMaterial[] = [];
   private _releasedMaterials: MeshBasicMaterial[] = [];
   
-  private _pickingMeshById = new Map<string, MeshBgBm>();
+  private _pickingMeshBySourceMesh = new Map<MeshBgSm, MeshBgBm>();
   private _sourceMeshByPickingColor = new Map<string, MeshBgSm>();
   
   private _lastPickingColor = 0;
@@ -33,6 +34,9 @@ export class PickingScene {
 
     this._target.dispose();
     this._target = null;
+
+    this._pickingMeshBySourceMesh.clear();
+    this._sourceMeshByPickingColor.clear();
   };
   
   add(sourceMesh: MeshBgSm) {
@@ -48,15 +52,15 @@ export class PickingScene {
     pickingMesh.scale.copy(sourceMesh.scale);
 
     this._scene.add(pickingMesh);
-    this._pickingMeshById.set(sourceMesh.uuid, pickingMesh);
+    this._pickingMeshBySourceMesh.set(sourceMesh, pickingMesh);
     this._sourceMeshByPickingColor.set(colorString, sourceMesh);
   }
 
   remove(sourceMesh: MeshBgSm) {
-    const pickingMesh = this._pickingMeshById.get(sourceMesh.uuid);
+    const pickingMesh = this._pickingMeshBySourceMesh.get(sourceMesh);
     if (pickingMesh) {
       this._scene.remove(pickingMesh);
-      this._pickingMeshById.delete(sourceMesh.uuid);
+      this._pickingMeshBySourceMesh.delete(sourceMesh);
       this._sourceMeshByPickingColor.delete(pickingMesh.userData.color);
       this.releaseMaterial(pickingMesh.material);
     }
@@ -71,13 +75,18 @@ export class PickingScene {
     canvasPosition: Vector2): MeshBgBm { 
     const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
     return sourceMesh
-      ? this._pickingMeshById.get(sourceMesh.uuid)
+      ? this._pickingMeshBySourceMesh.get(sourceMesh)
       : null;
   }
 
   private getSourceMeshAtPosition(camera: PerspectiveCamera, 
     renderer: WebGLRenderer, position: Vector2): MeshBgSm {   
     const context = renderer.getContext();  
+
+    // exclude fully transparent elements from render
+    this._pickingMeshBySourceMesh.forEach((picking, source) => {
+      picking.visible = !!ColorRgbRmo.getFromMesh(source)?.opacity;
+    });
     
     // set renderer and camera to 1x1 view
     camera.setViewOffset(

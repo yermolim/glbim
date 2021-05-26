@@ -515,9 +515,10 @@ export class GltfViewer {
           setTimeout(() => {
             this._pointerEventHelper.waitForDouble = false;
           }, 300);
-          this._selectionService.selectMeshAtPoint(this._renderService, x, y, 
+          this._selectionService.selectMeshAtPoint(this._renderService, 
             // add/remove to/from selection if touch action or 'ctrl' key pressed
-            e.ctrlKey || touch); 
+            e.ctrlKey || touch,
+            x, y,); 
         }      
         break;
       case "select_vertex":
