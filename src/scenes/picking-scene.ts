@@ -79,6 +79,14 @@ export class PickingScene {
       : null;
   }
 
+  getVisibleSourceMeshByColor(color: string): MeshBgSm {
+    const sourceMesh = this._sourceMeshByPickingColor.get(color);
+    if (!sourceMesh || !ColorRgbRmo.getFromMesh(sourceMesh)?.opacity) {
+      return null;
+    }
+    return sourceMesh;
+  }
+
   private getSourceMeshAtPosition(camera: PerspectiveCamera, 
     renderer: WebGLRenderer, position: Vector2): MeshBgSm {   
     const context = renderer.getContext();  

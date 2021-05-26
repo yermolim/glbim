@@ -43,25 +43,10 @@ export class PickingService {
     const position = renderService.convertClientToCanvas(clientX, clientY); 
     return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
   }
-  
-  getSnapPointAt(renderService: RenderService, clientX: number, clientY: number): SnapPoint {
-    const position = renderService.convertClientToCanvas(clientX, clientY);
-    const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
 
-    const point = pickingMesh
-      ? this.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
-      : null;
-
-    const snapPoint = point
-      ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) } 
-      : null;
-
-    return snapPoint;
-  }  
-
-  getMeshIdsInArea(renderService: RenderService, 
+  getMeshesInArea(renderService: RenderService, 
     clientStartX: number, clientStartY: number, 
-    clientEndX: number, clientEndY: number): string[] {
+    clientEndX: number, clientEndY: number): MeshBgSm[] {
     
     const canvasStart = renderService.convertClientToCanvas(clientStartX, clientStartY);
     const canvasEnd = renderService.convertClientToCanvas(clientEndX, clientEndY);     
@@ -72,9 +57,16 @@ export class PickingService {
     const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);    
 
     const centerPointTemp = new Vector3();
-    const ids: string[] = [];
+    const meshes: MeshBgSm[] = [];
     for (const x of this.scene.children) {
       if (!(x instanceof Mesh)) {
+        // not a mesh. ignore it
+        continue;
+      }
+
+      const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(x.userData.color);
+      if (!sourceMesh) {
+        // the mesh is not visible. ignore it
         continue;
       }
 
@@ -98,21 +90,25 @@ export class PickingService {
       }
 
       // add the mesh source id to the array
-      ids.push(x.userData.sourceId);
+      meshes.push(sourceMesh);
     }
-
-    return ids;
+  
+    return meshes;
   }
+  
+  getSnapPointAt(renderService: RenderService, clientX: number, clientY: number): SnapPoint {
+    const position = renderService.convertClientToCanvas(clientX, clientY);
+    const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
 
-  getMeshesInArea(renderService: RenderService, 
-    clientStartX: number, clientStartY: number, 
-    clientEndX: number, clientEndY: number): MeshBgSm[] {
+    const point = pickingMesh
+      ? this.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
+      : null;
 
-    const ids = this.getMeshIdsInArea(renderService, 
-      clientStartX, clientStartY, clientEndX, clientEndY);
-    
-    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
-    return found;
+    const snapPoint = point
+      ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) } 
+      : null;
+
+    return snapPoint;
   }
 
   private addMesh(mesh: MeshBgSm) {        

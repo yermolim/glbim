@@ -2890,6 +2890,14 @@ class PickingScene {
             ? this._pickingMeshBySourceMesh.get(sourceMesh)
             : null;
     }
+    getVisibleSourceMeshByColor(color) {
+        var _a;
+        const sourceMesh = this._sourceMeshByPickingColor.get(color);
+        if (!sourceMesh || !((_a = ColorRgbRmo.getFromMesh(sourceMesh)) === null || _a === void 0 ? void 0 : _a.opacity)) {
+            return null;
+        }
+        return sourceMesh;
+    }
     getSourceMeshAtPosition(camera, renderer, position) {
         const context = renderer.getContext();
         this._pickingMeshBySourceMesh.forEach((picking, source) => {
@@ -2962,18 +2970,7 @@ class PickingService {
         const position = renderService.convertClientToCanvas(clientX, clientY);
         return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
     }
-    getSnapPointAt(renderService, clientX, clientY) {
-        const position = renderService.convertClientToCanvas(clientX, clientY);
-        const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
-        const point = pickingMesh
-            ? this.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
-            : null;
-        const snapPoint = point
-            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
-            : null;
-        return snapPoint;
-    }
-    getMeshIdsInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY) {
+    getMeshesInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY) {
         const canvasStart = renderService.convertClientToCanvas(clientStartX, clientStartY);
         const canvasEnd = renderService.convertClientToCanvas(clientEndX, clientEndY);
         const minAreaCX = Math.min(canvasStart.x, canvasEnd.x);
@@ -2981,9 +2978,13 @@ class PickingService {
         const maxAreaCX = Math.max(canvasStart.x, canvasEnd.x);
         const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);
         const centerPointTemp = new Vector3();
-        const ids = [];
+        const meshes = [];
         for (const x of this.scene.children) {
             if (!(x instanceof Mesh)) {
+                continue;
+            }
+            const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(x.userData.color);
+            if (!sourceMesh) {
                 continue;
             }
             if (x.geometry.boundingSphere === null) {
@@ -2999,14 +3000,20 @@ class PickingService {
                 || canvasCoords.y > maxAreaCY) {
                 continue;
             }
-            ids.push(x.userData.sourceId);
+            meshes.push(sourceMesh);
         }
-        return ids;
+        return meshes;
     }
-    getMeshesInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY) {
-        const ids = this.getMeshIdsInArea(renderService, clientStartX, clientStartY, clientEndX, clientEndY);
-        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
-        return found;
+    getSnapPointAt(renderService, clientX, clientY) {
+        const position = renderService.convertClientToCanvas(clientX, clientY);
+        const pickingMesh = this._pickingScene.getPickingMeshAt(renderService.camera, renderService.renderer, position);
+        const point = pickingMesh
+            ? this.getMeshSnapPointAtPosition(renderService.camera, renderService.renderer, position, pickingMesh)
+            : null;
+        const snapPoint = point
+            ? { meshId: pickingMesh.userData.sourceId, position: Vec4DoubleCS.fromVector3(point) }
+            : null;
+        return snapPoint;
     }
     addMesh(mesh) {
         this._pickingScene.add(mesh);
@@ -3205,9 +3212,8 @@ class SelectionService {
         this.applySelection(renderService, meshes, true, false);
     }
     selectMeshesInArea(renderService, previousSelection, clientMinX, clientMinY, clientMaxX, clientMaxY) {
-        const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
-        const idSet = new Set(ids);
-        const { found } = this._loaderService.findMeshesByIds(idSet);
+        const found = this._pickingService.getMeshesInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
+        const idSet = new Set(found.map(x => x.userData.id));
         let meshes;
         if (previousSelection === "keep") {
             meshes = [...found, ...this._selectedMeshes];
