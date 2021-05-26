@@ -482,11 +482,21 @@ export class GltfViewer {
       // the pointer moved away from the 'down' point.
 
       if (this._interactionMode === "select_mesh" && allowArea) {
+        let previousSelection: "remove" | "keep" | "subtract";
+        if (e.ctrlKey || touch) {
+          // add to selection if touch action or 'ctrl' key pressed
+          previousSelection = "keep";
+        } else if (e.altKey) {
+          // subtract from selection if 'alt' key pressed
+          previousSelection = "subtract";
+        } else {
+          // replace selection
+          previousSelection = "remove";
+        }
+
         // apply area selection if the corresponding mode is set
         this._selectionService.selectMeshesInArea(this._renderService, 
-          // add to selection if touch action or 'ctrl' key pressed
-          e.ctrlKey || touch,
-          downX, downY, x, y);
+          previousSelection, downX, downY, x, y);
         this._highlightService.clearHighlight(this._renderService);
       }
       this.clearDownPoint();

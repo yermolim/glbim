@@ -3196,12 +3196,16 @@ class SelectionService {
         }
         this.selectMeshes(renderService, meshes, true, false);
     }
-    selectMeshesInArea(renderService, keepPreviousSelection, clientMinX, clientMinY, clientMaxX, clientMaxY) {
+    selectMeshesInArea(renderService, previousSelection, clientMinX, clientMinY, clientMaxX, clientMaxY) {
         const ids = this._pickingService.getMeshIdsInArea(renderService, clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
-        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
+        const idSet = new Set(ids);
+        const { found } = this._loaderService.findMeshesByIds(idSet);
         let meshes;
-        if (keepPreviousSelection) {
+        if (previousSelection === "keep") {
             meshes = [...found, ...this._selectedMeshes];
+        }
+        else if (previousSelection === "subtract") {
+            meshes = [...this._selectedMeshes.filter(x => !idSet.has(x.userData.id))];
         }
         else {
             meshes = found;
@@ -3492,7 +3496,17 @@ class GltfViewer {
             if (Math.abs(x - downX) > maxDiff
                 || Math.abs(y - downY) > maxDiff) {
                 if (this._interactionMode === "select_mesh" && allowArea) {
-                    this._selectionService.selectMeshesInArea(this._renderService, e.ctrlKey || touch, downX, downY, x, y);
+                    let previousSelection;
+                    if (e.ctrlKey || touch) {
+                        previousSelection = "keep";
+                    }
+                    else if (e.altKey) {
+                        previousSelection = "subtract";
+                    }
+                    else {
+                        previousSelection = "remove";
+                    }
+                    this._selectionService.selectMeshesInArea(this._renderService, previousSelection, downX, downY, x, y);
                     this._highlightService.clearHighlight(this._renderService);
                 }
                 this.clearDownPoint();

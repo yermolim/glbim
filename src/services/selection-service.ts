@@ -116,16 +116,19 @@ export class SelectionService {
     this.selectMeshes(renderService, meshes, true, false);
   }
   
-  selectMeshesInArea(renderService: RenderService, keepPreviousSelection: boolean,
+  selectMeshesInArea(renderService: RenderService, previousSelection: "remove" | "keep" | "subtract",
     clientMinX: number, clientMinY: number, clientMaxX: number, clientMaxY: number) {
 
     const ids = this._pickingService.getMeshIdsInArea(renderService,
       clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
+    const idSet = new Set<string>(ids);
     
-    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
+    const { found } = this._loaderService.findMeshesByIds(idSet);
     let meshes: MeshBgSm[];
-    if (keepPreviousSelection) {
+    if (previousSelection === "keep") {
       meshes = [...found, ...this._selectedMeshes];
+    } else if (previousSelection === "subtract") {
+      meshes = [...this._selectedMeshes.filter(x => !idSet.has(x.userData.id))];      
     } else {
       meshes = found;
     }
