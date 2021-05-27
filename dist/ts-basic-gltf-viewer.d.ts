@@ -118,6 +118,7 @@ export declare class GltfViewer {
 	modelsOpenedChange$: Observable<ModelOpenedInfo[]>;
 	meshesSelectionChange$: Observable<Set<string>>;
 	meshesManualSelectionChange$: Observable<Set<string>>;
+	meshesHiddenChange$: Observable<Set<string>>;
 	snapPointsHighlightChange$: Observable<SnapPoint>;
 	snapPointsManualSelectionChange$: Observable<SnapPoint[]>;
 	markersChange$: Observable<MarkerInfo[]>;
@@ -156,6 +157,8 @@ export declare class GltfViewer {
 	selectItems(ids: string[]): void;
 	isolateItems(ids: string[]): void;
 	zoomToItems(ids: string[]): void;
+	hideSelectedItems(): void;
+	unhideAllItems(): void;
 	getSelectedItems(): Set<string>;
 	setMarkers(markers: MarkerInfo[]): void;
 	selectMarkers(ids: string[]): void;

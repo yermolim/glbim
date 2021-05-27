@@ -3155,9 +3155,7 @@ class SelectionService {
         this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
     }
     select(renderService, ids) {
-        if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
-            return;
-        }
+        ids || (ids = []);
         if (this._loaderService.loadingInProgress) {
             this._queuedSelection = { ids, isolate: false };
             return;
@@ -3237,15 +3235,11 @@ class SelectionService {
             this.findAndSelectMeshes(renderService, ids, isolate);
         }
     }
-    reset(renderService) {
-        this.clearSelection(renderService);
-        this.clearIsolation(renderService);
-    }
     findAndSelectMeshes(renderService, ids, isolate) {
-        const { found } = this._loaderService.findMeshesByIds(new Set(ids));
-        if (found.length) {
-            this.applySelection(renderService, found, false, isolate);
-        }
+        const meshes = (ids === null || ids === void 0 ? void 0 : ids.length)
+            ? this._loaderService.findMeshesByIds(new Set(ids)).found
+            : [];
+        this.applySelection(renderService, meshes, false, isolate);
     }
     clearSelection(renderService) {
         for (const mesh of this._selectedMeshes) {
@@ -3262,7 +3256,8 @@ class SelectionService {
         this._isolatedMeshes.length = 0;
     }
     applySelection(renderService, meshes, manual, isolateSelected) {
-        this.reset(renderService);
+        this.clearSelection(renderService);
+        this.clearIsolation(renderService);
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
             this.emitSelectionChanged(renderService, manual, true);
             return null;
@@ -3301,10 +3296,17 @@ class SelectionService {
 
 class ColoringService {
     constructor(loaderService, selectionService) {
-        this._queuedColoring = null;
+        this._hiddenIds = new BehaviorSubject(new Set());
+        this._hiddenColoring = {
+            color: 0,
+            opacity: 0,
+            ids: []
+        };
+        this._queuedColorings = null;
+        this._activeColorings = null;
         this._coloredMeshes = [];
         this.onLoaderModelUnloaded = (modelGuid) => {
-            this.removeFromColoringArrays(modelGuid);
+            this.removeModelMeshesFromColoringArrays(modelGuid);
         };
         if (!loaderService) {
             throw new Error("LoaderService is not defined");
@@ -3315,57 +3317,80 @@ class ColoringService {
         this._loaderService = loaderService;
         this._selectionService = selectionService;
         this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
+        this.meshesHiddenChange$ = this._hiddenIds.asObservable();
     }
     destroy() {
         this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
+        this._hiddenIds.complete();
     }
     color(renderService, coloringInfos) {
         if (this._loaderService.loadingInProgress) {
-            this._queuedColoring = coloringInfos;
+            this._queuedColorings = coloringInfos;
             return;
         }
-        this.resetSelectionAndColorMeshes(renderService, coloringInfos);
+        this.resetSelectionAndApplyColoring(renderService, coloringInfos);
     }
     runQueuedColoring(renderService) {
-        if (this._queuedColoring) {
-            this.resetSelectionAndColorMeshes(renderService, this._queuedColoring);
+        if (this._queuedColorings) {
+            this.resetSelectionAndApplyColoring(renderService, this._queuedColorings);
         }
     }
-    removeFromColoringArrays(modelGuid) {
+    hideSelected(renderService) {
+        const selectedIds = this._selectionService.selectedIds;
+        const idSet = new Set([...this._hiddenColoring.ids, ...selectedIds]);
+        this.setHiddenIds(idSet);
+        this.resetSelectionAndApplyColoring(renderService, this._activeColorings);
+    }
+    unhideAll(renderService) {
+        this.setHiddenIds(new Set());
+        this.resetSelectionAndApplyColoring(renderService, this._activeColorings);
+    }
+    removeModelMeshesFromColoringArrays(modelGuid) {
         this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
     }
-    resetSelectionAndColorMeshes(renderService, coloringInfos) {
-        this._selectionService.reset(renderService);
+    resetSelectionAndApplyColoring(renderService, coloringInfos) {
+        if (!renderService) {
+            throw new Error("Render service is not defined");
+        }
+        this._selectionService.select(renderService, []);
+        this.clearMeshesColoring(renderService);
         this.colorMeshes(renderService, coloringInfos);
     }
     colorMeshes(renderService, coloringInfos) {
-        this.removeColoring(renderService);
-        if (coloringInfos === null || coloringInfos === void 0 ? void 0 : coloringInfos.length) {
-            for (const info of coloringInfos) {
-                const color = new Color(info.color);
-                const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
-                info.ids.forEach(x => {
-                    const meshes = this._loaderService.getLoadedMeshesById(x);
-                    if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
-                        meshes.forEach(mesh => {
-                            mesh.userData.colored = true;
-                            ColorRgbRmo.setCustomToMesh(mesh, customColor);
-                            renderService.enqueueMeshForColorUpdate(mesh);
-                            this._coloredMeshes.push(mesh);
-                        });
-                    }
+        const coloredMeshes = new Set();
+        coloringInfos || (coloringInfos = []);
+        for (const info of [...coloringInfos, this._hiddenColoring]) {
+            const color = new Color(info.color);
+            const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
+            for (const id of info.ids) {
+                const meshes = this._loaderService.getLoadedMeshesById(id);
+                if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
+                    continue;
+                }
+                meshes.forEach(mesh => {
+                    mesh.userData.colored = true;
+                    ColorRgbRmo.setCustomToMesh(mesh, customColor);
+                    renderService.enqueueMeshForColorUpdate(mesh);
+                    coloredMeshes.add(mesh);
                 });
             }
         }
+        this._activeColorings = coloringInfos;
+        this._coloredMeshes = [...coloredMeshes];
         renderService.render();
     }
-    removeColoring(renderService) {
+    clearMeshesColoring(renderService) {
         for (const mesh of this._coloredMeshes) {
             mesh.userData.colored = undefined;
             ColorRgbRmo.deleteFromMesh(mesh, true);
             renderService.enqueueMeshForColorUpdate(mesh);
         }
-        this._coloredMeshes.length = 0;
+        this._coloredMeshes = [];
+        this._activeColorings = [];
+    }
+    setHiddenIds(idSet) {
+        this._hiddenColoring.ids = [...idSet];
+        this._hiddenIds.next(idSet);
     }
 }
 
@@ -3739,6 +3764,12 @@ class GltfViewer {
         }
         this._renderService.renderWholeScene();
     }
+    hideSelectedItems() {
+        this._coloringService.hideSelected(this._renderService);
+    }
+    unhideAllItems() {
+        this._coloringService.unhideAll(this._renderService);
+    }
     getSelectedItems() {
         return this._selectionService.selectedIds;
     }
@@ -3775,11 +3806,11 @@ class GltfViewer {
             this._selectionService.runQueuedSelection(this._renderService);
             yield this._renderService.updateRenderSceneAsync();
         }));
-        this.loadingStateChange$ = this._loaderService.loadingStateChange$;
-        this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
-        this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
-        this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
-        this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;
+        this.loadingStateChange$ = this._loaderService.loadingStateChange$.pipe();
+        this.modelLoadingStart$ = this._loaderService.modelLoadingStart$.pipe();
+        this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$.pipe();
+        this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$.pipe();
+        this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$.pipe();
     }
     initCameraService() {
         this._cameraService = new CameraService(this._container, () => {
@@ -3789,7 +3820,7 @@ class GltfViewer {
         if (this._options.cameraControlsDisabled) {
             this._cameraService.disableControls();
         }
-        this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
+        this.cameraPositionChange$ = this._cameraService.cameraPositionChange$.pipe();
     }
     initPickingService() {
         this._pickingService = new PickingService(this._loaderService);
@@ -3800,21 +3831,22 @@ class GltfViewer {
     initSelectionService() {
         this._selectionService = new SelectionService(this._loaderService, this._pickingService);
         this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
-        this.meshesSelectionChange$ = this._selectionService.selectionChange$;
-        this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
+        this.meshesSelectionChange$ = this._selectionService.selectionChange$.pipe();
+        this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$.pipe();
     }
     initColoringService() {
         this._coloringService = new ColoringService(this._loaderService, this._selectionService);
+        this.meshesHiddenChange$ = this._coloringService.meshesHiddenChange$.pipe();
     }
     initScenesService() {
         this._scenesService = new ScenesService(this._container, this._cameraService, this._options);
-        this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$;
-        this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$;
-        this.markersChange$ = this._scenesService.hudScene.markers.markersChange$;
-        this.markersSelectionChange$ = this._scenesService.hudScene.markers.markersSelectionChange$;
-        this.markersManualSelectionChange$ = this._scenesService.hudScene.markers.markersManualSelectionChange$;
-        this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$;
-        this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
+        this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$.pipe();
+        this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$.pipe();
+        this.markersChange$ = this._scenesService.hudScene.markers.markersChange$.pipe();
+        this.markersSelectionChange$ = this._scenesService.hudScene.markers.markersSelectionChange$.pipe();
+        this.markersManualSelectionChange$ = this._scenesService.hudScene.markers.markersManualSelectionChange$.pipe();
+        this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$.pipe();
+        this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$.pipe();
     }
     initHudService() {
         this._hudService = new HudService(this._scenesService, this._pickingService);

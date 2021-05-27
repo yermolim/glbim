@@ -40,6 +40,8 @@ export class GltfViewer {
   meshesSelectionChange$: Observable<Set<string>>;
   meshesManualSelectionChange$: Observable<Set<string>>; 
 
+  meshesHiddenChange$: Observable<Set<string>>; 
+
   snapPointsHighlightChange$: Observable<SnapPoint>;
   snapPointsManualSelectionChange$: Observable<SnapPoint[]>;  
   
@@ -308,6 +310,7 @@ export class GltfViewer {
     return this._loaderService?.openedModelInfos;
   }
 
+  // items
   /**
    * paint items using the specified coloring information
    * @param coloringInfos coloring information objects
@@ -349,6 +352,20 @@ export class GltfViewer {
       }
     }
     this._renderService.renderWholeScene();
+  }
+
+  /**
+   * hide the currently selected items from the view (sets their opacity to 0)
+   */
+  hideSelectedItems() {
+    this._coloringService.hideSelected(this._renderService);
+  }
+
+  /**
+   * reveal the currently hidden items (makes them opaque again)
+   */
+  unhideAllItems() {
+    this._coloringService.unhideAll(this._renderService);
   }
 
   /**
@@ -555,11 +572,11 @@ export class GltfViewer {
         await this._renderService.updateRenderSceneAsync();
       });
 
-    this.loadingStateChange$ = this._loaderService.loadingStateChange$;
-    this.modelLoadingStart$ = this._loaderService.modelLoadingStart$;
-    this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$;
-    this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$;
-    this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$;  
+    this.loadingStateChange$ = this._loaderService.loadingStateChange$.pipe();
+    this.modelLoadingStart$ = this._loaderService.modelLoadingStart$.pipe();
+    this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$.pipe();
+    this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$.pipe();
+    this.modelsOpenedChange$ = this._loaderService.modelsOpenedChange$.pipe();  
   }
 
   private initCameraService() {
@@ -569,7 +586,7 @@ export class GltfViewer {
     if (this._options.cameraControlsDisabled) {
       this._cameraService.disableControls();
     }
-    this.cameraPositionChange$ = this._cameraService.cameraPositionChange$;
+    this.cameraPositionChange$ = this._cameraService.cameraPositionChange$.pipe();
   }
 
   private initPickingService() {
@@ -584,24 +601,26 @@ export class GltfViewer {
     this._selectionService = new SelectionService(this._loaderService, this._pickingService);
     this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
     
-    this.meshesSelectionChange$ = this._selectionService.selectionChange$;
-    this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$;
+    this.meshesSelectionChange$ = this._selectionService.selectionChange$.pipe();
+    this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$.pipe();
   }
 
   private initColoringService() {    
     this._coloringService = new ColoringService(this._loaderService, this._selectionService);
+
+    this.meshesHiddenChange$ = this._coloringService.meshesHiddenChange$.pipe();
   }
 
   private initScenesService() {
     this._scenesService = new ScenesService(this._container, this._cameraService, this._options);
 
-    this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$;
-    this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$;
-    this.markersChange$ = this._scenesService.hudScene.markers.markersChange$;
-    this.markersSelectionChange$ = this._scenesService.hudScene.markers.markersSelectionChange$;
-    this.markersManualSelectionChange$ = this._scenesService.hudScene.markers.markersManualSelectionChange$;
-    this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$;
-    this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$;
+    this.snapPointsHighlightChange$ = this._scenesService.hudScene.pointSnap.snapPointsHighlightChange$.pipe();
+    this.snapPointsManualSelectionChange$ = this._scenesService.hudScene.pointSnap.snapPointsManualSelectionChange$.pipe();
+    this.markersChange$ = this._scenesService.hudScene.markers.markersChange$.pipe();
+    this.markersSelectionChange$ = this._scenesService.hudScene.markers.markersSelectionChange$.pipe();
+    this.markersManualSelectionChange$ = this._scenesService.hudScene.markers.markersManualSelectionChange$.pipe();
+    this.markersHighlightChange$ = this._scenesService.hudScene.markers.markersHighlightChange$.pipe();
+    this.distanceMeasureChange$ = this._scenesService.hudScene.distanceMeasurer.distanceMeasureChange$.pipe();
   }
   
   private initHudService() {

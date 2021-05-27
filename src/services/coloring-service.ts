@@ -1,3 +1,4 @@
+import { BehaviorSubject, Observable } from "rxjs";
 import { Color } from "three";
 
 import { ColoringInfo, MeshBgSm } from "../common-types";
@@ -9,11 +10,21 @@ import { SelectionService } from "./selection-service";
 import { RenderService } from "./render-service";
 
 export class ColoringService { 
+  meshesHiddenChange$: Observable<Set<string>>; 
+  private _hiddenIds = new BehaviorSubject<Set<string>>(new Set()); 
+   
   private readonly _loaderService: ModelLoaderService;
   private readonly _selectionService: SelectionService;
 
-  private _queuedColoring: ColoringInfo[] = null;
-  private _coloredMeshes: MeshBgSm[] = [];
+  private readonly _hiddenColoring: ColoringInfo = {
+    color: 0,
+    opacity: 0,
+    ids: []
+  };
+  private _queuedColorings: ColoringInfo[] = null;
+  private _activeColorings: ColoringInfo[] = null;
+
+  private _coloredMeshes: MeshBgSm[] = [];  
 
   constructor(loaderService: ModelLoaderService, selectionService: SelectionService) {
     if (!loaderService) {
@@ -27,74 +38,101 @@ export class ColoringService {
     this._selectionService = selectionService;
     
     this._loaderService.addModelCallback("model-unloaded", this.onLoaderModelUnloaded);
+
+    this.meshesHiddenChange$ = this._hiddenIds.asObservable();
   }
 
   destroy() {
     this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
+    this._hiddenIds.complete();
   }
 
   color(renderService: RenderService, coloringInfos: ColoringInfo[]) {
     if (this._loaderService.loadingInProgress) {
-      this._queuedColoring = coloringInfos;
+      this._queuedColorings = coloringInfos;
       return;
     }
-
-    this.resetSelectionAndColorMeshes(renderService, coloringInfos);
+    this.resetSelectionAndApplyColoring(renderService, coloringInfos);
   }
   
   runQueuedColoring(renderService: RenderService) {
-    if (this._queuedColoring) {
-      this.resetSelectionAndColorMeshes(renderService, this._queuedColoring);
+    if (this._queuedColorings) {
+      this.resetSelectionAndApplyColoring(renderService, this._queuedColorings);
     }
+  }
+
+  hideSelected(renderService: RenderService) {
+    const selectedIds = this._selectionService.selectedIds;
+    const idSet = new Set<string>([...this._hiddenColoring.ids, ...selectedIds]);
+    this.setHiddenIds(idSet);
+    this.resetSelectionAndApplyColoring(renderService, this._activeColorings);
+  }
+
+  unhideAll(renderService: RenderService) {
+    this.setHiddenIds(new Set<string>());
+    this.resetSelectionAndApplyColoring(renderService, this._activeColorings);
   }
   
   /**
    * remove all meshes with the specified model GUID from the coloring arrays
    * @param modelGuid GUID of model, which meshes must be removed from the coloring arrays
    */
-  removeFromColoringArrays(modelGuid: string) {
+  private removeModelMeshesFromColoringArrays(modelGuid: string) {
     this._coloredMeshes = this._coloredMeshes.filter(x => x.userData.modelGuid !== modelGuid);
   }
 
   private onLoaderModelUnloaded = (modelGuid: string) => {    
-    this.removeFromColoringArrays(modelGuid);
+    this.removeModelMeshesFromColoringArrays(modelGuid);
   };
 
-  private resetSelectionAndColorMeshes(renderService: RenderService, coloringInfos: ColoringInfo[]) {    
-    this._selectionService.reset(renderService);
+  private resetSelectionAndApplyColoring(renderService: RenderService, coloringInfos: ColoringInfo[]) { 
+    if (!renderService) {
+      throw new Error("Render service is not defined");
+    }
+
+    this._selectionService.select(renderService, []);
+    this.clearMeshesColoring(renderService);
     this.colorMeshes(renderService, coloringInfos);
   }
 
   private colorMeshes(renderService: RenderService, coloringInfos: ColoringInfo[]) {
-    this.removeColoring(renderService);
+    const coloredMeshes = new Set<MeshBgSm>();
 
-    if (coloringInfos?.length) {
-      for (const info of coloringInfos) {
-        const color = new Color(info.color);
-        const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
-        info.ids.forEach(x => {
-          const meshes = this._loaderService.getLoadedMeshesById(x);
-          if (meshes?.length) {
-            meshes.forEach(mesh => {
-              mesh.userData.colored = true;
-              ColorRgbRmo.setCustomToMesh(mesh, customColor);
-              renderService.enqueueMeshForColorUpdate(mesh);
-              this._coloredMeshes.push(mesh);
-            });
-          }
+    coloringInfos ||= [];
+    for (const info of [...coloringInfos, this._hiddenColoring]) {
+      const color = new Color(info.color);
+      const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
+      for (const id of info.ids) {
+        const meshes = this._loaderService.getLoadedMeshesById(id);
+        if (!meshes?.length) {
+          continue;
+        }
+        meshes.forEach(mesh => {
+          mesh.userData.colored = true;
+          ColorRgbRmo.setCustomToMesh(mesh, customColor);
+          renderService.enqueueMeshForColorUpdate(mesh);
+          coloredMeshes.add(mesh);
         });
       }
     }
+    this._activeColorings = coloringInfos;
 
+    this._coloredMeshes = [...coloredMeshes];
     renderService.render();
   }
 
-  private removeColoring(renderService: RenderService) {
+  private clearMeshesColoring(renderService: RenderService) {
     for (const mesh of this._coloredMeshes) {
       mesh.userData.colored = undefined;
       ColorRgbRmo.deleteFromMesh(mesh, true);
       renderService.enqueueMeshForColorUpdate(mesh);
     }
-    this._coloredMeshes.length = 0;
+    this._coloredMeshes = [];
+    this._activeColorings = [];
+  }
+
+  private setHiddenIds(idSet: Set<string>) {
+    this._hiddenColoring.ids = [...idSet];
+    this._hiddenIds.next(idSet);
   }
 }

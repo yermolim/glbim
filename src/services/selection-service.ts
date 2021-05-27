@@ -53,9 +53,7 @@ export class SelectionService {
   }
 
   select(renderService: RenderService, ids: string[]) {
-    if (!ids?.length) {
-      return;
-    }
+    ids ||= [];
 
     if (this._loaderService.loadingInProgress) {
       this._queuedSelection = {ids, isolate: false};
@@ -147,21 +145,17 @@ export class SelectionService {
     }
   }
 
-  reset(renderService: RenderService) {    
-    this.clearSelection(renderService);
-    this.clearIsolation(renderService);
-  }
-
   //#region private
   private onLoaderModelUnloaded = (modelGuid: string) => {    
     this.removeModelMeshesFromSelectionArrays(modelGuid);
   };
 
   private findAndSelectMeshes(renderService: RenderService, ids: string[], isolate: boolean) {    
-    const { found } = this._loaderService.findMeshesByIds(new Set<string>(ids));
-    if (found.length) {
-      this.applySelection(renderService, found, false, isolate);
-    }
+
+    const meshes = ids?.length
+      ? this._loaderService.findMeshesByIds(new Set<string>(ids)).found
+      : [];
+    this.applySelection(renderService, meshes, false, isolate);
   }
 
   private clearSelection(renderService: RenderService) {
@@ -183,7 +177,8 @@ export class SelectionService {
   private applySelection(renderService: RenderService, meshes: MeshBgSm[], 
     manual: boolean, isolateSelected: boolean) { 
       
-    this.reset(renderService);
+    this.clearSelection(renderService);
+    this.clearIsolation(renderService);
 
     if (!meshes?.length) {
       this.emitSelectionChanged(renderService, manual, true);

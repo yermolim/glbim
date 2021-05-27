@@ -3,12 +3,14 @@ import { GltfViewer, ModelFileInfo, ModelOpenedInfo } from "../gltf-viewer";
 import { GltfViewerOptions } from "../gltf-viewer-options";
 
 class DemoViewer {
-  static readonly containerSelector = "#gltf-viewer-container";
-  static readonly fileInputSelector = "#model-file-input";  
-  static readonly buttonOpenModelsSelector = "#btn-open-models";
-  static readonly buttonCloseModelSelector = "#btn-close-model";
-  static readonly buttonFitModelsToViewSelector = "#btn-fit-models";
-  static readonly buttonFitElementsToViewSelector = "#btn-fit-elements";
+  static readonly containerSel = "#gltf-viewer-container";
+  static readonly fileInputSel = "#model-file-input";  
+  static readonly btnOpenModelsSel = "#btn-open-models";
+  static readonly btnCloseModelSel = "#btn-close-model";
+  static readonly btnFitModelsToViewSel = "#btn-fit-models";
+  static readonly btnFitElementsToViewSel = "#btn-fit-elements";
+  static readonly btnHideSelectedSel = "#btn-hide-selected";
+  static readonly btnUnhideAllSel = "#btn-unhide-all";
 
   private readonly _container: HTMLElement;
   private readonly _fileInput: HTMLInputElement;
@@ -17,6 +19,8 @@ class DemoViewer {
   private readonly _btnCloseModel: HTMLDivElement;
   private readonly _btnFitModelsToView: HTMLDivElement;
   private readonly _btnFitElementsToView: HTMLDivElement;
+  private readonly _btnHideSelected: HTMLDivElement;
+  private readonly _btnUnhideAll: HTMLDivElement;
 
   private readonly _viewer: GltfViewer;
 
@@ -24,19 +28,23 @@ class DemoViewer {
 
   private _openedModelInfos: ModelOpenedInfo[] = [];
   private _selectedMeshIds: string[] = [];
+  private _hiddenMeshIds: string[] = [];
 
   private _currentModelId = 0;
   private _urlById = new Map<number, string>();
 
   constructor() {
-    this._container = document.querySelector(DemoViewer.containerSelector);
-    this._fileInput = document.querySelector(DemoViewer.fileInputSelector);
-    this._btnOpenModels = document.querySelector(DemoViewer.buttonOpenModelsSelector);
-    this._btnCloseModel = document.querySelector(DemoViewer.buttonCloseModelSelector);
-    this._btnFitModelsToView = document.querySelector(DemoViewer.buttonFitModelsToViewSelector);
-    this._btnFitElementsToView = document.querySelector(DemoViewer.buttonFitElementsToViewSelector);
+    this._container = document.querySelector(DemoViewer.containerSel);
+    this._fileInput = document.querySelector(DemoViewer.fileInputSel);
 
-    this._viewer = new GltfViewer(DemoViewer.containerSelector, "/assets/draco/", new GltfViewerOptions(<GltfViewerOptions>{
+    this._btnOpenModels = document.querySelector(DemoViewer.btnOpenModelsSel);
+    this._btnCloseModel = document.querySelector(DemoViewer.btnCloseModelSel);
+    this._btnFitModelsToView = document.querySelector(DemoViewer.btnFitModelsToViewSel);
+    this._btnFitElementsToView = document.querySelector(DemoViewer.btnFitElementsToViewSel);
+    this._btnHideSelected = document.querySelector(DemoViewer.btnHideSelectedSel);
+    this._btnUnhideAll = document.querySelector(DemoViewer.btnUnhideAllSel);
+
+    this._viewer = new GltfViewer(DemoViewer.containerSel, "/assets/draco/", new GltfViewerOptions(<GltfViewerOptions>{
       axesHelperPlacement: "top-right",
       meshMergeType: "scene",      
     }));
@@ -69,6 +77,8 @@ class DemoViewer {
     });
     this._btnFitModelsToView.addEventListener("click", () => this._viewer.zoomToItems([]));
     this._btnFitElementsToView.addEventListener("click", () => this._viewer.zoomToItems(this._selectedMeshIds));
+    this._btnHideSelected.addEventListener("click", () => this._viewer.hideSelectedItems());
+    this._btnUnhideAll.addEventListener("click", () => this._viewer.unhideAllItems());
   }
 
   private initSubscriptions() {
@@ -82,8 +92,10 @@ class DemoViewer {
         }
         if (this._selectedMeshIds.length) {
           this._btnFitElementsToView.classList.remove("disabled");
+          this._btnHideSelected.classList.remove("disabled");
         } else {
           this._btnFitElementsToView.classList.add("disabled");
+          this._btnHideSelected.classList.add("disabled");
         }
       }),
       this._viewer.modelsOpenedChange$.subscribe(x => {
@@ -93,7 +105,15 @@ class DemoViewer {
         } else {
           this._btnFitModelsToView.classList.add("disabled");
         }
-      })
+      }),
+      this._viewer.meshesHiddenChange$.subscribe(x => {
+        this._hiddenMeshIds = [...x];
+        if (this._hiddenMeshIds.length) {
+          this._btnUnhideAll.classList.remove("disabled");
+        } else {
+          this._btnUnhideAll.classList.add("disabled");
+        }
+      }),
     );
   }
   
