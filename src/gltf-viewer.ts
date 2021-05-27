@@ -82,14 +82,14 @@ export class GltfViewer {
 
   /**
    * 
-   * @param containerId HTMLElement id
+   * @param containerSelector parent HTMLElement selector
    * @param dracoDecoderPath path to the folder with 'draco_decoder.js' file
    * @param options viewer options
    */
-  constructor(containerId: string, dracoDecoderPath: string, options: GltfViewerOptions) {
+  constructor(containerSelector: string, dracoDecoderPath: string, options: GltfViewerOptions) {
     this.initObservables();
 
-    this._container = document.getElementById(containerId);
+    this._container = document.getElementById(containerSelector) || document.querySelector(containerSelector);
     if (!this._container) {
       throw new Error("Container not found!");
     }

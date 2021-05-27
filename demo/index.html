@@ -21,7 +21,85 @@
         window.addEventListener("resize", mobileVhHack);
     </script>
     
-    <div id="gltf-viewer-container" class="abs-stretch"></div>
+    <input id="model-file-input" class="abs-hidden" type="file" accept="model/gltf-binary" multiple>
+
+    <div class="abs-stretch fl-column fl-ai-stretch fl-jc-stretch">
+        <div id="gltf-viewer-container" class="relative fl full-size">    
+            <div class="abs-topleft fl-column" style="margin: 3px;">    
+                <div class="fl-row">
+                    <div class="viewer-button active">
+                        <img src="assets/icons/icon_td_focus_auto.png"/>
+                    </div>
+                    <div class="viewer-button active">
+                        <img src="assets/icons/icon_td_navigation.png"/>
+                    </div>
+                    <div id="btn-fit-elements" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_fit_element.png"/>
+                    </div>
+                    <div id="btn-fit-models" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_fit_screen.png"/>
+                    </div>
+                    <div class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_hide.png"/>
+                    </div>
+                    <div class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_show_all.png"/>
+                    </div>
+                </div>                
+                <div class="fl-row">
+                    <div class="viewer-button active">
+                        <img src="assets/icons/icon_td_mode_select_elements.png"/>
+                    </div>
+                    <div class="viewer-button">
+                        <img src="assets/icons/icon_td_mode_select_point.png"/>
+                    </div>
+                    <div class="viewer-button">
+                        <img src="assets/icons/icon_td_mode_select_marker.png"/>
+                    </div>
+                    <div class="viewer-button">
+                        <img src="assets/icons/icon_td_mode_measure.png"/>
+                    </div>                
+                </div>  
+            </div>        
+            <div class="abs-bottomleft fl-column" style="margin: 3px;">           
+                <div class="fl-row">    
+                    <div class="viewer-button">
+                        <img src="assets/icons/icon_td_settings.png"/>
+                    </div>      
+                    <div class="viewer-button active">
+                        <img src="assets/icons/icon_td_menu.png"/>
+                    </div>               
+                </div>             
+                <div class="fl-row">   
+                    <div id="btn-open-models" class="viewer-button">
+                        <img src="assets/icons/icon_td_add.png"/>
+                    </div>    
+                    <div id="btn-close-model" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_close.png"/>
+                    </div>               
+                </div>                 
+            </div>
+        </div>
+        <div class="absolute" style="width: 600px; height: 800px; max-width: 60%; max-height: 75%;
+            right: 10px; bottom: 10px; background-color: bisque; border-radius: 18px;">
+        </div>
+    </div>
+    
+
+    <script type="module">
+        const viewerContainer = document.getElementById("gltf-viewer-container");
+        const resizeObserver = new ResizeObserver(() => {
+            const { width } = viewerContainer.getBoundingClientRect();
+            if (width < 720) {
+                viewerContainer.classList.add("mobile");
+            } else {
+                viewerContainer.classList.remove("mobile");
+            }
+        });
+        resizeObserver.observe(viewerContainer);
+    </script>
+
+
 
     <script src="demo.js" type="module"></script>  
 </body>

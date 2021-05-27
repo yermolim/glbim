@@ -4,6 +4,7 @@
 /tmp
 /tsc
 /demo/assets/draco
+/demo/assets/models/_private
 /demo/*.js
 
 # dependencies

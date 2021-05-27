@@ -3439,7 +3439,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 class GltfViewer {
-    constructor(containerId, dracoDecoderPath, options) {
+    constructor(containerSelector, dracoDecoderPath, options) {
         this._subscriptions = [];
         this._pointerEventHelper = PointerEventHelper.default;
         this._modeChange = new BehaviorSubject(null);
@@ -3563,7 +3563,7 @@ class GltfViewer {
             this._contextLoss.next(false);
         };
         this.initObservables();
-        this._container = document.getElementById(containerId);
+        this._container = document.getElementById(containerSelector) || document.querySelector(containerSelector);
         if (!this._container) {
             throw new Error("Container not found!");
         }
