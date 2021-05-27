@@ -194,12 +194,14 @@ export class RenderScene {
     const chunkSize = 100;
     const processChunk = (chunk: MeshBgSm[]) => {    
       chunk.forEach(x => {
+        // get the mesh current positions and indices
         x.updateMatrixWorld();
         const geometry = <BufferGeometry>x.geometry
           .clone()
           .applyMatrix4(x.matrixWorld);
         const positions = geometry.getAttribute("position").array;
         const indices = geometry.getIndex().array;
+        // fill indices
         const meshIndices = new Uint32Array(indices.length);
         indicesBySourceMesh.set(x, meshIndices);
         for (let i = 0; i < indices.length; i++) {
@@ -207,6 +209,7 @@ export class RenderScene {
           indexBuffer.setX(indicesOffset++, index);
           meshIndices[i] = index;
         }
+        // fill positions and colors
         for (let i = 0; i < positions.length;) {   
           const rgbrmo = ColorRgbRmo.getFromMesh(x);
           colorBuffer.setXYZ(positionsOffset, rgbrmo.rByte, rgbrmo.gByte, rgbrmo.bByte);
