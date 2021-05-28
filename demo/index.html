@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>   
+    <meta charset="UTF-8">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="data:,">
     <base href="/">
-    <meta charset="UTF-8">
     <meta name="description" content="TS Basic Gltf Viewer Demo">
     <meta name="author" content="Volodymyr Yermolenko">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
@@ -21,85 +21,179 @@
         window.addEventListener("resize", mobileVhHack);
     </script>
     
-    <input id="model-file-input" class="abs-hidden" type="file" accept="model/gltf-binary" multiple>
+    <input id="model-file-input" class="abs-hidden" type="file" accept="model/gltf-binary" multiple/>
 
     <div class="abs-stretch fl-column fl-ai-stretch fl-jc-stretch">
-        <div id="gltf-viewer-container" class="relative fl full-size">    
-            <div class="abs-topleft fl-column" style="margin: 3px;">    
+        <div id="outer-container" class="relative fl full-size">    
+            <div id="viewer-container" class="abs-stretch"></div>
+            <div class="abs-topleft fl-column margin-3">    
                 <div class="fl-row">
-                    <div class="viewer-button active">
+                    <div id="btn-toggle-autofocus" title="Toggle autofocus on selection" class="viewer-button active">
                         <img src="assets/icons/icon_td_focus_auto.png"/>
                     </div>
-                    <div class="viewer-button active">
+                    <div id="btn-toggle-navigation" title="Toggle camera navigation" class="viewer-button active">
                         <img src="assets/icons/icon_td_navigation.png"/>
                     </div>
-                    <div id="btn-fit-elements" class="viewer-button disabled">
+                    <div id="btn-fit-elements" title="Fit selected elements to view" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_fit_element.png"/>
                     </div>
-                    <div id="btn-fit-models" class="viewer-button disabled">
+                    <div id="btn-fit-models" title="Fit scene to view" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_fit_screen.png"/>
                     </div>
-                    <div id="btn-hide-selected" class="viewer-button disabled">
+                    <div id="btn-hide-selected" title="Hide selected elements" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_hide.png"/>
                     </div>
-                    <div id="btn-unhide-all" class="viewer-button disabled">
+                    <div id="btn-unhide-all" title="Show all previously hidden elements" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_show_all.png"/>
                     </div>
                 </div>                
                 <div class="fl-row">
-                    <div class="viewer-button active">
+                    <div data-mode="select_mesh" title="Enable mesh selection mode" class="viewer-button active btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_select_elements.png"/>
                     </div>
-                    <div class="viewer-button">
+                    <div data-mode="select_vertex" title="Enable vertex selection mode" class="viewer-button btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_select_point.png"/>
                     </div>
-                    <div class="viewer-button">
+                    <div data-mode="select_sprite" title="Enable sprite selection mode" class="viewer-button btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_select_marker.png"/>
                     </div>
-                    <div class="viewer-button">
+                    <div data-mode="measure_distance" title="Enable distance measurement mode" class="viewer-button btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_measure.png"/>
                     </div>                
                 </div>  
             </div>        
-            <div class="abs-bottomleft fl-column" style="margin: 3px;">           
+            <div class="abs-bottomleft fl-column margin-3">           
                 <div class="fl-row">    
-                    <div class="viewer-button">
+                    <div id="btn-toggle-settings-overlay" title="Show/hide settings panel" class="viewer-button">
                         <img src="assets/icons/icon_td_settings.png"/>
                     </div>      
-                    <div class="viewer-button active">
+                    <div id="btn-toggle-data-overlay" title="Show/hide data panel" class="viewer-button active">
                         <img src="assets/icons/icon_td_menu.png"/>
                     </div>               
                 </div>             
                 <div class="fl-row">   
-                    <div id="btn-open-models" class="viewer-button">
+                    <div id="btn-open-models" title="Load models" class="viewer-button">
                         <img src="assets/icons/icon_td_add.png"/>
                     </div>    
-                    <div id="btn-close-model" class="viewer-button disabled">
+                    <div id="btn-close-model" title="Close the model of the selected element" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_close.png"/>
                     </div>               
                 </div>                 
             </div>
         </div>
-        <div class="absolute" style="width: 600px; height: 800px; max-width: 60%; max-height: 75%;
-            right: 10px; bottom: 10px; background-color: bisque; border-radius: 18px;">
+        <div id="measurements-overlay" class="overlay-panel hidden" style="width: 200px; height: 200px; max-width: 50%; max-height: 50%;
+            left: 10px; top: 90px; background-color: lightcyan;">
+            <p class="title bold">Measurement data</p>
+
+            <div class="height-10"></div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Start X:</p>
+                <p class="common"><span id="start-x-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Start Y:</p>
+                <p class="common"><span id="start-y-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Start Z:</p>
+                <p class="common"><span id="start-z-value">0</span><span> m</span></p>
+            </div>
+
+            <div class="height-10"></div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">End X:</p>
+                <p class="common"><span id="end-x-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">End Y:</p>
+                <p class="common"><span id="end-y-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">End Z:</p>
+                <p class="common"><span id="end-z-value">0</span><span> m</span></p>
+            </div>
+
+            <div class="height-10"></div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Distance X:</p>
+                <p class="common"><span id="distance-x-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Distance Y:</p>
+                <p class="common"><span id="distance-y-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Distance Z:</p>
+                <p class="common"><span id="distance-z-value">0</span><span> m</span></p>
+            </div>
+            <div class="fl-row fl-jc-sbetween">
+                <p class="common bold">Distance:</p>
+                <p class="common"><span id="distance-value">0</span><span> m</span></p>
+            </div>
         </div>
-    </div>
-    
+        <div id="data-overlay" class="overlay-panel" style="width: 600px; height: 800px; max-width: 60%; max-height: 75%;
+            right: 10px; bottom: 10px; background-color: bisque;">
+            <p class="title bold">Scene data</p>
+        </div>
+        <div id="settings-overlay" class="overlay-panel hidden" style="width: 250px; height: 300px; max-width: 60%; max-height: 50%;
+            left: 10px; bottom: 90px; background-color: lightsalmon;">
+            <p class="title bold">Settings</p>
+
+            <div class="height-10"></div>
+            <label class="checkbox" for="cb-aa">
+                <input id="cb-aa" type="checkbox" checked/> 
+                <span class="checkmark"></span>
+                <span>Enable anti-aliasing</span>
+            </label>
+            <label class="checkbox" for="cb-pl">
+                <input id="cb-pl" type="checkbox" checked/> 
+                <span class="checkmark"></span>
+                <span>Enable physical lights</span>
+            </label>
+            <label class="checkbox" for="cb-axes">
+                <input id="cb-axes" type="checkbox" checked/> 
+                <span class="checkmark"></span>
+                <span>Show axes helper</span>
+            </label>
+
+            <div class="height-10"></div>
+            <label for="select-mesh-merge-type">
+                <span>Mesh merge type</span>
+            </label>
+            <div class="select">
+                <select id="select-mesh-merge-type">
+                    <option value="">Disabled</option>
+                    <option value="model">Merge each model</option>
+                    <option value="scene" selected>Merge all scene</option>
+                </select>
+                <span class="focus"></span>
+            </div>
+            <label for="select-fast-render-type">
+                <span>Fast render type</span>
+            </label>
+            <div class="select">
+                <select id="select-fast-render-type">
+                    <option value="" selected>Disabled</option>
+                    <option value="aabb">AABB</option>
+                    <option value="ch">Convex hull</option>
+                </select>
+                <span class="focus"></span>
+            </div>
+        </div>
+    </div>    
 
     <script type="module">
-        const viewerContainer = document.getElementById("gltf-viewer-container");
+        const outerContainer = document.getElementById("outer-container");
         const resizeObserver = new ResizeObserver(() => {
-            const { width } = viewerContainer.getBoundingClientRect();
+            const { width } = outerContainer.getBoundingClientRect();
             if (width < 720) {
-                viewerContainer.classList.add("mobile");
+                outerContainer.classList.add("mobile");
             } else {
-                viewerContainer.classList.remove("mobile");
+                outerContainer.classList.remove("mobile");
             }
         });
-        resizeObserver.observe(viewerContainer);
+        resizeObserver.observe(outerContainer);
     </script>
-
-
 
     <script src="demo.js" type="module"></script>  
 </body>

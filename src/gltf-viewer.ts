@@ -97,7 +97,7 @@ export class GltfViewer {
     }
 
     this._options = new GltfViewerOptions(options);  
-    this._optionsChange.next(this._options);
+    this._optionsChange.next(Object.assign({}, this._options));
     
     // init services. the order is important
     this.initLoaderService(dracoDecoderPath);    
@@ -180,9 +180,9 @@ export class GltfViewer {
     let lightsUpdated = false;
     let colorsUpdated = false;
     let materialsUpdated = false;
-    let sceneUpdated = false;
+    let sceneUpdated = false;  
 
-    if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {
+    if (this._options.useAntialiasing !== oldOptions.useAntialiasing) {      
       this.initRenderService();
       rendererReinitialized = true;
     }
@@ -243,7 +243,7 @@ export class GltfViewer {
     
     this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
 
-    this._optionsChange.next(this._options);  
+    this._optionsChange.next(Object.assign({}, this._options));  
     return this._options;
   }
   

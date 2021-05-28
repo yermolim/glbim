@@ -3593,7 +3593,7 @@ class GltfViewer {
             throw new Error("Container not found!");
         }
         this._options = new GltfViewerOptions(options);
-        this._optionsChange.next(this._options);
+        this._optionsChange.next(Object.assign({}, this._options));
         this.initLoaderService(dracoDecoderPath);
         this.initCameraService();
         this.initPickingService();
@@ -3700,7 +3700,7 @@ class GltfViewer {
                 this._cameraService.enableControls();
             }
             this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
-            this._optionsChange.next(this._options);
+            this._optionsChange.next(Object.assign({}, this._options));
             return this._options;
         });
     }
