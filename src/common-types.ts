@@ -42,6 +42,8 @@ export interface ModelOpenedInfo {
   guid: string; 
   name: string; 
   handles: Set<string>;
+  meshCount: number;
+  vertexCount: number;
 }
 
 export interface ColoringInfo {
@@ -54,6 +56,7 @@ export interface ModelGeometryInfo {
   name: string;
   meshes: MeshBgSm[]; 
   handles: Set<string>; 
+  vertexCount: number;
 }
 
 export interface RenderGeometry {  

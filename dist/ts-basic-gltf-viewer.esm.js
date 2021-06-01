@@ -427,6 +427,7 @@ class ModelLoaderService {
         const scene = gltf.scene;
         scene.userData.guid = modelGuid;
         scene.name = name;
+        let vertexCount = 0;
         const meshes = [];
         const handles = new Set();
         scene.traverse(x => {
@@ -453,9 +454,10 @@ class ModelLoaderService {
                         callback(x);
                     }
                 }
+                vertexCount += x.geometry.getAttribute("position").count;
             }
         });
-        const modelInfo = { name, meshes, handles };
+        const modelInfo = { name, meshes, handles, vertexCount };
         this._loadedModels.add(modelInfo);
         this._loadedModelsByGuid.set(modelGuid, modelInfo);
         if (this._onModelLoaded.size) {
@@ -495,7 +497,13 @@ class ModelLoaderService {
     emitOpenedModelsChanged() {
         const modelOpenedInfos = [];
         for (const [modelGuid, model] of this._loadedModelsByGuid) {
-            modelOpenedInfos.push({ guid: modelGuid, name: model.name, handles: model.handles });
+            modelOpenedInfos.push({
+                guid: modelGuid,
+                name: model.name,
+                handles: model.handles,
+                meshCount: model.meshes.length,
+                vertexCount: model.vertexCount,
+            });
         }
         this._modelsOpenedChange.next(modelOpenedInfos);
     }

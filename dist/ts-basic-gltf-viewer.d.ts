@@ -25,6 +25,8 @@ export interface ModelOpenedInfo {
 	guid: string;
 	name: string;
 	handles: Set<string>;
+	meshCount: number;
+	vertexCount: number;
 }
 export interface ColoringInfo {
 	color: number;

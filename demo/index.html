@@ -75,7 +75,7 @@
                     <div id="btn-open-models" title="Load models" class="viewer-button">
                         <img src="assets/icons/icon_td_add.png"/>
                     </div>    
-                    <div id="btn-close-model" title="Close the model of the selected element" class="viewer-button disabled">
+                    <div id="btn-close-models" title="Close all models" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_close.png"/>
                     </div>               
                 </div>                 
@@ -84,7 +84,6 @@
         <div id="measurements-overlay" class="overlay-panel hidden" style="width: 200px; height: 200px; max-width: 50%; max-height: 50%;
             left: 10px; top: 90px; background-color: lightcyan;">
             <p class="title bold">Measurement data</p>
-
             <div class="height-10"></div>
             <div class="fl-row fl-jc-sbetween">
                 <p class="common bold">Start X:</p>
@@ -133,7 +132,46 @@
         </div>
         <div id="data-overlay" class="overlay-panel" style="width: 600px; height: 800px; max-width: 60%; max-height: 75%;
             right: 10px; bottom: 10px; background-color: bisque;">
-            <p class="title bold">Scene data</p>
+            <div class="fl-column fl-ai-stretch fl-fix-sized">    
+                <p class="title bold">Scene data</p>
+                <div class="height-10"></div> 
+            </div>
+            <div class="fl-column fl-ai-stretch fl-fix-sized">        
+                <div class="fl-row fl-jc-sbetween">
+                    <p class="common bold">Model count:</p>
+                    <p class="common"><span id="model-count-value">0</span><span></span></p>
+                </div>    
+                <div class="fl-row fl-jc-sbetween">
+                    <p class="common bold">Mesh count:</p>
+                    <p class="common"><span id="mesh-count-value">0</span><span></span></p>
+                </div>       
+                <div class="fl-row fl-jc-sbetween">
+                    <p class="common bold">Vertex count:</p>
+                    <p class="common"><span id="vertex-count-value">0</span><span></span></p>
+                </div>           
+                <div class="fl-row fl-jc-sbetween">
+                    <p class="common bold">Last frame time:</p>
+                    <p class="common"><span id="frame-time-value">0</span><span> ms</span></p>
+                </div>  
+            </div>  
+            <div class="fl-column fl-ai-stretch fl-fix-sized">   
+                <div class="height-10"></div>
+                <p class="subtitle bold">Opened models</p>
+                <div class="height-5"></div>
+            </div>          
+            <div id="model-grid" class="fl fl-column fl-ai-stretch fl-fix-sized over-y-auto pseudo-grid" style="height: 25%;"></div>     
+            <div class="fl-column fl-ai-stretch fl-fix-sized">   
+                <div class="height-10"></div>
+                <p class="subtitle bold">Model elements</p>
+                <div class="height-5"></div>
+            </div>          
+            <div id="model-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto pseudo-grid" style="min-height: 10%;"></div>
+            <div class="fl-column fl-ai-stretch fl-fix-sized">   
+                <div class="height-10"></div>
+                <p class="subtitle bold">Selected elements</p>
+                <div class="height-5"></div>
+            </div>          
+            <div id="selected-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto pseudo-grid" style="min-height: 10%;"></div>
         </div>
         <div id="settings-overlay" class="overlay-panel hidden" style="width: 250px; height: 300px; max-width: 60%; max-height: 50%;
             left: 10px; bottom: 90px; background-color: lightsalmon;">

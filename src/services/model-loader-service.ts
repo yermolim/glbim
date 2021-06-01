@@ -298,13 +298,13 @@ export class ModelLoaderService {
     scene.userData.guid = modelGuid;
     scene.name = name;
 
+    let vertexCount = 0;
     const meshes: MeshBgSm[] = [];
     const handles = new Set<string>();
     scene.traverse(x => {
       if (x instanceof Mesh
           && x.geometry instanceof BufferGeometry
           && x.material instanceof MeshStandardMaterial) {
-
         const id = `${modelGuid}|${x.name}`;
         x.userData.id = id;
         x.userData.modelGuid = modelGuid;
@@ -327,10 +327,12 @@ export class ModelLoaderService {
             callback(x);
           }
         }
+
+        vertexCount += x.geometry.getAttribute("position").count;
       }
     });
     
-    const modelInfo = {name, meshes, handles};
+    const modelInfo = {name, meshes, handles, vertexCount};
     this._loadedModels.add(modelInfo);
     this._loadedModelsByGuid.set(modelGuid, modelInfo);
     
@@ -378,7 +380,13 @@ export class ModelLoaderService {
   private emitOpenedModelsChanged() {  
     const modelOpenedInfos: ModelOpenedInfo[] = [];
     for (const [ modelGuid, model ] of this._loadedModelsByGuid) {
-      modelOpenedInfos.push({guid: modelGuid, name: model.name, handles: model.handles});
+      modelOpenedInfos.push({
+        guid: modelGuid,
+        name: model.name, 
+        handles: model.handles,
+        meshCount: model.meshes.length,
+        vertexCount: model.vertexCount,
+      });
     } 
     this._modelsOpenedChange.next(modelOpenedInfos);
   }
