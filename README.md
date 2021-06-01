@@ -1,7 +1,7 @@
 # ts-basic-gltf-viewer
-three.js-based basic gltf(glb) model viewer
+#### three.js-based gltf(glb) model viewer
 
-Created for personal use in a specific project, so use cases may be limited and not much description provided, but maybe some parts of the code will still be helpful to someone. 
+Created for personal use in a specific project, so use cases may be limited, but maybe some parts of the code will still be helpful to someone. 
 The main goal was to make it possible to open dozens of large industrial building models with thousands of elements and millions of polygons while keeping an optimal render performance. Optimized mesh merging to reduce render calls, GPU picking, using only vertex colors, etc. were the ways to achieve it. Target models were static without the need to take into account their internal structure, all the meshes used indexed BufferGeometry and MeshStandardMaterial without textures.
 
 ## Main features:
@@ -20,21 +20,21 @@ The main goal was to make it possible to open dozens of large industrial buildin
   <li>auto-resized canvas with transparent background (so outer container background used, easy to switch colors)</li>
 </ul>
 
-## Outside of scope:
-(The support of these possible features are outside of the current module scope and their implementation is implausible unless the module will become popular and there will be a huge amount of requests for additional features, which I think is extremely unrealistic)
+### Outside of scope:
+The support of these possible features are outside of the current module scope and their implementation is implausible unless the module will become popular and there will be a huge amount of requests for additional features, which I think is extremely unrealistic.
 <ul>
   <li>textures</li>
   <li>animation</li>
   <li>model editing</li>
 </ul>
 
-#### *Mesh ids
-A combination of internal model UUID and mesh 'name' field is used as mesh id (`${modelUuid}|${meshName}`). This id is used for all available manipulations with a mesh (selection/isolation/hiding/coloring etc.). If mesh id is not unique, all manipulations will affect all meshes with this id.
-
-If I find time for this, or if there are any requests, I will add more details to the description.
-
 ## Dependencies:
 </ul>
   <li><a href="https://github.com/mrdoob/three.js">three.js<a></li>
   <li><a href="https://github.com/ReactiveX/rxjs">RxJS<a></li>
 </ul>
+
+#### *Mesh ids
+A combination of internal model UUID and mesh 'name' field is used as mesh id (`${modelUuid}|${meshName}`). This id is used for all available manipulations with a mesh (selection/isolation/hiding/coloring etc.). If mesh id is not unique, all manipulations will affect all meshes with this id.
+
+If I find time for this, or if there are any requests, I will add more details to the description.
