@@ -2347,7 +2347,7 @@ class RenderScene {
         else if (mesh.userData.selected) {
             rgbRmo = new ColorRgbRmo(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, rgbRmoBase.roughness, rgbRmoBase.metalness, rgbRmoBase.opacity);
         }
-        else if (mesh.userData.isolated) {
+        else if (mesh.userData.isolated && this._isolationColor.opacity < rgbRmoBase.opacity) {
             rgbRmo = this._isolationColor;
         }
         else {

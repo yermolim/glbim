@@ -376,7 +376,7 @@ export class RenderScene {
         rgbRmoBase.metalness,
         rgbRmoBase.opacity,  
       );
-    } else if (mesh.userData.isolated) { 
+    } else if (mesh.userData.isolated && this._isolationColor.opacity < rgbRmoBase.opacity) { 
       rgbRmo = this._isolationColor;
     } else {
       rgbRmo = rgbRmoBase;

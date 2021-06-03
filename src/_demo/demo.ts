@@ -221,7 +221,7 @@ class DemoViewer {
       this._selectedMeshIds.forEach(x => this._paintedMeshIds.add(x));
       this._viewer.colorItems([{
         color: 65280,
-        opacity: 1,
+        opacity: 0.1,
         ids: [...this._paintedMeshIds, ...this._selectedMeshIds],
       }]);
       if (this._paintedMeshIds.size) {
