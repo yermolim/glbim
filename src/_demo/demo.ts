@@ -72,6 +72,8 @@ class DemoViewer {
   static readonly btnFitElementsToViewSel = "#btn-fit-elements";
   static readonly btnHideSelectedSel = "#btn-hide-selected";
   static readonly btnUnhideAllSel = "#btn-unhide-all";
+  static readonly btnPaintSelectedSel = "#btn-paint-selected";
+  static readonly btnUnpaintAllSel = "#btn-unpaint-all";
   static readonly btnToggleAutofocusSel = "#btn-toggle-autofocus";
   static readonly btnToggleNavigationSel = "#btn-toggle-navigation";
   static readonly btnToggleDataOverlaySel = "#btn-toggle-data-overlay";
@@ -105,6 +107,8 @@ class DemoViewer {
   private readonly _btnFitElementsToView: HTMLDivElement;
   private readonly _btnHideSelected: HTMLDivElement;
   private readonly _btnUnhideAll: HTMLDivElement;
+  private readonly _btnPaintSelected: HTMLDivElement;
+  private readonly _btnUnpaintAll: HTMLDivElement;
   private readonly _btnToggleAutofocus: HTMLDivElement;
   private readonly _btnToggleNavigation: HTMLDivElement;
   private readonly _btnToggleDataOverlay: HTMLDivElement;
@@ -134,6 +138,7 @@ class DemoViewer {
   private _openedModelNameByGuid = new Map<string, string>();
   private _selectedMeshIds: string[] = [];
   private _hiddenMeshIds: string[] = [];
+  private _paintedMeshIds = new Set<string>();
 
   private _currentModelId = 0;
   private _urlById = new Map<number, string>();
@@ -154,6 +159,8 @@ class DemoViewer {
     this._btnFitElementsToView = document.querySelector(DemoViewer.btnFitElementsToViewSel);
     this._btnHideSelected = document.querySelector(DemoViewer.btnHideSelectedSel);
     this._btnUnhideAll = document.querySelector(DemoViewer.btnUnhideAllSel);
+    this._btnPaintSelected = document.querySelector(DemoViewer.btnPaintSelectedSel);
+    this._btnUnpaintAll = document.querySelector(DemoViewer.btnUnpaintAllSel);
     this._btnToggleAutofocus = document.querySelector(DemoViewer.btnToggleAutofocusSel);
     this._btnToggleNavigation = document.querySelector(DemoViewer.btnToggleNavigationSel);
     this._btnToggleDataOverlay = document.querySelector(DemoViewer.btnToggleDataOverlaySel);
@@ -210,6 +217,22 @@ class DemoViewer {
     this._btnFitElementsToView.addEventListener("click", () => this._viewer.zoomToItems(this._selectedMeshIds));
     this._btnHideSelected.addEventListener("click", () => this._viewer.hideSelectedItems());
     this._btnUnhideAll.addEventListener("click", () => this._viewer.unhideAllItems());
+    this._btnPaintSelected.addEventListener("click", () => {
+      this._selectedMeshIds.forEach(x => this._paintedMeshIds.add(x));
+      this._viewer.colorItems([{
+        color: 65280,
+        opacity: 1,
+        ids: [...this._paintedMeshIds, ...this._selectedMeshIds],
+      }]);
+      if (this._paintedMeshIds.size) {
+        this._btnUnpaintAll.classList.remove("disabled");
+      }     
+    });
+    this._btnUnpaintAll.addEventListener("click", () => {
+      this._viewer.colorItems([]);
+      this._paintedMeshIds.clear();      
+      this._btnUnpaintAll.classList.add("disabled");
+    });
     this._btnToggleAutofocus.addEventListener("click", () => {
       this._options.selectionAutoFocusEnabled = !this._options.selectionAutoFocusEnabled;
       this._viewer.updateOptionsAsync(this._options);
@@ -294,6 +317,7 @@ class DemoViewer {
         if (this._selectedMeshIds.length) {
           this._btnFitElementsToView.classList.remove("disabled");
           this._btnHideSelected.classList.remove("disabled");
+          this._btnPaintSelected.classList.remove("disabled");
           this._selectedMeshIds.forEach(id => {
             const [modelGuid, handle] = id.split("|");
             const elementRow = document.createElement("div");
@@ -311,6 +335,7 @@ class DemoViewer {
         } else {
           this._btnFitElementsToView.classList.add("disabled");
           this._btnHideSelected.classList.add("disabled");
+          this._btnPaintSelected.classList.add("disabled");
         }
       }),
 

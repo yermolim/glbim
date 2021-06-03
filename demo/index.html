@@ -26,27 +26,7 @@
     <div class="abs-stretch fl-column fl-ai-stretch fl-jc-stretch">
         <div id="outer-container" class="relative fl full-size">    
             <div id="viewer-container" class="abs-stretch"></div>
-            <div class="abs-topleft fl-column margin-3">    
-                <div class="fl-row">
-                    <div id="btn-toggle-autofocus" title="Toggle autofocus on selection" class="viewer-button active">
-                        <img src="assets/icons/icon_td_focus_auto.png"/>
-                    </div>
-                    <div id="btn-toggle-navigation" title="Toggle camera navigation" class="viewer-button active">
-                        <img src="assets/icons/icon_td_navigation.png"/>
-                    </div>
-                    <div id="btn-fit-elements" title="Fit selected elements to view" class="viewer-button disabled">
-                        <img src="assets/icons/icon_td_fit_element.png"/>
-                    </div>
-                    <div id="btn-fit-models" title="Fit scene to view" class="viewer-button disabled">
-                        <img src="assets/icons/icon_td_fit_screen.png"/>
-                    </div>
-                    <div id="btn-hide-selected" title="Hide selected elements" class="viewer-button disabled">
-                        <img src="assets/icons/icon_td_hide.png"/>
-                    </div>
-                    <div id="btn-unhide-all" title="Show all previously hidden elements" class="viewer-button disabled">
-                        <img src="assets/icons/icon_td_show_all.png"/>
-                    </div>
-                </div>                
+            <div class="abs-topleft fl-column margin-3">              
                 <div class="fl-row">
                     <div data-mode="select_mesh" title="Enable mesh selection mode" class="viewer-button active btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_select_elements.png"/>
@@ -59,8 +39,38 @@
                     </div>
                     <div data-mode="measure_distance" title="Enable distance measurement mode" class="viewer-button btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_measure.png"/>
-                    </div>                
+                    </div>            
                 </div>  
+                <div class="fl-row">
+                    <div id="btn-toggle-autofocus" title="Toggle autofocus on selection" class="viewer-button active">
+                        <img src="assets/icons/icon_td_focus_auto.png"/>
+                    </div>
+                    <div id="btn-toggle-navigation" title="Toggle camera navigation" class="viewer-button active">
+                        <img src="assets/icons/icon_td_navigation.png"/>
+                    </div>    
+                    <div id="btn-fit-elements" title="Fit selected elements to view" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_fit_element.png"/>
+                    </div>
+                    <div id="btn-fit-models" title="Fit scene to view" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_fit_screen.png"/>
+                    </div>
+                </div>     
+                <div class="fl-row">
+                    <div id="btn-hide-selected" title="Hide selected elements" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_hide.png"/>
+                    </div>
+                    <div id="btn-unhide-all" title="Show all previously hidden elements" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_show_all.png"/>
+                    </div>
+                </div>    
+                <div class="fl-row">
+                    <div id="btn-paint-selected" title="Paint selected element" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_brush.png"/>
+                    </div>
+                    <div id="btn-unpaint-all" title="Clear all paint from elements" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_brush_hide.png"/>
+                    </div>
+                </div>   
             </div>        
             <div class="abs-bottomleft fl-column margin-3">           
                 <div class="fl-row">    
@@ -79,10 +89,14 @@
                         <img src="assets/icons/icon_td_close.png"/>
                     </div>               
                 </div>                 
+            </div>     
+            <div class="abs-bottomright fl-column margin-3"> 
+                <div class="fl-row">
+                </div>               
             </div>
         </div>
-        <div id="measurements-overlay" class="overlay-panel hidden" style="width: 200px; height: 200px; max-width: 50%; max-height: 50%;
-            left: 10px; top: 90px; background-color: lightcyan;">
+        <div id="measurements-overlay" class="overlay-panel hidden" style="width: 200px; height: 200px; 
+            max-width: 50%; max-height: 50%; left: 10px; top: 175px; background-color: lightcyan;">
             <p class="title bold">Measurement data</p>
             <div class="height-10"></div>
             <div class="fl-row fl-jc-sbetween">
@@ -130,8 +144,8 @@
                 <p class="common"><span id="distance-value">0</span><span> m</span></p>
             </div>
         </div>
-        <div id="data-overlay" class="overlay-panel" style="width: 600px; height: 800px; max-width: 60%; max-height: 75%;
-            right: 10px; bottom: 10px; background-color: bisque;">
+        <div id="data-overlay" class="overlay-panel" style="width: 600px; height: 800px; 
+            max-width: 60%; max-height: 75%; right: 10px; bottom: 10px; background-color: bisque;">
             <div class="fl-column fl-ai-stretch fl-fix-sized">    
                 <p class="title bold">Scene data</p>
                 <div class="height-10"></div> 
@@ -159,22 +173,22 @@
                 <p class="subtitle bold">Opened models</p>
                 <div class="height-5"></div>
             </div>          
-            <div id="model-grid" class="fl fl-column fl-ai-stretch fl-fix-sized over-y-auto pseudo-grid" style="height: 25%;"></div>     
+            <div id="model-grid" class="fl fl-column fl-ai-stretch fl-fix-sized over-y-auto over-x-hidden pseudo-grid" style="height: 25%;"></div>     
             <div class="fl-column fl-ai-stretch fl-fix-sized">   
                 <div class="height-10"></div>
                 <p class="subtitle bold">Model elements</p>
                 <div class="height-5"></div>
             </div>          
-            <div id="model-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto pseudo-grid" style="min-height: 10%;"></div>
+            <div id="model-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto over-x-hidden pseudo-grid" style="min-height: 10%;"></div>
             <div class="fl-column fl-ai-stretch fl-fix-sized">   
                 <div class="height-10"></div>
                 <p class="subtitle bold">Selected elements</p>
                 <div class="height-5"></div>
             </div>          
-            <div id="selected-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto pseudo-grid" style="min-height: 10%;"></div>
+            <div id="selected-element-grid" class="fl fl-column fl-ai-stretch fl-auto-sized over-y-auto over-x-hidden pseudo-grid" style="min-height: 10%;"></div>
         </div>
-        <div id="settings-overlay" class="overlay-panel hidden" style="width: 250px; height: 300px; max-width: 60%; max-height: 50%;
-            left: 10px; bottom: 90px; background-color: lightsalmon;">
+        <div id="settings-overlay" class="overlay-panel hidden" style="width: 250px; height: 240px; 
+            max-width: 60%; max-height: 50%; left: 10px; bottom: 90px; background-color: lightsalmon;">
             <p class="title bold">Settings</p>
 
             <div class="height-10"></div>
