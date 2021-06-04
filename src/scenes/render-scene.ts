@@ -16,7 +16,8 @@ export interface RenderSceneColors {
 
 export class RenderScene {
   private _currentMergeType: MeshMergeType;  
-  private _isolationColor: ColorRgbRmo;
+  private _isolationDefaultOpacity: number;
+  private _isolationColorsByOpacity = new Map<number, ColorRgbRmo>();
   private _selectionColor: Color;
   private _highlightColor: Color;
 
@@ -78,7 +79,11 @@ export class RenderScene {
       throw new Error("Colors are not defined");
     }
     const {isolationColor, isolationOpacity, selectionColor, highlightColor} = colors;
-    this._isolationColor = MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity);
+
+    this._isolationDefaultOpacity = isolationOpacity;
+    this._isolationColorsByOpacity.clear();
+    this._isolationColorsByOpacity.set(isolationOpacity, MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity));
+
     this._selectionColor = new Color(selectionColor);
     this._highlightColor = new Color(highlightColor);
   }
@@ -376,8 +381,15 @@ export class RenderScene {
         rgbRmoBase.metalness,
         rgbRmoBase.opacity,  
       );
-    } else if (mesh.userData.isolated && this._isolationColor.opacity < rgbRmoBase.opacity) { 
-      rgbRmo = this._isolationColor;
+    } else if (mesh.userData.isolated) {
+      const opacity = Math.min(rgbRmoBase.opacity, this._isolationDefaultOpacity);
+      let isolationColor = this._isolationColorsByOpacity.get(opacity);
+      if (!isolationColor) {        
+        isolationColor =  this._isolationColorsByOpacity.get(this._isolationDefaultOpacity).clone();
+        isolationColor.opacity = opacity;
+        this._isolationColorsByOpacity.set(opacity, isolationColor);
+      }
+      rgbRmo = isolationColor;
     } else {
       rgbRmo = rgbRmoBase;
     }

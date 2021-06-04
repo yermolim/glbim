@@ -107,6 +107,11 @@ export class ColorRgbRmo {
     mesh[ColorRgbRmo.prop] = rgbRmo;
   }  
 
+  clone(): ColorRgbRmo {
+    const {r, g, b, roughness, metalness, opacity} = this;
+    return new ColorRgbRmo(r, g, b, roughness, metalness, opacity);
+  }
+
   toString() {
     return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
   }

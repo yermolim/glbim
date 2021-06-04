@@ -71,7 +71,7 @@ export class PickingService {
       }
 
       // calculate bounding sphere center of the mesh
-      if (x.geometry.boundingSphere === null) {
+      if (!x.geometry.boundingSphere) {
         x.geometry.computeBoundingSphere();
       }
 

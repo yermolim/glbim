@@ -774,6 +774,10 @@ class ColorRgbRmo {
     static setToMesh(mesh, rgbRmo) {
         mesh[ColorRgbRmo.prop] = rgbRmo;
     }
+    clone() {
+        const { r, g, b, roughness, metalness, opacity } = this;
+        return new ColorRgbRmo(r, g, b, roughness, metalness, opacity);
+    }
     toString() {
         return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
     }
@@ -2044,6 +2048,7 @@ var __awaiter$3 = (undefined && undefined.__awaiter) || function (thisArg, _argu
 };
 class RenderScene {
     constructor(colors) {
+        this._isolationColorsByOpacity = new Map();
         this._geometries = [];
         this._materials = new Map();
         this._geometryIndexBySourceMesh = new Map();
@@ -2090,7 +2095,9 @@ class RenderScene {
             throw new Error("Colors are not defined");
         }
         const { isolationColor, isolationOpacity, selectionColor, highlightColor } = colors;
-        this._isolationColor = MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity);
+        this._isolationDefaultOpacity = isolationOpacity;
+        this._isolationColorsByOpacity.clear();
+        this._isolationColorsByOpacity.set(isolationOpacity, MaterialBuilder.buildIsolationColor(isolationColor, isolationOpacity));
         this._selectionColor = new Color(selectionColor);
         this._highlightColor = new Color(highlightColor);
     }
@@ -2347,8 +2354,15 @@ class RenderScene {
         else if (mesh.userData.selected) {
             rgbRmo = new ColorRgbRmo(this._selectionColor.r, this._selectionColor.g, this._selectionColor.b, rgbRmoBase.roughness, rgbRmoBase.metalness, rgbRmoBase.opacity);
         }
-        else if (mesh.userData.isolated && this._isolationColor.opacity < rgbRmoBase.opacity) {
-            rgbRmo = this._isolationColor;
+        else if (mesh.userData.isolated) {
+            const opacity = Math.min(rgbRmoBase.opacity, this._isolationDefaultOpacity);
+            let isolationColor = this._isolationColorsByOpacity.get(opacity);
+            if (!isolationColor) {
+                isolationColor = this._isolationColorsByOpacity.get(this._isolationDefaultOpacity).clone();
+                isolationColor.opacity = opacity;
+                this._isolationColorsByOpacity.set(opacity, isolationColor);
+            }
+            rgbRmo = isolationColor;
         }
         else {
             rgbRmo = rgbRmoBase;
@@ -2995,7 +3009,7 @@ class PickingService {
             if (!sourceMesh) {
                 continue;
             }
-            if (x.geometry.boundingSphere === null) {
+            if (!x.geometry.boundingSphere) {
                 x.geometry.computeBoundingSphere();
             }
             centerPointTemp.copy(x.geometry.boundingSphere.center);
