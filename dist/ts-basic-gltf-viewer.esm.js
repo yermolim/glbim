@@ -2082,6 +2082,7 @@ class RenderScene {
         this._materials.forEach(v => v.needsUpdate = true);
     }
     updateMeshColors(sourceMeshes) {
+        const c = performance.now();
         if (this._currentMergeType) {
             this.updateMeshGeometryColors(sourceMeshes);
         }
@@ -2089,6 +2090,7 @@ class RenderScene {
             this.updateMeshMaterials(sourceMeshes);
         }
         this.sortGeometryIndicesByOpacity();
+        console.log("updateMeshColors: " + (performance.now() - c));
     }
     updateCommonColors(colors) {
         if (!colors) {
@@ -2279,18 +2281,50 @@ class RenderScene {
             return;
         }
         const { colors, rmos, indicesBySourceMesh } = geometry;
+        const colorBuffer = colors.array;
+        const rmoBuffer = rmos.array;
         let anyMeshOpacityChanged = false;
-        meshes.forEach(mesh => {
+        let i;
+        let j;
+        let mesh;
+        let initialOpacity;
+        let index;
+        let r;
+        let g;
+        let b;
+        let roughness;
+        let metalness;
+        let opacity;
+        let n1;
+        let n2;
+        let n3;
+        for (i = 0; i < meshes.length; i++) {
+            mesh = meshes[i];
             const indices = indicesBySourceMesh.get(mesh);
-            const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh, rmos.getZ(indices[0]) / 255);
-            indices.forEach(i => {
-                colors.setXYZ(i, rgbRmo.rByte, rgbRmo.gByte, rgbRmo.bByte);
-                rmos.setXYZ(i, rgbRmo.roughnessByte, rgbRmo.metalnessByte, rgbRmo.opacityByte);
-            });
+            initialOpacity = rmos.getZ(indices[0]) / 255;
+            const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh, initialOpacity);
+            r = rgbRmo.rByte;
+            g = rgbRmo.gByte;
+            b = rgbRmo.bByte;
+            roughness = rgbRmo.roughnessByte;
+            metalness = rgbRmo.metalnessByte;
+            opacity = rgbRmo.opacityByte;
+            for (j = 0; j < indices.length; j++) {
+                index = indices[j] * 3;
+                n1 = index;
+                n2 = index + 1;
+                n3 = index + 2;
+                colorBuffer[n1] = r;
+                colorBuffer[n2] = g;
+                colorBuffer[n3] = b;
+                rmoBuffer[n1] = roughness;
+                rmoBuffer[n2] = metalness;
+                rmoBuffer[n3] = opacity;
+            }
             if (!anyMeshOpacityChanged && opacityChanged) {
                 anyMeshOpacityChanged = true;
             }
-        });
+        }
         colors.needsUpdate = true;
         rmos.needsUpdate = true;
         if (anyMeshOpacityChanged) {
@@ -2298,32 +2332,43 @@ class RenderScene {
         }
     }
     sortGeometryIndicesByOpacity() {
-        this._geometryIndicesNeedSort.forEach(i => {
-            const meshes = this._sourceMeshesByGeometryIndex.get(i);
+        let j;
+        let m;
+        let n;
+        let p;
+        let q;
+        let mesh;
+        let opaqueIndices;
+        let transparentIndices;
+        for (const index of this._geometryIndicesNeedSort) {
+            const meshes = this._sourceMeshesByGeometryIndex.get(index);
             const opaqueMeshes = [];
             const transparentMeshes = [];
-            meshes.forEach(x => {
-                if (ColorRgbRmo.getFromMesh(x).opacity === 1) {
-                    opaqueMeshes.push(x);
+            for (j = 0; j < meshes.length; j++) {
+                mesh = meshes[j];
+                if (ColorRgbRmo.getFromMesh(mesh).opacity === 1) {
+                    opaqueMeshes.push(mesh);
                 }
                 else {
-                    transparentMeshes.push(x);
+                    transparentMeshes.push(mesh);
                 }
-            });
-            const { indices, indicesBySourceMesh } = this._geometries[i];
+            }
+            const { indices, indicesBySourceMesh } = this._geometries[index];
             let currentIndex = 0;
-            opaqueMeshes.forEach(mesh => {
-                indicesBySourceMesh.get(mesh).forEach(value => {
-                    indices.setX(currentIndex++, value);
-                });
-            });
-            transparentMeshes.forEach(mesh => {
-                indicesBySourceMesh.get(mesh).forEach(value => {
-                    indices.setX(currentIndex++, value);
-                });
-            });
+            for (m = 0; m < opaqueMeshes.length; m++) {
+                opaqueIndices = indicesBySourceMesh.get(opaqueMeshes[m]);
+                for (p = 0; p < opaqueIndices.length; p++) {
+                    indices.setX(currentIndex++, opaqueIndices[p]);
+                }
+            }
+            for (n = 0; n < transparentMeshes.length; n++) {
+                transparentIndices = indicesBySourceMesh.get(transparentMeshes[n]);
+                for (q = 0; q < transparentIndices.length; q++) {
+                    indices.setX(currentIndex++, transparentIndices[q]);
+                }
+            }
             indices.needsUpdate = true;
-        });
+        }
         this._geometryIndicesNeedSort.clear();
     }
     destroyScene() {
