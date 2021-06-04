@@ -57,6 +57,7 @@ export class RenderScene {
 
     this.deleteScene();
     await this.createSceneAsync(lights, meshes, models, meshMergeType);
+    this.updateMeshColors(new Set<MeshBgSm>(meshes));
   }    
 
   updateSceneMaterials() {
@@ -100,34 +101,40 @@ export class RenderScene {
   }
 
   private async createSceneAsync(lights: Light[], meshes: MeshBgSm[], 
-    models: ModelGeometryInfo[], meshMergeType: MeshMergeType): Promise<void> {    
+    models: ModelGeometryInfo[], meshMergeType: MeshMergeType): Promise<void> {      
     const scene = new Scene();
     scene.add(...lights);
 
     if (meshMergeType) {
       const meshGroups = await this.groupModelMeshesByMergeType(meshes, 
         models, meshMergeType);
+
       for (const meshGroup of meshGroups) {
-        if (meshGroup.length) {
-          const geometry = await this.buildRenderGeometryAsync(meshGroup);    
-          if (!geometry) {
-            continue;
-          }      
-          this._geometries.push(geometry);
-          const i = this._geometries.length - 1;
-          this._sourceMeshesByGeometryIndex.set(i, meshGroup);
-          this._geometryIndicesNeedSort.add(i);
-          meshGroup.forEach(x => {
-            this._geometryIndexBySourceMesh.set(x, i);
-          });
+        if (!meshGroup.length) {
+          continue;
+        }
+        
+        const geometry = await this.buildRenderGeometryAsync(meshGroup);        
+        if (!geometry) {
+          continue;
+        }
+        this._geometries.push(geometry);
+        const lastGeomIndex = this._geometries.length - 1;
+        this._sourceMeshesByGeometryIndex.set(lastGeomIndex, meshGroup);
+        this._geometryIndicesNeedSort.add(lastGeomIndex);
+
+        for (const mesh of meshGroup) {
+          this._geometryIndexBySourceMesh.set(mesh, lastGeomIndex);
         }
       }
-      this._geometries.forEach(x => {    
-        const mesh = new Mesh(x.geometry, this._globalMaterial);
+
+      for (const renderGeometry of this._geometries) {
+        const mesh = new Mesh(renderGeometry.geometry, this._globalMaterial);
         scene.add(mesh);
-      });
+      }
+
     } else {
-      meshes.forEach(sourceMesh => {
+      for (const sourceMesh of meshes) {
         const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
         const material = this.getMaterialByColor(rgbRmo);
         sourceMesh.updateMatrixWorld();
@@ -135,7 +142,7 @@ export class RenderScene {
         renderMesh.applyMatrix4(sourceMesh.matrixWorld);
         this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
         scene.add(renderMesh); 
-      });
+      }
     } 
 
     this._currentMergeType = meshMergeType;
@@ -177,6 +184,7 @@ export class RenderScene {
   private async buildRenderGeometryAsync(meshes: MeshBgSm[]): Promise<RenderGeometry> {
     let positionsLen = 0;
     let indicesLen = 0;
+
     meshes.forEach(x => {
       positionsLen += x.geometry.getAttribute("position").count * 3;
       indicesLen += x.geometry.getIndex().count;;      
@@ -190,46 +198,99 @@ export class RenderScene {
     const colorBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
     const rmoBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
     const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
+
+    const indexArray = indexBuffer.array as Uint32Array;
+    const colorArray = colorBuffer.array as Uint8Array;
+    const rmoArray = rmoBuffer.array as Uint8Array;
+    const positionArray = positionBuffer.array as Float32Array;
+
     const indicesBySourceMesh = new Map<MeshBgSm, Uint32Array>();    
     
     let positionsOffset = 0; 
     let indicesOffset = 0;
+    let mesh: MeshBgSm;
+    let index: number;
+
+    let rgbRmo: ColorRgbRmo;
+    let r: number;
+    let g: number;
+    let b: number;
+    let roughness: number;
+    let metalness: number;
+    let opacity: number;
+
+    let i: number;
+    let m: number;
+    let n: number;
+
+    let p1: number;
+    let p2: number;
+    let p3: number;
+
+    let lastBreakTime = performance.now();
+
     // splitting into chunks to UI remain responsible
-    const chunkSize = 100;
-    const processChunk = (chunk: MeshBgSm[]) => {    
-      chunk.forEach(x => {
-        // get the mesh current positions and indices
-        x.updateMatrixWorld();
-        const geometry = <BufferGeometry>x.geometry
-          .clone()
-          .applyMatrix4(x.matrixWorld);
-        const positions = geometry.getAttribute("position").array;
-        const indices = geometry.getIndex().array;
-        // fill indices
-        const meshIndices = new Uint32Array(indices.length);
-        indicesBySourceMesh.set(x, meshIndices);
-        for (let i = 0; i < indices.length; i++) {
-          const index = indices[i] + positionsOffset;
-          indexBuffer.setX(indicesOffset++, index);
-          meshIndices[i] = index;
-        }
-        // fill positions and colors
-        for (let i = 0; i < positions.length;) {   
-          const rgbrmo = ColorRgbRmo.getFromMesh(x);
-          colorBuffer.setXYZ(positionsOffset, rgbrmo.rByte, rgbrmo.gByte, rgbrmo.bByte);
-          rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughnessByte, rgbrmo.metalnessByte, rgbrmo.opacityByte);
-          positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
-        }
-        geometry.dispose();
-      });
-    };
-    for (let i = 0; i < meshes.length; i += chunkSize) {
-      await new Promise<void>((resolve) => { 
-        setTimeout(() => {
-          processChunk(meshes.slice(i, i + chunkSize));
-          resolve();
-        }, 0);
-      });
+    for (i = 0; i < meshes.length; i++) {
+
+      if (performance.now() - lastBreakTime > 100) {
+        // break on timeout every 100ms to keep UI responsive
+        await new Promise<void>((resolve) => { 
+          setTimeout(() => {
+            resolve();
+          }, 0);
+        });
+        lastBreakTime = performance.now();
+      }
+
+      mesh = meshes[i];
+      // get the mesh current positions and indices
+      mesh.updateMatrixWorld();
+      const geometry = <BufferGeometry>mesh.geometry
+        .clone()
+        .applyMatrix4(mesh.matrixWorld);
+      const positions = geometry.getAttribute("position").array;
+      const indices = geometry.getIndex().array;
+
+      // get colors
+      rgbRmo = ColorRgbRmo.getFromMesh(mesh);
+      r = rgbRmo.rByte;
+      g = rgbRmo.gByte;
+      b = rgbRmo.bByte;
+      roughness = rgbRmo.roughnessByte;
+      metalness = rgbRmo.metalnessByte;
+      opacity = rgbRmo.opacityByte;
+
+      // fill indices
+      const meshIndices = new Uint32Array(indices.length);
+      indicesBySourceMesh.set(mesh, meshIndices);
+      for (m = 0; m < indices.length; m++) {
+        index = indices[m] + positionsOffset;
+        meshIndices[m] = index;
+        indexArray[indicesOffset++] = index;
+      }
+
+      // fill positions and colors        
+      for (n = 0; n < positions.length;) {   
+        p1 = positionsOffset * 3;
+        p2 = p1 + 1;
+        p3 = p2 + 1;
+
+        colorArray[p1] = r;
+        colorArray[p2] = g;
+        colorArray[p3] = b;
+
+        rmoArray[p1] = roughness;
+        rmoArray[p2] = metalness;
+        rmoArray[p3] = opacity;
+
+        positionArray[p1] = positions[n++];
+        positionArray[p2] = positions[n++];
+        positionArray[p3] = positions[n++];
+
+        positionsOffset++;
+      }
+      
+      geometry.dispose();
     }
 
     const renderGeometry = new BufferGeometry();

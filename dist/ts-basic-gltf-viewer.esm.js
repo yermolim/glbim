@@ -2075,6 +2075,7 @@ class RenderScene {
         return __awaiter$3(this, void 0, void 0, function* () {
             this.deleteScene();
             yield this.createSceneAsync(lights, meshes, models, meshMergeType);
+            this.updateMeshColors(new Set(meshes));
         });
     }
     updateSceneMaterials() {
@@ -2082,7 +2083,6 @@ class RenderScene {
         this._materials.forEach(v => v.needsUpdate = true);
     }
     updateMeshColors(sourceMeshes) {
-        const c = performance.now();
         if (this._currentMergeType) {
             this.updateMeshGeometryColors(sourceMeshes);
         }
@@ -2090,7 +2090,6 @@ class RenderScene {
             this.updateMeshMaterials(sourceMeshes);
         }
         this.sortGeometryIndicesByOpacity();
-        console.log("updateMeshColors: " + (performance.now() - c));
     }
     updateCommonColors(colors) {
         if (!colors) {
@@ -2119,27 +2118,28 @@ class RenderScene {
             if (meshMergeType) {
                 const meshGroups = yield this.groupModelMeshesByMergeType(meshes, models, meshMergeType);
                 for (const meshGroup of meshGroups) {
-                    if (meshGroup.length) {
-                        const geometry = yield this.buildRenderGeometryAsync(meshGroup);
-                        if (!geometry) {
-                            continue;
-                        }
-                        this._geometries.push(geometry);
-                        const i = this._geometries.length - 1;
-                        this._sourceMeshesByGeometryIndex.set(i, meshGroup);
-                        this._geometryIndicesNeedSort.add(i);
-                        meshGroup.forEach(x => {
-                            this._geometryIndexBySourceMesh.set(x, i);
-                        });
+                    if (!meshGroup.length) {
+                        continue;
+                    }
+                    const geometry = yield this.buildRenderGeometryAsync(meshGroup);
+                    if (!geometry) {
+                        continue;
+                    }
+                    this._geometries.push(geometry);
+                    const lastGeomIndex = this._geometries.length - 1;
+                    this._sourceMeshesByGeometryIndex.set(lastGeomIndex, meshGroup);
+                    this._geometryIndicesNeedSort.add(lastGeomIndex);
+                    for (const mesh of meshGroup) {
+                        this._geometryIndexBySourceMesh.set(mesh, lastGeomIndex);
                     }
                 }
-                this._geometries.forEach(x => {
-                    const mesh = new Mesh(x.geometry, this._globalMaterial);
+                for (const renderGeometry of this._geometries) {
+                    const mesh = new Mesh(renderGeometry.geometry, this._globalMaterial);
                     scene.add(mesh);
-                });
+                }
             }
             else {
-                meshes.forEach(sourceMesh => {
+                for (const sourceMesh of meshes) {
                     const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
                     const material = this.getMaterialByColor(rgbRmo);
                     sourceMesh.updateMatrixWorld();
@@ -2147,7 +2147,7 @@ class RenderScene {
                     renderMesh.applyMatrix4(sourceMesh.matrixWorld);
                     this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
                     scene.add(renderMesh);
-                });
+                }
             }
             this._currentMergeType = meshMergeType;
             this._scene = scene;
@@ -2199,41 +2199,75 @@ class RenderScene {
             const colorBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
             const rmoBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
             const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
+            const indexArray = indexBuffer.array;
+            const colorArray = colorBuffer.array;
+            const rmoArray = rmoBuffer.array;
+            const positionArray = positionBuffer.array;
             const indicesBySourceMesh = new Map();
             let positionsOffset = 0;
             let indicesOffset = 0;
-            const chunkSize = 100;
-            const processChunk = (chunk) => {
-                chunk.forEach(x => {
-                    x.updateMatrixWorld();
-                    const geometry = x.geometry
-                        .clone()
-                        .applyMatrix4(x.matrixWorld);
-                    const positions = geometry.getAttribute("position").array;
-                    const indices = geometry.getIndex().array;
-                    const meshIndices = new Uint32Array(indices.length);
-                    indicesBySourceMesh.set(x, meshIndices);
-                    for (let i = 0; i < indices.length; i++) {
-                        const index = indices[i] + positionsOffset;
-                        indexBuffer.setX(indicesOffset++, index);
-                        meshIndices[i] = index;
-                    }
-                    for (let i = 0; i < positions.length;) {
-                        const rgbrmo = ColorRgbRmo.getFromMesh(x);
-                        colorBuffer.setXYZ(positionsOffset, rgbrmo.rByte, rgbrmo.gByte, rgbrmo.bByte);
-                        rmoBuffer.setXYZ(positionsOffset, rgbrmo.roughnessByte, rgbrmo.metalnessByte, rgbrmo.opacityByte);
-                        positionBuffer.setXYZ(positionsOffset++, positions[i++], positions[i++], positions[i++]);
-                    }
-                    geometry.dispose();
-                });
-            };
-            for (let i = 0; i < meshes.length; i += chunkSize) {
-                yield new Promise((resolve) => {
-                    setTimeout(() => {
-                        processChunk(meshes.slice(i, i + chunkSize));
-                        resolve();
-                    }, 0);
-                });
+            let mesh;
+            let index;
+            let rgbRmo;
+            let r;
+            let g;
+            let b;
+            let roughness;
+            let metalness;
+            let opacity;
+            let i;
+            let m;
+            let n;
+            let p1;
+            let p2;
+            let p3;
+            let lastBreakTime = performance.now();
+            for (i = 0; i < meshes.length; i++) {
+                if (performance.now() - lastBreakTime > 100) {
+                    yield new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve();
+                        }, 0);
+                    });
+                    lastBreakTime = performance.now();
+                }
+                mesh = meshes[i];
+                mesh.updateMatrixWorld();
+                const geometry = mesh.geometry
+                    .clone()
+                    .applyMatrix4(mesh.matrixWorld);
+                const positions = geometry.getAttribute("position").array;
+                const indices = geometry.getIndex().array;
+                rgbRmo = ColorRgbRmo.getFromMesh(mesh);
+                r = rgbRmo.rByte;
+                g = rgbRmo.gByte;
+                b = rgbRmo.bByte;
+                roughness = rgbRmo.roughnessByte;
+                metalness = rgbRmo.metalnessByte;
+                opacity = rgbRmo.opacityByte;
+                const meshIndices = new Uint32Array(indices.length);
+                indicesBySourceMesh.set(mesh, meshIndices);
+                for (m = 0; m < indices.length; m++) {
+                    index = indices[m] + positionsOffset;
+                    meshIndices[m] = index;
+                    indexArray[indicesOffset++] = index;
+                }
+                for (n = 0; n < positions.length;) {
+                    p1 = positionsOffset * 3;
+                    p2 = p1 + 1;
+                    p3 = p2 + 1;
+                    colorArray[p1] = r;
+                    colorArray[p2] = g;
+                    colorArray[p3] = b;
+                    rmoArray[p1] = roughness;
+                    rmoArray[p2] = metalness;
+                    rmoArray[p3] = opacity;
+                    positionArray[p1] = positions[n++];
+                    positionArray[p2] = positions[n++];
+                    positionArray[p3] = positions[n++];
+                    positionsOffset++;
+                }
+                geometry.dispose();
             }
             const renderGeometry = new BufferGeometry();
             renderGeometry.setIndex(indexBuffer);
