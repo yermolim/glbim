@@ -219,7 +219,6 @@ export class RenderScene {
     let metalness: number;
     let opacity: number;
 
-    let i: number;
     let m: number;
     let n: number;
 
@@ -230,7 +229,7 @@ export class RenderScene {
     let lastBreakTime = performance.now();
 
     // splitting into chunks to UI remain responsible
-    for (i = 0; i < meshes.length; i++) {
+    for (let i = 0; i < meshes.length; i++) {
 
       if (performance.now() - lastBreakTime > 100) {
         // break on timeout every 100ms to keep UI responsive
@@ -243,6 +242,7 @@ export class RenderScene {
       }
 
       mesh = meshes[i];
+
       // get the mesh current positions and indices
       mesh.updateMatrixWorld();
       const geometry = <BufferGeometry>mesh.geometry

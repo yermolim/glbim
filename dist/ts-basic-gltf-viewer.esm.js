@@ -2215,14 +2215,13 @@ class RenderScene {
             let roughness;
             let metalness;
             let opacity;
-            let i;
             let m;
             let n;
             let p1;
             let p2;
             let p3;
             let lastBreakTime = performance.now();
-            for (i = 0; i < meshes.length; i++) {
+            for (let i = 0; i < meshes.length; i++) {
                 if (performance.now() - lastBreakTime > 100) {
                     yield new Promise((resolve) => {
                         setTimeout(() => {
@@ -2542,53 +2541,61 @@ class SimplifiedScene {
                 return null;
             }
             const hullPoints = [];
-            const hullChunkSize = 100;
-            const hullChunk = (chunk) => {
-                chunk.forEach(x => {
-                    try {
-                        const hull = new ConvexHull().setFromObject(x);
-                        hull.faces.forEach(f => {
-                            let edge = f.edge;
-                            do {
-                                hullPoints.push(edge.head().point);
-                                edge = edge.next;
-                            } while (edge !== f.edge);
-                        });
+            let mesh;
+            let face;
+            let edge;
+            let j;
+            let lastBreakTime = performance.now();
+            for (let i = 0; i < meshes.length; i++) {
+                if (performance.now() - lastBreakTime > 100) {
+                    yield new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve();
+                        }, 0);
+                    });
+                    lastBreakTime = performance.now();
+                }
+                mesh = meshes[i];
+                try {
+                    const faces = new ConvexHull().setFromObject(mesh).faces;
+                    for (j = 0; j < faces.length; j++) {
+                        face = faces[j];
+                        edge = face.edge;
+                        do {
+                            hullPoints.push(edge.head().point);
+                            edge = edge.next;
+                        } while (edge !== face.edge);
                     }
-                    catch (_a) {
-                    }
-                });
-            };
-            for (let i = 0; i < meshes.length; i += hullChunkSize) {
-                yield new Promise((resolve) => {
-                    setTimeout(() => {
-                        hullChunk(meshes.slice(i, i + hullChunkSize));
-                        resolve();
-                    }, 0);
-                });
+                }
+                catch (_a) {
+                }
             }
             const indexArray = new Uint32Array(hullPoints.length);
-            let currentIndex = 0;
             const indexByKey = new Map();
             const uniquePoints = [];
-            hullPoints.forEach((x, i) => {
-                const key = `${x.x}|${x.y}|${x.z}`;
+            let point;
+            let currentIndex = 0;
+            for (let i = 0; i < hullPoints.length; i++) {
+                point = hullPoints[i];
+                const key = `${point.x}|${point.y}|${point.z}`;
                 if (!indexByKey.has(key)) {
                     indexArray[i] = currentIndex;
                     indexByKey.set(key, currentIndex++);
-                    uniquePoints.push(x);
+                    uniquePoints.push(point);
                 }
                 else {
                     indexArray[i] = indexByKey.get(key);
                 }
-            });
+            }
             const positionArray = new Float32Array(uniquePoints.length * 3);
             let currentPosition = 0;
-            uniquePoints.forEach(x => {
-                positionArray[currentPosition++] = x.x;
-                positionArray[currentPosition++] = x.y;
-                positionArray[currentPosition++] = x.z;
-            });
+            let uniquePoint;
+            for (let i = 0; i < uniquePoints.length; i++) {
+                uniquePoint = uniquePoints[i];
+                positionArray[currentPosition++] = uniquePoint.x;
+                positionArray[currentPosition++] = uniquePoint.y;
+                positionArray[currentPosition++] = uniquePoint.z;
+            }
             const positionBuffer = new Float32BufferAttribute(positionArray, 3);
             const indexBuffer = new Uint32BufferAttribute(indexArray, 1);
             const outputGeometry = new BufferGeometry();
@@ -2604,26 +2611,30 @@ class SimplifiedScene {
             }
             const positionArray = new Float32Array(meshes.length * 8 * 3);
             const indexArray = new Uint32Array(meshes.length * 12 * 3);
+            let mesh;
             let positionsOffset = 0;
             let indicesOffset = 0;
-            const chunkSize = 100;
-            const processChunk = (chunk) => {
-                chunk.forEach(x => {
-                    const boxPositions = this.getMeshBoxPositions(x);
-                    const indexPositionOffset = positionsOffset / 3;
-                    for (let i = 0; i < boxPositions.length; i++) {
-                        positionArray[positionsOffset++] = boxPositions[i];
-                    }
-                    this._boxIndices.forEach(i => indexArray[indicesOffset++] = indexPositionOffset + i);
-                });
-            };
-            for (let i = 0; i < meshes.length; i += chunkSize) {
-                yield new Promise((resolve) => {
-                    setTimeout(() => {
-                        processChunk(meshes.slice(i, i + chunkSize));
-                        resolve();
-                    }, 0);
-                });
+            let j;
+            let k;
+            let lastBreakTime = performance.now();
+            for (let i = 0; i < meshes.length; i++) {
+                if (performance.now() - lastBreakTime > 100) {
+                    yield new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve();
+                        }, 0);
+                    });
+                    lastBreakTime = performance.now();
+                }
+                mesh = meshes[i];
+                const boxPositions = this.getMeshBoxPositions(mesh);
+                const indexPositionOffset = positionsOffset / 3;
+                for (j = 0; j < boxPositions.length; j++) {
+                    positionArray[positionsOffset++] = boxPositions[j];
+                }
+                for (k = 0; k < this._boxIndices.length; k++) {
+                    indexArray[indicesOffset++] = indexPositionOffset + this._boxIndices[k];
+                }
             }
             const positionBuffer = new Float32BufferAttribute(positionArray, 3);
             const indexBuffer = new Uint32BufferAttribute(indexArray, 1);

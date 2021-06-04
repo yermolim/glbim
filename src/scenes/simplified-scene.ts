@@ -1,5 +1,5 @@
-import { Light, Scene, Mesh, Box3, Matrix4, Vector3, BufferGeometry, BufferAttribute,
-  Uint32BufferAttribute, Float32BufferAttribute, BoxBufferGeometry, MeshPhongMaterial } from "three";
+import { Light, Scene, Mesh, Box3, Vector3, BufferGeometry, BufferAttribute,
+  Uint32BufferAttribute, Float32BufferAttribute, MeshPhongMaterial } from "three";
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull";
 
 import { MeshBgSm, FastRenderType } from "../common-types";
@@ -91,56 +91,69 @@ export class SimplifiedScene {
     if (!meshes?.length) {
       return null;
     }
-
+    
     const hullPoints: Vector3[] = [];
-    // splitting into chunks to UI remain responsible
-    const hullChunkSize = 100;
-    const hullChunk = (chunk: MeshBgSm[]) => {    
-      chunk.forEach(x => {  
-        try {
-          const hull = new ConvexHull().setFromObject(x);
-          hull.faces.forEach(f => {
-            let edge = f.edge;
-            do {
-              hullPoints.push(edge.head().point);
-              edge = edge.next;
-            } while (edge !== f.edge);
-          });
-        } catch {
-          // console.log("convex hull computing failed for mesh: " + x.name);
+    let mesh: MeshBgSm;
+    let face: any;
+    let edge: any;
+    let j: number;
+    let lastBreakTime = performance.now();
+
+    for (let i = 0; i < meshes.length; i++) {    
+
+      if (performance.now() - lastBreakTime > 100) {
+        // break on timeout every 100ms to keep UI responsive
+        await new Promise<void>((resolve) => { 
+          setTimeout(() => {
+            resolve();
+          }, 0);
+        });
+        lastBreakTime = performance.now();
+      }
+
+      mesh = meshes[i];
+
+      try {
+        const faces = new ConvexHull().setFromObject(mesh).faces;
+        for (j = 0; j < faces.length; j++) {
+          face = faces[j];
+          edge = face.edge;
+          do {
+            hullPoints.push(edge.head().point);
+            edge = edge.next;
+          } while (edge !== face.edge);
         }
-      });
-    };
-    for (let i = 0; i < meshes.length; i += hullChunkSize) {
-      await new Promise<void>((resolve) => { 
-        setTimeout(() => {
-          hullChunk(meshes.slice(i, i + hullChunkSize));
-          resolve();
-        }, 0);
-      });
+      } catch {
+        // console.log("convex hull computing failed for mesh: " + x.name);
+      }
     }
     
     const indexArray = new Uint32Array(hullPoints.length);
-    let currentIndex = 0;
     const indexByKey = new Map<string, number>();
     const uniquePoints: Vector3[] = [];
-    hullPoints.forEach((x, i) => {
-      const key = `${x.x}|${x.y}|${x.z}`;
+    let point: Vector3;
+    let currentIndex = 0;
+    for (let i = 0; i < hullPoints.length; i++) {
+      point = hullPoints[i];
+      const key = `${point.x}|${point.y}|${point.z}`;
       if (!indexByKey.has(key)) {
         indexArray[i] = currentIndex;
         indexByKey.set(key, currentIndex++);
-        uniquePoints.push(x);
+        uniquePoints.push(point);
       } else {
         indexArray[i] = indexByKey.get(key);
       }
-    });
+    }
+
     const positionArray = new Float32Array(uniquePoints.length * 3);
     let currentPosition = 0;
-    uniquePoints.forEach(x => {
-      positionArray[currentPosition++] = x.x;
-      positionArray[currentPosition++] = x.y;
-      positionArray[currentPosition++] = x.z;
-    });
+    let uniquePoint: Vector3;
+    for (let i = 0; i < uniquePoints.length; i++) {
+      uniquePoint = uniquePoints[i];
+      positionArray[currentPosition++] = uniquePoint.x;
+      positionArray[currentPosition++] = uniquePoint.y;
+      positionArray[currentPosition++] = uniquePoint.z;
+    }
     
     const positionBuffer = new Float32BufferAttribute(positionArray, 3);
     const indexBuffer = new Uint32BufferAttribute(indexArray, 1);
@@ -160,28 +173,35 @@ export class SimplifiedScene {
     const positionArray = new Float32Array(meshes.length * 8 * 3);
     const indexArray = new Uint32Array(meshes.length * 12 * 3);
     
+    let mesh: MeshBgSm;
     let positionsOffset = 0; 
     let indicesOffset = 0;
-    // splitting into chunks to UI remain responsible
-    const chunkSize = 100;
-    const processChunk = (chunk: MeshBgSm[]) => {    
-      chunk.forEach(x => {
-        const boxPositions = this.getMeshBoxPositions(x);
-        const indexPositionOffset = positionsOffset / 3;
-        for (let i = 0; i < boxPositions.length; i++) {
-          positionArray[positionsOffset++] = boxPositions[i];
-        }
-        this._boxIndices.forEach(i => indexArray[indicesOffset++] = indexPositionOffset + i);
-      });
-    };
+    let j: number;
+    let k: number;
+    let lastBreakTime = performance.now();
 
-    for (let i = 0; i < meshes.length; i += chunkSize) {
-      await new Promise<void>((resolve) => { 
-        setTimeout(() => {
-          processChunk(meshes.slice(i, i + chunkSize));
-          resolve();
-        }, 0);
-      });
+    for (let i = 0; i < meshes.length; i++) {    
+
+      if (performance.now() - lastBreakTime > 100) {
+        // break on timeout every 100ms to keep UI responsive
+        await new Promise<void>((resolve) => { 
+          setTimeout(() => {
+            resolve();
+          }, 0);
+        });
+        lastBreakTime = performance.now();
+      }
+
+      mesh = meshes[i];
+
+      const boxPositions = this.getMeshBoxPositions(mesh);
+      const indexPositionOffset = positionsOffset / 3;
+      for (j = 0; j < boxPositions.length; j++) {
+        positionArray[positionsOffset++] = boxPositions[j];
+      }
+      for (k = 0; k < this._boxIndices.length; k++) {
+        indexArray[indicesOffset++] = indexPositionOffset + this._boxIndices[k];
+      }
     }
     
     const positionBuffer = new Float32BufferAttribute(positionArray, 3);
