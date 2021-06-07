@@ -28,6 +28,10 @@ export interface ModelOpenedInfo {
 	meshCount: number;
 	vertexCount: number;
 }
+export interface LoadingQueueInfo {
+	actionsDone: number;
+	actionsLeft: number;
+}
 export interface ColoringInfo {
 	color: number;
 	opacity: number;
@@ -114,6 +118,7 @@ export declare class GltfViewer {
 	lastFrameTime$: Observable<number>;
 	cameraPositionChange$: Observable<Vec4DoubleCS>;
 	loadingStateChange$: Observable<boolean>;
+	loadingQueueChange$: Observable<LoadingQueueInfo>;
 	modelLoadingStart$: Observable<ModelLoadedInfo>;
 	modelLoadingEnd$: Observable<ModelLoadedInfo>;
 	modelLoadingProgress$: Observable<ModelLoadingInfo>;

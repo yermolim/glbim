@@ -192,6 +192,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
 class ModelLoaderService {
     constructor(dracoDecoderPath, basePoint = null) {
         this._loadingStateChange = new BehaviorSubject(false);
+        this._loadingQueueChange = new BehaviorSubject(null);
         this._modelLoadingStart = new Subject();
         this._modelLoadingEnd = new Subject();
         this._modelLoadingProgress = new Subject();
@@ -217,6 +218,7 @@ class ModelLoaderService {
         }
         this._wcsToUcsMatrix = wcsToUcsMatrix;
         this.loadingStateChange$ = this._loadingStateChange.asObservable();
+        this.loadingQueueChange$ = this._loadingQueueChange.asObservable();
         this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
         this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
         this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
@@ -378,10 +380,14 @@ class ModelLoaderService {
             }
             this._loadingInProgress = true;
             this._loadingStateChange.next(true);
+            let actionsDone = 0;
             while (this._loadingQueue.length > 0) {
+                this._loadingQueueChange.next({ actionsDone, actionsLeft: this._loadingQueue.length });
                 const action = this._loadingQueue.shift();
                 yield action();
+                actionsDone += 1;
             }
+            this._loadingQueueChange.next(null);
             this.updateModelsDataArrays();
             if (this._onQueueLoaded.size) {
                 for (const callback of this._onQueueLoaded) {
@@ -3091,20 +3097,20 @@ class PickingService {
         const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);
         const centerPointTemp = new Vector3();
         const meshes = [];
-        for (const x of this.scene.children) {
-            if (!(x instanceof Mesh)) {
+        for (const mesh of this.scene.children) {
+            if (!(mesh instanceof Mesh)) {
                 continue;
             }
-            const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(x.userData.color);
+            const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(mesh.userData.color);
             if (!sourceMesh) {
                 continue;
             }
-            if (!x.geometry.boundingSphere) {
-                x.geometry.computeBoundingSphere();
+            if (!mesh.geometry.boundingSphere) {
+                mesh.geometry.computeBoundingSphere();
             }
-            centerPointTemp.copy(x.geometry.boundingSphere.center);
-            x.updateMatrixWorld();
-            centerPointTemp.applyMatrix4(x.matrixWorld);
+            centerPointTemp.copy(mesh.geometry.boundingSphere.center);
+            mesh.updateMatrixWorld();
+            centerPointTemp.applyMatrix4(mesh.matrixWorld);
             const canvasCoords = renderService.convertWorldToCanvas(centerPointTemp);
             if (canvasCoords.x < minAreaCX
                 || canvasCoords.x > maxAreaCX
@@ -3471,20 +3477,23 @@ class ColoringService {
     colorMeshes(renderService, coloringInfos) {
         const coloredMeshes = new Set();
         coloringInfos || (coloringInfos = []);
+        let i;
+        let mesh;
         for (const info of [...coloringInfos, this._hiddenColoring]) {
-            const color = new Color(info.color);
-            const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
+            const threeColor = new Color(info.color);
+            const rgbrmoColor = new ColorRgbRmo(threeColor.r, threeColor.g, threeColor.b, 1, 0, info.opacity);
             for (const id of info.ids) {
                 const meshes = this._loaderService.getLoadedMeshesById(id);
                 if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
                     continue;
                 }
-                meshes.forEach(mesh => {
+                for (i = 0; i < meshes.length; i++) {
+                    mesh = meshes[i];
                     mesh.userData.colored = true;
-                    ColorRgbRmo.setCustomToMesh(mesh, customColor);
+                    ColorRgbRmo.setCustomToMesh(mesh, rgbrmoColor);
                     renderService.enqueueMeshForColorUpdate(mesh);
                     coloredMeshes.add(mesh);
-                });
+                }
             }
         }
         this._activeColorings = coloringInfos;
@@ -3492,7 +3501,9 @@ class ColoringService {
         renderService.render();
     }
     clearMeshesColoring(renderService) {
-        for (const mesh of this._coloredMeshes) {
+        let mesh;
+        for (let i = 0; i < this._coloredMeshes.length; i++) {
+            mesh = this._coloredMeshes[i];
             mesh.userData.colored = undefined;
             ColorRgbRmo.deleteFromMesh(mesh, true);
             renderService.enqueueMeshForColorUpdate(mesh);
@@ -3919,6 +3930,7 @@ class GltfViewer {
             yield this._renderService.updateRenderSceneAsync();
         }));
         this.loadingStateChange$ = this._loaderService.loadingStateChange$.pipe();
+        this.loadingQueueChange$ = this._loaderService.loadingQueueChange$.pipe();
         this.modelLoadingStart$ = this._loaderService.modelLoadingStart$.pipe();
         this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$.pipe();
         this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$.pipe();

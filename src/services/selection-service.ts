@@ -175,8 +175,8 @@ export class SelectionService {
   }
 
   private applySelection(renderService: RenderService, meshes: MeshBgSm[], 
-    manual: boolean, isolateSelected: boolean) { 
-      
+    manual: boolean, isolateSelected: boolean) {
+
     this.clearSelection(renderService);
     this.clearIsolation(renderService);
 
@@ -189,7 +189,6 @@ export class SelectionService {
       x.userData.selected = true;
       renderService.enqueueMeshForColorUpdate(x);
     });
-
 
     this._selectedMeshes = meshes;
     if (isolateSelected) {

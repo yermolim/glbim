@@ -97,22 +97,25 @@ export class ColoringService {
 
   private colorMeshes(renderService: RenderService, coloringInfos: ColoringInfo[]) {
     const coloredMeshes = new Set<MeshBgSm>();
-
     coloringInfos ||= [];
+
+    let i: number;
+    let mesh: MeshBgSm;
     for (const info of [...coloringInfos, this._hiddenColoring]) {
-      const color = new Color(info.color);
-      const customColor = new ColorRgbRmo(color.r, color.g, color.b, 1, 0, info.opacity);
+      const threeColor = new Color(info.color);
+      const rgbrmoColor = new ColorRgbRmo(threeColor.r, threeColor.g, threeColor.b, 1, 0, info.opacity);
       for (const id of info.ids) {
         const meshes = this._loaderService.getLoadedMeshesById(id);
         if (!meshes?.length) {
           continue;
         }
-        meshes.forEach(mesh => {
+        for (i = 0; i < meshes.length; i++) {
+          mesh = meshes[i];
           mesh.userData.colored = true;
-          ColorRgbRmo.setCustomToMesh(mesh, customColor);
+          ColorRgbRmo.setCustomToMesh(mesh, rgbrmoColor);
           renderService.enqueueMeshForColorUpdate(mesh);
           coloredMeshes.add(mesh);
-        });
+        }
       }
     }
     this._activeColorings = coloringInfos;
@@ -122,7 +125,9 @@ export class ColoringService {
   }
 
   private clearMeshesColoring(renderService: RenderService) {
-    for (const mesh of this._coloredMeshes) {
+    let mesh: MeshBgSm;
+    for (let i = 0; i < this._coloredMeshes.length; i++) {
+      mesh = this._coloredMeshes[i];
       mesh.userData.colored = undefined;
       ColorRgbRmo.deleteFromMesh(mesh, true);
       renderService.enqueueMeshForColorUpdate(mesh);

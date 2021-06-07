@@ -143,6 +143,8 @@ class DemoViewer {
   private _currentModelId = 0;
   private _urlById = new Map<number, string>();
 
+  private _selectionGridPromise: Promise<void>;
+
   constructor() {
     //#region select html elements
     this._outerContainer = document.querySelector(DemoViewer.outerContainerSel);
@@ -311,27 +313,49 @@ class DemoViewer {
         }
       }),
       
-      this._viewer.meshesSelectionChange$.subscribe(x => {
+      this._viewer.meshesSelectionChange$.subscribe(async x => {
+        if (this._selectionGridPromise) {
+          await this._selectionGridPromise;
+          this._selectionGridPromise = null;
+        }
+
         this._selectedMeshIds = [...x];
         this._selectedElementGrid.innerHTML = "";
+
         if (this._selectedMeshIds.length) {
           this._btnFitElementsToView.classList.remove("disabled");
           this._btnHideSelected.classList.remove("disabled");
           this._btnPaintSelected.classList.remove("disabled");
-          this._selectedMeshIds.forEach(id => {
-            const [modelGuid, handle] = id.split("|");
-            const elementRow = document.createElement("div");
-            elementRow.classList.add("row", "fl-row", "fl-jc-sbetween", "fl-ai-center");
-            const elementParagraph = document.createElement("p");
-            const handleSpan = document.createElement("span");
-            handleSpan.classList.add("bold");
-            handleSpan.innerHTML = handle;
-            const modelNameSpan = document.createElement("span");
-            modelNameSpan.innerHTML = ` (${this._openedModelNameByGuid.get(modelGuid)})`;
-            elementParagraph.append(handleSpan, modelNameSpan);
-            elementRow.append(elementParagraph);
-            this._selectedElementGrid.append(elementRow);
+
+          this._selectionGridPromise = new Promise<void>((resolve, reject) => {
+            setTimeout(async () => {
+              let lastBreak = performance.now();
+              for (const id of this._selectedMeshIds) {
+                if (performance.now() - lastBreak > 100) {
+                  await new Promise<void>(breakRes => {
+                    setTimeout(() => {
+                      lastBreak = performance.now();
+                      breakRes();
+                    }, 0);
+                  });
+                }
+                const [modelGuid, handle] = id.split("|");
+                const elementRow = document.createElement("div");
+                elementRow.classList.add("row", "fl-row", "fl-jc-sbetween", "fl-ai-center");
+                const elementParagraph = document.createElement("p");
+                const handleSpan = document.createElement("span");
+                handleSpan.classList.add("bold");
+                handleSpan.innerHTML = handle;
+                const modelNameSpan = document.createElement("span");
+                modelNameSpan.innerHTML = ` (${this._openedModelNameByGuid.get(modelGuid)})`;
+                elementParagraph.append(handleSpan, modelNameSpan);
+                elementRow.append(elementParagraph);
+                this._selectedElementGrid.append(elementRow);
+              }
+              resolve();
+            }, 0);
           });
+
         } else {
           this._btnFitElementsToView.classList.add("disabled");
           this._btnHideSelected.classList.add("disabled");

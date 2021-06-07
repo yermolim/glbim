@@ -5,12 +5,13 @@ import { Mesh, MeshStandardMaterial, BufferGeometry, Matrix4 } from "three";
 import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 
-import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, 
+import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, LoadingQueueInfo,
   ModelGeometryInfo, ModelFileInfo, MeshBgSm, Vec4DoubleCS} from "../common-types";
 
 export class ModelLoaderService {
   // #region public observables
   loadingStateChange$: Observable<boolean>;
+  loadingQueueChange$: Observable<LoadingQueueInfo>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
@@ -19,6 +20,7 @@ export class ModelLoaderService {
   
   // #region private rx subjects
   private _loadingStateChange = new BehaviorSubject<boolean>(false);
+  private _loadingQueueChange = new BehaviorSubject<LoadingQueueInfo>(null);
   private _modelLoadingStart = new Subject<ModelLoadedInfo>();
   private _modelLoadingEnd = new Subject<ModelLoadedInfo>();
   private _modelLoadingProgress = new Subject<ModelLoadingInfo>();
@@ -74,6 +76,7 @@ export class ModelLoaderService {
     this._wcsToUcsMatrix = wcsToUcsMatrix;
     
     this.loadingStateChange$ = this._loadingStateChange.asObservable();
+    this.loadingQueueChange$ = this._loadingQueueChange.asObservable();
     this.modelLoadingStart$ = this._modelLoadingStart.asObservable();
     this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
     this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
@@ -241,10 +244,15 @@ export class ModelLoaderService {
     this._loadingInProgress = true;  
     this._loadingStateChange.next(true);
 
+    let actionsDone = 0;
     while (this._loadingQueue.length > 0) {
+      this._loadingQueueChange.next({actionsDone, actionsLeft: this._loadingQueue.length});
+
       const action = this._loadingQueue.shift();
       await action();
+      actionsDone += 1;
     } 
+    this._loadingQueueChange.next(null);
     
     this.updateModelsDataArrays();
     

@@ -2,7 +2,7 @@ import { Observable, Subscription, BehaviorSubject } from "rxjs";
 
 import { GltfViewerOptions } from "./gltf-viewer-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
-  ColoringInfo, PointerEventHelper, Distance, 
+  ColoringInfo, PointerEventHelper, Distance, LoadingQueueInfo,
   Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
 import { SelectionFrame } from "./components/selection-frame";
 
@@ -32,6 +32,7 @@ export class GltfViewer {
   cameraPositionChange$: Observable<Vec4DoubleCS>;
   
   loadingStateChange$: Observable<boolean>;
+  loadingQueueChange$: Observable<LoadingQueueInfo>;
   modelLoadingStart$: Observable<ModelLoadedInfo>;
   modelLoadingEnd$: Observable<ModelLoadedInfo>;
   modelLoadingProgress$: Observable<ModelLoadingInfo>;
@@ -573,6 +574,7 @@ export class GltfViewer {
       });
 
     this.loadingStateChange$ = this._loaderService.loadingStateChange$.pipe();
+    this.loadingQueueChange$ = this._loaderService.loadingQueueChange$.pipe();
     this.modelLoadingStart$ = this._loaderService.modelLoadingStart$.pipe();
     this.modelLoadingEnd$ = this._loaderService.modelLoadingEnd$.pipe();
     this.modelLoadingProgress$ = this._loaderService.modelLoadingProgress$.pipe();

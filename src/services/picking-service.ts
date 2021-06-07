@@ -58,27 +58,27 @@ export class PickingService {
 
     const centerPointTemp = new Vector3();
     const meshes: MeshBgSm[] = [];
-    for (const x of this.scene.children) {
-      if (!(x instanceof Mesh)) {
+    for (const mesh of this.scene.children) {
+      if (!(mesh instanceof Mesh)) {
         // not a mesh. ignore it
         continue;
       }
 
-      const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(x.userData.color);
+      const sourceMesh = this._pickingScene.getVisibleSourceMeshByColor(mesh.userData.color);
       if (!sourceMesh) {
         // the mesh is not visible. ignore it
         continue;
       }
 
       // calculate bounding sphere center of the mesh
-      if (!x.geometry.boundingSphere) {
-        x.geometry.computeBoundingSphere();
+      if (!mesh.geometry.boundingSphere) {
+        mesh.geometry.computeBoundingSphere();
       }
 
       // get the transformed center of the mesh
-      centerPointTemp.copy(x.geometry.boundingSphere.center);
-      x.updateMatrixWorld();
-      centerPointTemp.applyMatrix4(x.matrixWorld); 
+      centerPointTemp.copy(mesh.geometry.boundingSphere.center);
+      mesh.updateMatrixWorld();
+      centerPointTemp.applyMatrix4(mesh.matrixWorld); 
 
       // check if the mesh center is inside the area
       const canvasCoords = renderService.convertWorldToCanvas(centerPointTemp);

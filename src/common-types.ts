@@ -46,6 +46,11 @@ export interface ModelOpenedInfo {
   vertexCount: number;
 }
 
+export interface LoadingQueueInfo {
+  actionsDone: number;
+  actionsLeft: number;
+}
+
 export interface ColoringInfo {
   color: number; 
   opacity: number;
