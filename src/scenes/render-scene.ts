@@ -7,6 +7,11 @@ import { MeshMergeType, MeshBgSm,
 import { MaterialBuilder } from "../helpers/material-builder";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
+interface RefreshMeshColorsResult {
+  rgbRmo: ColorRgbRmo; 
+  opacityChanged: boolean;
+}
+
 export interface RenderSceneColors {
   selectionColor: number;
   highlightColor: number;
@@ -350,32 +355,39 @@ export class RenderScene {
     let i: number;
     let j: number;
     let mesh: MeshBgSm;
+    let indices: Uint32Array;
     let initialOpacity: number;
-    let index: number;
-
+    let refreshColorsResult: RefreshMeshColorsResult;
+    let color: ColorRgbRmo;
+    
     let r: number;
     let g: number;
     let b: number;
     let roughness: number;
     let metalness: number;
     let opacity: number;
-
+    let index: number;
+    
     let n1: number;
     let n2: number;
     let n3: number;
 
     for (i = 0; i < meshes.length; i++) {
       mesh = meshes[i]; 
-      const indices = indicesBySourceMesh.get(mesh);
+      indices = indicesBySourceMesh.get(mesh);
+
       initialOpacity = rmos.getZ(indices[0]) / 255;
-      const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh, initialOpacity);
-      
-      r = rgbRmo.rByte;
-      g = rgbRmo.gByte;
-      b = rgbRmo.bByte;
-      roughness = rgbRmo.roughnessByte;
-      metalness = rgbRmo.metalnessByte;
-      opacity = rgbRmo.opacityByte;
+      refreshColorsResult = this.refreshMeshColors(mesh, initialOpacity);
+      if (!anyMeshOpacityChanged && refreshColorsResult.opacityChanged) {
+        anyMeshOpacityChanged = true;
+      }      
+      color = refreshColorsResult.rgbRmo;
+      r = color.rByte;
+      g = color.gByte;
+      b = color.bByte;
+      roughness = color.roughnessByte;
+      metalness = color.metalnessByte;
+      opacity = color.opacityByte;
 
       for (j = 0; j < indices.length; j++) {
         index = indices[j] * 3;
@@ -392,10 +404,6 @@ export class RenderScene {
         rmoBuffer[n2] = metalness;
         rmoBuffer[n3] = opacity;
       }
-
-      if (!anyMeshOpacityChanged && opacityChanged) {
-        anyMeshOpacityChanged = true;
-      }
     }
 
     colors.needsUpdate = true;
@@ -411,14 +419,23 @@ export class RenderScene {
     let n: number;
     let p: number;
     let q: number;
+
+    let meshes: MeshBgSm[];
+    let opaqueMeshes: MeshBgSm[];
+    let transparentMeshes: MeshBgSm[];
     let mesh: MeshBgSm;
+
+    let renderGeometry: RenderGeometry;
+    let indexMap: Map<MeshBgSm, Uint32Array>;
+    let indexArray: Uint32Array;
     let opaqueIndices: Uint32Array;
-    let transparentIndices: Uint32Array;
+    let transparentIndices: Uint32Array;    
+    let currentIndex: number;
 
     for (const index of this._geometryIndicesNeedSort) {
-      const meshes = this._sourceMeshesByGeometryIndex.get(index);
-      const opaqueMeshes: MeshBgSm[] = [];
-      const transparentMeshes: MeshBgSm[] = [];
+      meshes = this._sourceMeshesByGeometryIndex.get(index);
+      opaqueMeshes = [];
+      transparentMeshes = [];
       for (j = 0; j < meshes.length; j++) {
         mesh = meshes[j];
         if (ColorRgbRmo.getFromMesh(mesh).opacity === 1) {
@@ -428,22 +445,25 @@ export class RenderScene {
         }
       }
 
-      const { indices, indicesBySourceMesh } = this._geometries[index];
-      let currentIndex = 0;
+      renderGeometry = this._geometries[index];
+      indexArray = renderGeometry.indices.array as Uint32Array;
+      indexMap = renderGeometry.indicesBySourceMesh;
+
+      currentIndex = 0;
       for (m = 0; m < opaqueMeshes.length; m++) {
-        opaqueIndices = indicesBySourceMesh.get(opaqueMeshes[m]);
+        opaqueIndices = indexMap.get(opaqueMeshes[m]);
         for (p = 0; p < opaqueIndices.length; p++) {
-          indices.setX(currentIndex++, opaqueIndices[p]);
+          indexArray[currentIndex++] = opaqueIndices[p];
         }
       }
       for (n = 0; n < transparentMeshes.length; n++) {
-        transparentIndices = indicesBySourceMesh.get(transparentMeshes[n]);
+        transparentIndices = indexMap.get(transparentMeshes[n]);
         for (q = 0; q < transparentIndices.length; q++) {
-          indices.setX(currentIndex++, transparentIndices[q]);
+          indexArray[currentIndex++] = transparentIndices[q];
         }
       }
 
-      indices.needsUpdate = true;
+      renderGeometry.indices.needsUpdate = true;
     }
 
     this._geometryIndicesNeedSort.clear();
@@ -468,8 +488,8 @@ export class RenderScene {
     return material;
   }   
 
-  private refreshMeshColors(mesh: MeshBgSm, opacityInitial: number = null): 
-  {rgbRmo: ColorRgbRmo; opacityChanged: boolean} {
+  private refreshMeshColors(mesh: MeshBgSm, 
+    opacityInitial: number = null): RefreshMeshColorsResult {
 
     opacityInitial = opacityInitial ?? ColorRgbRmo.getFromMesh(mesh).opacity;   
     if (!mesh.userData.isolated) {

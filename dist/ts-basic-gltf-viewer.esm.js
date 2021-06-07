@@ -2326,28 +2326,35 @@ class RenderScene {
         let i;
         let j;
         let mesh;
+        let indices;
         let initialOpacity;
-        let index;
+        let refreshColorsResult;
+        let color;
         let r;
         let g;
         let b;
         let roughness;
         let metalness;
         let opacity;
+        let index;
         let n1;
         let n2;
         let n3;
         for (i = 0; i < meshes.length; i++) {
             mesh = meshes[i];
-            const indices = indicesBySourceMesh.get(mesh);
+            indices = indicesBySourceMesh.get(mesh);
             initialOpacity = rmos.getZ(indices[0]) / 255;
-            const { rgbRmo, opacityChanged } = this.refreshMeshColors(mesh, initialOpacity);
-            r = rgbRmo.rByte;
-            g = rgbRmo.gByte;
-            b = rgbRmo.bByte;
-            roughness = rgbRmo.roughnessByte;
-            metalness = rgbRmo.metalnessByte;
-            opacity = rgbRmo.opacityByte;
+            refreshColorsResult = this.refreshMeshColors(mesh, initialOpacity);
+            if (!anyMeshOpacityChanged && refreshColorsResult.opacityChanged) {
+                anyMeshOpacityChanged = true;
+            }
+            color = refreshColorsResult.rgbRmo;
+            r = color.rByte;
+            g = color.gByte;
+            b = color.bByte;
+            roughness = color.roughnessByte;
+            metalness = color.metalnessByte;
+            opacity = color.opacityByte;
             for (j = 0; j < indices.length; j++) {
                 index = indices[j] * 3;
                 n1 = index;
@@ -2359,9 +2366,6 @@ class RenderScene {
                 rmoBuffer[n1] = roughness;
                 rmoBuffer[n2] = metalness;
                 rmoBuffer[n3] = opacity;
-            }
-            if (!anyMeshOpacityChanged && opacityChanged) {
-                anyMeshOpacityChanged = true;
             }
         }
         colors.needsUpdate = true;
@@ -2376,13 +2380,20 @@ class RenderScene {
         let n;
         let p;
         let q;
+        let meshes;
+        let opaqueMeshes;
+        let transparentMeshes;
         let mesh;
+        let renderGeometry;
+        let indexMap;
+        let indexArray;
         let opaqueIndices;
         let transparentIndices;
+        let currentIndex;
         for (const index of this._geometryIndicesNeedSort) {
-            const meshes = this._sourceMeshesByGeometryIndex.get(index);
-            const opaqueMeshes = [];
-            const transparentMeshes = [];
+            meshes = this._sourceMeshesByGeometryIndex.get(index);
+            opaqueMeshes = [];
+            transparentMeshes = [];
             for (j = 0; j < meshes.length; j++) {
                 mesh = meshes[j];
                 if (ColorRgbRmo.getFromMesh(mesh).opacity === 1) {
@@ -2392,21 +2403,23 @@ class RenderScene {
                     transparentMeshes.push(mesh);
                 }
             }
-            const { indices, indicesBySourceMesh } = this._geometries[index];
-            let currentIndex = 0;
+            renderGeometry = this._geometries[index];
+            indexArray = renderGeometry.indices.array;
+            indexMap = renderGeometry.indicesBySourceMesh;
+            currentIndex = 0;
             for (m = 0; m < opaqueMeshes.length; m++) {
-                opaqueIndices = indicesBySourceMesh.get(opaqueMeshes[m]);
+                opaqueIndices = indexMap.get(opaqueMeshes[m]);
                 for (p = 0; p < opaqueIndices.length; p++) {
-                    indices.setX(currentIndex++, opaqueIndices[p]);
+                    indexArray[currentIndex++] = opaqueIndices[p];
                 }
             }
             for (n = 0; n < transparentMeshes.length; n++) {
-                transparentIndices = indicesBySourceMesh.get(transparentMeshes[n]);
+                transparentIndices = indexMap.get(transparentMeshes[n]);
                 for (q = 0; q < transparentIndices.length; q++) {
-                    indices.setX(currentIndex++, transparentIndices[q]);
+                    indexArray[currentIndex++] = transparentIndices[q];
                 }
             }
-            indices.needsUpdate = true;
+            renderGeometry.indices.needsUpdate = true;
         }
         this._geometryIndicesNeedSort.clear();
     }
