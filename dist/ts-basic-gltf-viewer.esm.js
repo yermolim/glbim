@@ -747,38 +747,38 @@ class ColorRgbRmo {
     static createFromMaterial(material) {
         return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
     }
-    static deleteFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
-        mesh[ColorRgbRmo.prop] = null;
+    static deleteColorFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
+        mesh[ColorRgbRmo.overrideColorProp] = null;
         if (deleteCustom) {
-            mesh[ColorRgbRmo.customProp] = null;
+            mesh[ColorRgbRmo.paintColorProp] = null;
         }
         if (deleteDefault) {
-            mesh[ColorRgbRmo.defaultProp] = null;
+            mesh[ColorRgbRmo.originalColorProp] = null;
         }
     }
-    static getDefaultFromMesh(mesh) {
-        if (!mesh[ColorRgbRmo.defaultProp]) {
-            mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+    static getOriginalColorFromMesh(mesh) {
+        if (!mesh[ColorRgbRmo.originalColorProp]) {
+            mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(mesh.material);
         }
-        return mesh[ColorRgbRmo.defaultProp];
+        return mesh[ColorRgbRmo.originalColorProp];
     }
-    static getCustomFromMesh(mesh) {
-        return mesh[ColorRgbRmo.customProp];
+    static getPaintColorFromMesh(mesh) {
+        return mesh[ColorRgbRmo.paintColorProp];
     }
-    static getFromMesh(mesh) {
-        if (mesh[ColorRgbRmo.prop]) {
-            return mesh[ColorRgbRmo.prop];
+    static getFinalColorFromMesh(mesh) {
+        if (mesh[ColorRgbRmo.overrideColorProp]) {
+            return mesh[ColorRgbRmo.overrideColorProp];
         }
-        if (mesh[ColorRgbRmo.customProp]) {
-            return mesh[ColorRgbRmo.customProp];
+        if (mesh[ColorRgbRmo.paintColorProp]) {
+            return mesh[ColorRgbRmo.paintColorProp];
         }
-        return ColorRgbRmo.getDefaultFromMesh(mesh);
+        return ColorRgbRmo.getOriginalColorFromMesh(mesh);
     }
-    static setCustomToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.customProp] = rgbRmo;
+    static setPaintColorToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.paintColorProp] = rgbRmo;
     }
-    static setToMesh(mesh, rgbRmo) {
-        mesh[ColorRgbRmo.prop] = rgbRmo;
+    static setOverrideColorToMesh(mesh, rgbRmo) {
+        mesh[ColorRgbRmo.overrideColorProp] = rgbRmo;
     }
     clone() {
         const { r, g, b, roughness, metalness, opacity } = this;
@@ -788,9 +788,9 @@ class ColorRgbRmo {
         return `${this.r}|${this.g}|${this.b}|${this.roughness}|${this.metalness}|${this.opacity}`;
     }
 }
-ColorRgbRmo.prop = "rgbrmo";
-ColorRgbRmo.customProp = "rgbrmoC";
-ColorRgbRmo.defaultProp = "rgbrmoD";
+ColorRgbRmo.overrideColorProp = "rgbrmoOv";
+ColorRgbRmo.paintColorProp = "rgbrmoP";
+ColorRgbRmo.originalColorProp = "rgbrmoOr";
 
 class MaterialBuilder {
     static buildGlobalMaterial() {
@@ -2146,7 +2146,7 @@ class RenderScene {
             }
             else {
                 for (const sourceMesh of meshes) {
-                    const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
+                    const rgbRmo = ColorRgbRmo.getFinalColorFromMesh(sourceMesh);
                     const material = this.getMaterialByColor(rgbRmo);
                     sourceMesh.updateMatrixWorld();
                     const renderMesh = new Mesh(sourceMesh.geometry, material);
@@ -2243,7 +2243,7 @@ class RenderScene {
                     .applyMatrix4(mesh.matrixWorld);
                 const positions = geometry.getAttribute("position").array;
                 const indices = geometry.getIndex().array;
-                rgbRmo = ColorRgbRmo.getFromMesh(mesh);
+                rgbRmo = ColorRgbRmo.getFinalColorFromMesh(mesh);
                 r = rgbRmo.rByte;
                 g = rgbRmo.gByte;
                 b = rgbRmo.bByte;
@@ -2396,7 +2396,7 @@ class RenderScene {
             transparentMeshes = [];
             for (j = 0; j < meshes.length; j++) {
                 mesh = meshes[j];
-                if (ColorRgbRmo.getFromMesh(mesh).opacity === 1) {
+                if (ColorRgbRmo.getFinalColorFromMesh(mesh).opacity === 1) {
                     opaqueMeshes.push(mesh);
                 }
                 else {
@@ -2439,11 +2439,11 @@ class RenderScene {
         return material;
     }
     refreshMeshColors(mesh, opacityInitial = null) {
-        opacityInitial = opacityInitial !== null && opacityInitial !== void 0 ? opacityInitial : ColorRgbRmo.getFromMesh(mesh).opacity;
+        opacityInitial = opacityInitial !== null && opacityInitial !== void 0 ? opacityInitial : ColorRgbRmo.getFinalColorFromMesh(mesh).opacity;
         if (!mesh.userData.isolated) {
-            ColorRgbRmo.deleteFromMesh(mesh);
+            ColorRgbRmo.deleteColorFromMesh(mesh);
         }
-        const rgbRmoBase = ColorRgbRmo.getFromMesh(mesh);
+        const rgbRmoBase = ColorRgbRmo.getFinalColorFromMesh(mesh);
         let rgbRmo;
         if (mesh.userData.highlighted) {
             rgbRmo = new ColorRgbRmo(this._highlightColor.r, this._highlightColor.g, this._highlightColor.b, rgbRmoBase.roughness, rgbRmoBase.metalness, rgbRmoBase.opacity);
@@ -2464,7 +2464,7 @@ class RenderScene {
         else {
             rgbRmo = rgbRmoBase;
         }
-        ColorRgbRmo.setToMesh(mesh, rgbRmo);
+        ColorRgbRmo.setOverrideColorToMesh(mesh, rgbRmo);
         const opacityChanged = (rgbRmo.opacity === 1 && opacityInitial < 1)
             || (rgbRmo.opacity < 1 && opacityInitial === 1);
         return { rgbRmo, opacityChanged };
@@ -3024,7 +3024,7 @@ class PickingScene {
     getVisibleSourceMeshByColor(color) {
         var _a;
         const sourceMesh = this._sourceMeshByPickingColor.get(color);
-        if (!sourceMesh || !((_a = ColorRgbRmo.getFromMesh(sourceMesh)) === null || _a === void 0 ? void 0 : _a.opacity)) {
+        if (!sourceMesh || !((_a = ColorRgbRmo.getFinalColorFromMesh(sourceMesh)) === null || _a === void 0 ? void 0 : _a.opacity)) {
             return null;
         }
         return sourceMesh;
@@ -3033,7 +3033,7 @@ class PickingScene {
         const context = renderer.getContext();
         this._pickingMeshBySourceMesh.forEach((picking, source) => {
             var _a;
-            picking.visible = !!((_a = ColorRgbRmo.getFromMesh(source)) === null || _a === void 0 ? void 0 : _a.opacity);
+            picking.visible = !!((_a = ColorRgbRmo.getFinalColorFromMesh(source)) === null || _a === void 0 ? void 0 : _a.opacity);
         });
         camera.setViewOffset(context.drawingBufferWidth, context.drawingBufferHeight, position.x, position.y, 1, 1);
         renderer.setRenderTarget(this._target);
@@ -3503,7 +3503,7 @@ class ColoringService {
                 for (i = 0; i < meshes.length; i++) {
                     mesh = meshes[i];
                     mesh.userData.colored = true;
-                    ColorRgbRmo.setCustomToMesh(mesh, rgbrmoColor);
+                    ColorRgbRmo.setPaintColorToMesh(mesh, rgbrmoColor);
                     renderService.enqueueMeshForColorUpdate(mesh);
                     coloredMeshes.add(mesh);
                 }
@@ -3518,7 +3518,7 @@ class ColoringService {
         for (let i = 0; i < this._coloredMeshes.length; i++) {
             mesh = this._coloredMeshes[i];
             mesh.userData.colored = undefined;
-            ColorRgbRmo.deleteFromMesh(mesh, true);
+            ColorRgbRmo.deleteColorFromMesh(mesh, true);
             renderService.enqueueMeshForColorUpdate(mesh);
         }
         this._coloredMeshes = [];

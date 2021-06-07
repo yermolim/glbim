@@ -10,9 +10,9 @@ import { MeshBgSm } from "../common-types";
  * O - opacity
  */
 export class ColorRgbRmo {
-  private static readonly prop = "rgbrmo";
-  private static readonly customProp = "rgbrmoC";
-  private static readonly defaultProp = "rgbrmoD";
+  private static readonly overrideColorProp = "rgbrmoOv";
+  private static readonly paintColorProp = "rgbrmoP";
+  private static readonly originalColorProp = "rgbrmoOr";
 
   r: number;
   g: number;
@@ -69,42 +69,49 @@ export class ColorRgbRmo {
       material.opacity);
   }
 
-  static deleteFromMesh(mesh: MeshBgSm,
+  static deleteColorFromMesh(mesh: MeshBgSm,
     deleteCustom = false, deleteDefault = false) {
 
-    mesh[ColorRgbRmo.prop] = null;
+    mesh[ColorRgbRmo.overrideColorProp] = null;
     if (deleteCustom) {
-      mesh[ColorRgbRmo.customProp] = null;
+      mesh[ColorRgbRmo.paintColorProp] = null;
     }
     if (deleteDefault) {
-      mesh[ColorRgbRmo.defaultProp] = null;
+      mesh[ColorRgbRmo.originalColorProp] = null;
     }
   }
 
-  static getDefaultFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    if (!mesh[ColorRgbRmo.defaultProp]) {      
-      mesh[ColorRgbRmo.defaultProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+  static getOriginalColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+    if (!mesh[ColorRgbRmo.originalColorProp]) {      
+      mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(mesh.material);
     }
-    return mesh[ColorRgbRmo.defaultProp];
+    return mesh[ColorRgbRmo.originalColorProp];
   }
-  static getCustomFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    return mesh[ColorRgbRmo.customProp];
+  static getPaintColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+    return mesh[ColorRgbRmo.paintColorProp];
   }
-  static getFromMesh(mesh: MeshBgSm): ColorRgbRmo {
-    if (mesh[ColorRgbRmo.prop]) {
-      return mesh[ColorRgbRmo.prop];
+  /**
+   * get the resulting mesh color
+   * in descending order of priority:
+   * override color | paint color | mesh original color
+   * @param mesh 
+   * @returns 
+   */
+  static getFinalColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+    if (mesh[ColorRgbRmo.overrideColorProp]) {
+      return mesh[ColorRgbRmo.overrideColorProp];
     }
-    if (mesh[ColorRgbRmo.customProp]) {      
-      return mesh[ColorRgbRmo.customProp];
+    if (mesh[ColorRgbRmo.paintColorProp]) {      
+      return mesh[ColorRgbRmo.paintColorProp];
     }
-    return ColorRgbRmo.getDefaultFromMesh(mesh);
+    return ColorRgbRmo.getOriginalColorFromMesh(mesh);
   }
 
-  static setCustomToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
-    mesh[ColorRgbRmo.customProp] = rgbRmo;
+  static setPaintColorToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
+    mesh[ColorRgbRmo.paintColorProp] = rgbRmo;
   }
-  static setToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
-    mesh[ColorRgbRmo.prop] = rgbRmo;
+  static setOverrideColorToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
+    mesh[ColorRgbRmo.overrideColorProp] = rgbRmo;
   }  
 
   clone(): ColorRgbRmo {

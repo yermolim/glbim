@@ -81,7 +81,7 @@ export class PickingScene {
 
   getVisibleSourceMeshByColor(color: string): MeshBgSm {
     const sourceMesh = this._sourceMeshByPickingColor.get(color);
-    if (!sourceMesh || !ColorRgbRmo.getFromMesh(sourceMesh)?.opacity) {
+    if (!sourceMesh || !ColorRgbRmo.getFinalColorFromMesh(sourceMesh)?.opacity) {
       return null;
     }
     return sourceMesh;
@@ -93,7 +93,7 @@ export class PickingScene {
 
     // exclude fully transparent elements from render
     this._pickingMeshBySourceMesh.forEach((picking, source) => {
-      picking.visible = !!ColorRgbRmo.getFromMesh(source)?.opacity;
+      picking.visible = !!ColorRgbRmo.getFinalColorFromMesh(source)?.opacity;
     });
     
     // set renderer and camera to 1x1 view

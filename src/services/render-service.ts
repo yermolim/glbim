@@ -136,6 +136,9 @@ export class RenderService {
   //#endregion
 
   //#region public render
+  /**
+   * rebuild the current render scene using the actual render options
+   */
   async updateRenderSceneAsync(): Promise<void> {
     await this._scenesService.renderScene.updateSceneAsync(this._scenesService.lights.getLights(), 
       this._loaderService.loadedMeshesArray, this._loaderService.loadedModelsArray,
@@ -152,8 +155,13 @@ export class RenderService {
     this.renderWholeScene();
   }
 
+  /**
+   * a specific render call designed to be invoked when the camera moves
+   */
   renderOnCameraMove() {
     if (this._options.fastRenderType) {
+      // is fast rendering is enabled, renders the simplified scene, 
+      // deferring rendering of the normal scene by 300 ms from the last render call
       if (this._deferRender) {
         clearTimeout(this._deferRender);
         this._deferRender = null;
@@ -168,6 +176,11 @@ export class RenderService {
     }
   }
 
+  /**
+   * render the next frame
+   * @param focusObjects an array of objects the camera should focus on
+   * @param fast if 'true', a simplified scene is used for rendering
+   */
   render(focusObjects: Object3D[] = null, fast = false) {
     this.prepareToRender(focusObjects);
     requestAnimationFrame(() => { 
@@ -190,10 +203,17 @@ export class RenderService {
     });
   }  
 
+  /**
+   * fit all the scene inside the view and render the next frame
+   */
   renderWholeScene() {    
     this.render(this._loaderService.loadedMeshesArray.length ? [this._scenesService.renderScene.scene] : null);
   }
 
+  /**
+   * force mesh color to be actualized during the next render call
+   * @param mesh 
+   */
   enqueueMeshForColorUpdate(mesh: MeshBgSm) {
     this._meshesNeedColorUpdate.add(mesh);
   }
@@ -271,6 +291,10 @@ export class RenderService {
   }
   //#endregion
 
+  /**
+   * prepare the scene for the next render frame
+   * @param focusObjects 
+   */
   private prepareToRender(focusObjects: Object3D[] = null) {
     if (focusObjects?.length) {
       this._cameraService.focusCameraOnObjects(focusObjects);

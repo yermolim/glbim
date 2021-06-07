@@ -47,7 +47,6 @@ export class RenderScene {
   }
 
   constructor(colors: RenderSceneColors) {
-
     this.updateCommonColors(colors);
     this._globalMaterial = MaterialBuilder.buildGlobalMaterial(); 
   }
@@ -65,11 +64,18 @@ export class RenderScene {
     this.updateMeshColors(new Set<MeshBgSm>(meshes));
   }    
 
+  /**
+   * force materials to refresh on the next render call
+   */
   updateSceneMaterials() {
     this._globalMaterial.needsUpdate = true;
     this._materials.forEach(v => v.needsUpdate = true);
   }
   
+  /**
+   * apply the actual coloring to meshes based on current mesh states 
+   * @param sourceMeshes 
+   */
   updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
     if (this._currentMergeType) {
       this.updateMeshGeometryColors(sourceMeshes);
@@ -79,6 +85,10 @@ export class RenderScene {
     this.sortGeometryIndicesByOpacity();
   }  
 
+  /**
+   * update the colors used for mesh highlighting, selection, isolation
+   * @param colors 
+   */
   updateCommonColors(colors: RenderSceneColors) {
     if (!colors) {
       throw new Error("Colors are not defined");
@@ -140,7 +150,7 @@ export class RenderScene {
 
     } else {
       for (const sourceMesh of meshes) {
-        const rgbRmo = ColorRgbRmo.getFromMesh(sourceMesh);
+        const rgbRmo = ColorRgbRmo.getFinalColorFromMesh(sourceMesh);
         const material = this.getMaterialByColor(rgbRmo);
         sourceMesh.updateMatrixWorld();
         const renderMesh = new Mesh(sourceMesh.geometry, material);
@@ -186,6 +196,11 @@ export class RenderScene {
     return grouppedMeshes;
   }
 
+  /**
+   * merge meshes geometries into the single one
+   * @param meshes 
+   * @returns 
+   */
   private async buildRenderGeometryAsync(meshes: MeshBgSm[]): Promise<RenderGeometry> {
     let positionsLen = 0;
     let indicesLen = 0;
@@ -257,7 +272,7 @@ export class RenderScene {
       const indices = geometry.getIndex().array;
 
       // get colors
-      rgbRmo = ColorRgbRmo.getFromMesh(mesh);
+      rgbRmo = ColorRgbRmo.getFinalColorFromMesh(mesh);
       r = rgbRmo.rByte;
       g = rgbRmo.gByte;
       b = rgbRmo.bByte;
@@ -325,6 +340,10 @@ export class RenderScene {
     });
   } 
 
+  /**
+   * apply the actual coloring to meshes based on current mesh states 
+   * @param sourceMeshes 
+   */
   private updateMeshGeometryColors(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
     const meshesByRgIndex = new Map<number, MeshBgSm[]>();
     sourceMeshes.forEach((mesh: MeshBgSm) => {
@@ -341,6 +360,12 @@ export class RenderScene {
     });
   }
 
+  /**
+   * apply the actual coloring to geometry meshes based on current mesh states 
+   * @param rgIndex 
+   * @param meshes 
+   * @returns 
+   */
   private updateGeometryColors(rgIndex: number, meshes: MeshBgSm[]) {
     const geometry = this._geometries[rgIndex];
     if (!geometry) {
@@ -413,6 +438,11 @@ export class RenderScene {
     }
   }
 
+  /**
+   * change the order of geometry indices 
+   * to force all opaque meshes to render before the transparent ones
+   * (all meshes with opacity less than 1 is treated as transparent)
+   */
   private sortGeometryIndicesByOpacity() {
     let j: number;
     let m: number;
@@ -438,7 +468,7 @@ export class RenderScene {
       transparentMeshes = [];
       for (j = 0; j < meshes.length; j++) {
         mesh = meshes[j];
-        if (ColorRgbRmo.getFromMesh(mesh).opacity === 1) {
+        if (ColorRgbRmo.getFinalColorFromMesh(mesh).opacity === 1) {
           opaqueMeshes.push(mesh);
         } else {
           transparentMeshes.push(mesh);
@@ -488,14 +518,24 @@ export class RenderScene {
     return material;
   }   
 
+  /**
+   * apply actual colors to the mesh based on the current mesh state
+   * @param mesh 
+   * @param opacityInitial current mesh opacity (optional)
+   * @returns 
+   */
   private refreshMeshColors(mesh: MeshBgSm, 
     opacityInitial: number = null): RefreshMeshColorsResult {
 
-    opacityInitial = opacityInitial ?? ColorRgbRmo.getFromMesh(mesh).opacity;   
+    opacityInitial = opacityInitial ?? ColorRgbRmo.getFinalColorFromMesh(mesh).opacity;   
     if (!mesh.userData.isolated) {
-      ColorRgbRmo.deleteFromMesh(mesh);
+      ColorRgbRmo.deleteColorFromMesh(mesh);
     }
-    const rgbRmoBase = ColorRgbRmo.getFromMesh(mesh);  
+    const rgbRmoBase = ColorRgbRmo.getFinalColorFromMesh(mesh);  
+
+    // coloring priority for shown meshes:
+    // highlight -> selection -> isolation ->* paint -> mesh original color
+    // *isolation opacity must always be less or equal to the paint and original color
 
     let rgbRmo: ColorRgbRmo;
     if (mesh.userData.highlighted) {  
@@ -529,7 +569,7 @@ export class RenderScene {
       rgbRmo = rgbRmoBase;
     }
 
-    ColorRgbRmo.setToMesh(mesh, rgbRmo);
+    ColorRgbRmo.setOverrideColorToMesh(mesh, rgbRmo);
     const opacityChanged = (rgbRmo.opacity === 1 && opacityInitial < 1)
       || (rgbRmo.opacity < 1 && opacityInitial === 1);
 

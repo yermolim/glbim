@@ -112,7 +112,7 @@ export class ColoringService {
         for (i = 0; i < meshes.length; i++) {
           mesh = meshes[i];
           mesh.userData.colored = true;
-          ColorRgbRmo.setCustomToMesh(mesh, rgbrmoColor);
+          ColorRgbRmo.setPaintColorToMesh(mesh, rgbrmoColor);
           renderService.enqueueMeshForColorUpdate(mesh);
           coloredMeshes.add(mesh);
         }
@@ -129,7 +129,7 @@ export class ColoringService {
     for (let i = 0; i < this._coloredMeshes.length; i++) {
       mesh = this._coloredMeshes[i];
       mesh.userData.colored = undefined;
-      ColorRgbRmo.deleteFromMesh(mesh, true);
+      ColorRgbRmo.deleteColorFromMesh(mesh, true);
       renderService.enqueueMeshForColorUpdate(mesh);
     }
     this._coloredMeshes = [];
