@@ -29,7 +29,7 @@ The support of these possible features are outside of the current module scope a
 </ul>
 
 ## External dependencies:
-</ul>
+<ul>
   <li><a href="https://github.com/mrdoob/three.js">three.js<a></li>
   <li><a href="https://github.com/ReactiveX/rxjs">RxJS<a></li>
 </ul>
