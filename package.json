@@ -1,13 +1,13 @@
 {
-  "name": "ts-basic-gltf-viewer",
-  "version": "0.9.8",
-  "description": "three.js-based basic gltf model viewer",
-  "module": "dist/ts-basic-gltf-viewer.esm.js",
-  "types": "dist/ts-basic-gltf-viewer.d.ts",
+  "name": "globin",
+  "version": "1.0.0",
+  "description": "Three.js-based GLB model viewer",
+  "module": "dist/globin.esm.js",
+  "types": "dist/globin.d.ts",
   "scripts": {
     "buildts": "tsc",
     "buildru": "rollup -c",
-    "bundletypes": "dts-bundle-generator -o dist/ts-basic-gltf-viewer.d.ts src/gltf-viewer.ts",
+    "bundletypes": "dts-bundle-generator -o dist/globin.d.ts src/gltf-viewer.ts",
     "copydraco": "copyfiles -f ./node_modules/three/examples/js/libs/draco/* ./demo/assets/draco",
     "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco",
     "start": "npm run build && lite-server -c ls-config.json",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yermolim/ts-basic-gltf-viewer.git"
+    "url": "git+https://github.com/yermolim/globin.git"
   },
   "keywords": [
     "3d",
@@ -30,11 +30,11 @@
     "rxjs"
   ],
   "author": "Volodymyr Yermolenko <yermolim@gmail.com> (https://github.com/yermolim)",
-  "license": "MIT",
+  "license": "AGPL",
   "bugs": {
-    "url": "https://github.com/yermolim/ts-basic-gltf-viewer/issues"
+    "url": "https://github.com/yermolim/globin/issues"
   },
-  "homepage": "https://github.com/yermolim/ts-basic-gltf-viewer#readme",
+  "homepage": "https://github.com/yermolim/globin#readme",
   "dependencies": {
     "rxjs": "^7.0.1",
     "three": "^0.128.0"

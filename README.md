@@ -1,4 +1,4 @@
-# globin 🧬
+# GLoBin 🧬
 #### Three.js-based GLB model viewer
 
 Created for personal use in a specific project, so use cases may be limited, but maybe some parts of the code will still be helpful to someone. 
