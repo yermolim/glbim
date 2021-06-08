@@ -1,5 +1,5 @@
-# ts-basic-gltf-viewer
-#### three.js-based gltf(glb) model viewer
+# globin 🧬
+#### Three.js-based GLB model viewer
 
 Created for personal use in a specific project, so use cases may be limited, but maybe some parts of the code will still be helpful to someone. 
 The main goal was to make it possible to open dozens of large industrial building models with thousands of elements and millions of polygons while keeping an optimal render performance. Optimized mesh merging to reduce render calls, GPU picking, using only vertex colors, etc. were the ways to achieve it. Target models were static without the need to take into account their internal structure, all the meshes used indexed BufferGeometry and MeshStandardMaterial without textures.
@@ -28,7 +28,7 @@ The support of these possible features are outside of the current module scope a
   <li>model editing</li>
 </ul>
 
-## Dependencies:
+## External dependencies:
 </ul>
   <li><a href="https://github.com/mrdoob/three.js">three.js<a></li>
   <li><a href="https://github.com/ReactiveX/rxjs">RxJS<a></li>
