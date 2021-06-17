@@ -30,8 +30,9 @@ The support of these possible features are outside of the current module scope a
 
 ## External dependencies:
 <ul>
-  <li><a href="https://github.com/mrdoob/three.js">three.js<a></li>
+  <li><a href="https://github.com/mrdoob/three.js">Three.js<a></li>
   <li><a href="https://github.com/ReactiveX/rxjs">RxJS<a></li>
+  <li><a href="https://github.com/tomvandig/web-ifc">IFC.js web-api<a></li>
 </ul>
 
 #### *Mesh ids

@@ -9,7 +9,7 @@
     "buildru": "rollup -c",
     "bundletypes": "dts-bundle-generator -o dist/cherubim.d.ts src/cherubim-viewer.ts",
     "copydraco": "copyfiles -f ./node_modules/three/examples/js/libs/draco/* ./demo/assets/draco",
-    "copyifc": "copyfiles -f ./node_modules/three/examples/jsm/loaders/ifc/* ./demo/assets/ifc",
+    "copyifc": "copyfiles -f ./node_modules/web-ifc/*.wasm ./node_modules/web-ifc/*.md ./demo/assets/ifc",
     "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco && npm run copyifc",
     "start": "npm run build && lite-server -c ls-config.json",
     "mpublish": "npm version minor && npm publish",
@@ -40,7 +40,8 @@
   "homepage": "https://github.com/yermolim/cherubim#readme",
   "dependencies": {
     "rxjs": "^7.1.0",
-    "three": "^0.129.0"
+    "three": "^0.129.0",
+    "web-ifc": "^0.0.19"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^19.0.0",

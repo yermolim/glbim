@@ -4,10 +4,10 @@ import { Mesh, BufferGeometry, Matrix4, Object3D, Scene } from "three";
 // eslint-disable-next-line import/named
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
-import { IFCLoader } from "three/examples/jsm/loaders/IFCLoader";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, LoadingQueueInfo,
   ModelGeometryInfo, ModelFileInfo, Mesh_BG, Vec4DoubleCS} from "../common-types";
+import { IFCLoader } from "../helpers/ifc-loader";
 
 export class ModelLoaderService {
   // #region public observables
@@ -93,11 +93,9 @@ export class ModelLoaderService {
     }
     this._glbLoader = glbLoader;
 
-    const ifcLoader = new IFCLoader();
     if (ifcLibPath) {
-      (<any>ifcLoader).setWasmPath(ifcLibPath);
+      this._ifcLoader = new IFCLoader(ifcLibPath);
     }
-    this._ifcLoader = ifcLoader;
   }
 
   destroy() {
@@ -290,7 +288,7 @@ export class ModelLoaderService {
         this.addModelToLoaded(gltfModel.scene, guid, name);
       } else if (name.endsWith("ifc")) {
         if (!this._ifcLoader) {
-          throw new Error("GLB/GLTF loader is not initialized");
+          throw new Error("IFC loader is not initialized");
         }
         const ifcModel: Object3D = await this._ifcLoader.loadAsync(url,
           (progress) => this.onModelLoadingProgress(progress, url, guid));

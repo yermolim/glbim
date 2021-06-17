@@ -665,10 +665,11 @@
  */
 
 import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
+import * as THREE from 'three';
 import { Matrix4, Scene, Mesh, BufferGeometry, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial, MeshPhongMaterial, MeshLambertMaterial, MeshToonMaterial, SpriteMaterial, NormalBlending, DoubleSide, Color, NoBlending, LineBasicMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, InterleavedBufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { IFCLoader } from 'three/examples/jsm/loaders/IFCLoader';
+import * as IFC from 'web-ifc';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry';
 import { Line2 } from 'three/examples/jsm/lines/Line2';
@@ -823,6 +824,108 @@ class SelectionFrame {
     }
 }
 
+var __awaiter$5 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+class IFCLoader extends THREE.Loader {
+    constructor(wasmPath) {
+        super();
+        this._ifcAPI = new IFC.IfcAPI();
+        this._ifcAPI.SetWasmPath(wasmPath);
+        this._ifcAPI.Init();
+    }
+    load(url, onLoad, onProgress, onError) {
+        const loader = new THREE.FileLoader(this.manager);
+        loader.setPath(this.path);
+        loader.setResponseType("arraybuffer");
+        loader.setRequestHeader(this.requestHeader);
+        loader.setWithCredentials(this.withCredentials);
+        loader.load(url, (buffer) => __awaiter$5(this, void 0, void 0, function* () {
+            try {
+                const data = new Uint8Array(buffer);
+                const result = yield this.loadModelAsync(data);
+                onLoad(result);
+            }
+            catch (e) {
+                console.log(e);
+                if (onError) {
+                    onError(e);
+                }
+                else {
+                    console.error(e);
+                }
+                this.manager.itemError(url);
+            }
+        }), onProgress, onError);
+    }
+    loadModelAsync(data) {
+        var _a;
+        return __awaiter$5(this, void 0, void 0, function* () {
+            const root = new THREE.Group();
+            const modelId = this._ifcAPI.OpenModel(data, { COORDINATE_TO_ORIGIN: false });
+            const ifcMeshes = this._ifcAPI.LoadAllGeometry(modelId);
+            let lastBreakTime = performance.now();
+            for (let i = 0; i < ifcMeshes.size(); i++) {
+                if (performance.now() - lastBreakTime > 100) {
+                    yield new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve();
+                        }, 0);
+                    });
+                    lastBreakTime = performance.now();
+                }
+                const ifcMesh = ifcMeshes.get(i);
+                const lineAttrs = this._ifcAPI.GetLine(modelId, ifcMesh.expressID, false);
+                const globalId = (_a = lineAttrs.GlobalId) === null || _a === void 0 ? void 0 : _a.value;
+                const ifcMeshGeometries = ifcMesh.geometries;
+                for (let j = 0; j < ifcMeshGeometries.size(); j++) {
+                    const ifcMeshGeometry = ifcMeshGeometries.get(j);
+                    const threeMesh = this.convertIfcGeometryToThreeMesh(modelId, ifcMeshGeometry);
+                    threeMesh.name = globalId;
+                    root.add(threeMesh);
+                }
+            }
+            this._ifcAPI.CloseModel(modelId);
+            return root;
+        });
+    }
+    convertIfcGeometryToThreeMesh(modelId, ifcMeshGeometry) {
+        const geometry = this._ifcAPI.GetGeometry(modelId, ifcMeshGeometry.geometryExpressID);
+        const vertices = this._ifcAPI.GetVertexArray(geometry.GetVertexData(), geometry.GetVertexDataSize());
+        const indices = this._ifcAPI.GetIndexArray(geometry.GetIndexData(), geometry.GetIndexDataSize());
+        const bufferGeometry = this.buildThreeGeometry(vertices, indices);
+        const material = this.buildMeshMaterial(ifcMeshGeometry.color);
+        const mesh = new THREE.Mesh(bufferGeometry, material);
+        const matrix = new THREE.Matrix4().fromArray(ifcMeshGeometry.flatTransformation.map(x => +x.toFixed(5)));
+        mesh.matrix = matrix;
+        mesh.matrixAutoUpdate = false;
+        return mesh;
+    }
+    buildMeshMaterial(ifcColor) {
+        const threeColor = new THREE.Color(ifcColor.x, ifcColor.y, ifcColor.z);
+        const material = new THREE.MeshPhongMaterial({ color: threeColor, side: THREE.DoubleSide });
+        material.transparent = ifcColor.w !== 1;
+        if (material.transparent) {
+            material.opacity = ifcColor.w;
+        }
+        return material;
+    }
+    buildThreeGeometry(vertices, indices) {
+        const geometry = new THREE.BufferGeometry();
+        const positionNormalBuffer = new THREE.InterleavedBuffer(vertices, 6);
+        geometry.setAttribute("position", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 0));
+        geometry.setAttribute("normal", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 3));
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        return geometry;
+    }
+}
+
 var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -874,11 +977,9 @@ class ModelLoaderService {
             glbLoader.setDRACOLoader(dracoLoader);
         }
         this._glbLoader = glbLoader;
-        const ifcLoader = new IFCLoader();
         if (ifcLibPath) {
-            ifcLoader.setWasmPath(ifcLibPath);
+            this._ifcLoader = new IFCLoader(ifcLibPath);
         }
-        this._ifcLoader = ifcLoader;
     }
     get loadedModelsArray() {
         return this._loadedModelsArray;
@@ -1061,7 +1162,7 @@ class ModelLoaderService {
                 }
                 else if (name.endsWith("ifc")) {
                     if (!this._ifcLoader) {
-                        throw new Error("GLB/GLTF loader is not initialized");
+                        throw new Error("IFC loader is not initialized");
                     }
                     const ifcModel = yield this._ifcLoader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
                     this.addModelToLoaded(ifcModel, guid, name);
