@@ -1,6 +1,6 @@
 import { Subscription } from "rxjs";
-import { GltfViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../gltf-viewer";
-import { GltfViewerOptions } from "../gltf-viewer-options";
+import { CherubimViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../cherubim-viewer";
+import { CherubimOptions } from "../cherubim-options";
 class LoadingAnimation {
   protected readonly _loaderElement: HTMLElement;
 
@@ -130,11 +130,11 @@ class DemoViewer {
   //#endregion
 
   private readonly _loader: LoadingAnimation;
-  private readonly _viewer: GltfViewer;
+  private readonly _viewer: CherubimViewer;
 
   private _subscriptions: Subscription[] = [];
 
-  private _options: GltfViewerOptions;
+  private _options: CherubimOptions;
   private _openedModelNameByGuid = new Map<string, string>();
   private _selectedMeshIds: string[] = [];
   private _hiddenMeshIds: string[] = [];
@@ -186,10 +186,10 @@ class DemoViewer {
     this._loader = new LoadingAnimation();
     this._loader.showAsync(this._outerContainer);
 
-    this._viewer = new GltfViewer(DemoViewer.viewerContainerSel, 
+    this._viewer = new CherubimViewer(DemoViewer.viewerContainerSel, 
       "/assets/draco/", 
       "/assets/ifc/",
-      new GltfViewerOptions(<GltfViewerOptions>{
+      new CherubimOptions(<CherubimOptions>{
         axesHelperPlacement: "top-right",
         meshMergeType: "scene",     
         fastRenderType: null, 

@@ -7,7 +7,7 @@
   "scripts": {
     "buildts": "tsc",
     "buildru": "rollup -c",
-    "bundletypes": "dts-bundle-generator -o dist/cherubim.d.ts src/gltf-viewer.ts",
+    "bundletypes": "dts-bundle-generator -o dist/cherubim.d.ts src/cherubim-viewer.ts",
     "copydraco": "copyfiles -f ./node_modules/three/examples/js/libs/draco/* ./demo/assets/draco",
     "copyifc": "copyfiles -f ./node_modules/three/examples/jsm/loaders/ifc/* ./demo/assets/ifc",
     "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco && npm run copyifc",

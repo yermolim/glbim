@@ -1,6 +1,6 @@
 import { Observable, Subscription, BehaviorSubject } from "rxjs";
 
-import { GltfViewerOptions } from "./gltf-viewer-options";
+import { CherubimOptions } from "./cherubim-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   ColoringInfo, PointerEventHelper, Distance, LoadingQueueInfo,
   Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
@@ -16,14 +16,14 @@ import { SelectionService } from "./services/selection-service";
 import { ColoringService } from "./services/coloring-service";
 import { HudService } from "./services/hud-service";
 
-export { GltfViewerOptions, ModelFileInfo, ModelOpenedInfo,
+export { CherubimOptions, ModelFileInfo, ModelOpenedInfo,
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };  
 
 export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 
-export class GltfViewer {
+export class CherubimViewer {
   // #region public observables
-  optionsChange$: Observable<GltfViewerOptions>; 
+  optionsChange$: Observable<CherubimOptions>; 
   modeChange$: Observable<ViewerInteractionMode>; 
   
   contextLoss$: Observable<boolean>;
@@ -59,7 +59,7 @@ export class GltfViewer {
   private _container: HTMLElement;
   private _containerResizeObserver: ResizeObserver;
 
-  private _options: GltfViewerOptions;  
+  private _options: CherubimOptions;  
   private _interactionMode: ViewerInteractionMode;
 
   private _cameraService: CameraService;   
@@ -78,7 +78,7 @@ export class GltfViewer {
   
   // #region private rx subjects
   private _modeChange = new BehaviorSubject<ViewerInteractionMode>(null);
-  private _optionsChange = new BehaviorSubject<GltfViewerOptions>(null);
+  private _optionsChange = new BehaviorSubject<CherubimOptions>(null);
   private _contextLoss = new BehaviorSubject<boolean>(false);  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
   // #endregion
@@ -93,7 +93,7 @@ export class GltfViewer {
    */
   constructor(containerSelector: string, 
     dracoLibPath?: string, ifcLibPath?: string,
-    options?: GltfViewerOptions) {
+    options?: CherubimOptions) {
     this.initObservables();
 
     this._container = document.getElementById(containerSelector) || document.querySelector(containerSelector);
@@ -101,7 +101,7 @@ export class GltfViewer {
       throw new Error("Container not found!");
     }
 
-    this._options = new GltfViewerOptions(options);  
+    this._options = new CherubimOptions(options);  
     this._optionsChange.next(Object.assign({}, this._options));
     
     // init services. the order is important
@@ -175,9 +175,9 @@ export class GltfViewer {
    * @param options 
    * @returns 
    */
-  async updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions> {
+  async updateOptionsAsync(options: CherubimOptions): Promise<CherubimOptions> {
     const oldOptions = this._options;
-    this._options = new GltfViewerOptions(options);
+    this._options = new CherubimOptions(options);
     this._renderService.options = this._options;
 
     let rendererReinitialized = false;
