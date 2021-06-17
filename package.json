@@ -1,6 +1,6 @@
 {
   "name": "cherubim",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Three.js-based GLB model viewer",
   "module": "dist/cherubim.esm.js",
   "types": "dist/cherubim.d.ts",
