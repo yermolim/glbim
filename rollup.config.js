@@ -9,9 +9,9 @@ export default [
   {
     input: "tsc/gltf-viewer.js",
     output: [
-      { file: "dist/globin.esm.js", format: "esm"},
+      { file: "dist/cherubim.esm.js", format: "esm"},
       // TODO: configure terser to prevent imports from shadowing variables
-      // { file: "dist/globin.esm.min.js", format: "es", plugins: [terser()] },
+      // { file: "dist/cherubim.esm.min.js", format: "es", plugins: [terser()] },
     ],
     external: [],
     plugins: [

@@ -6,11 +6,11 @@ export type MeshMergeType = "scene" | "model" | "model+" | null;
 
 export type FastRenderType = "ch" | "aabb" | "ombb" | null;
 
-export type MeshBgSm = Mesh<BufferGeometry, MeshStandardMaterial>;
+/**three.js Mesh with BufferGeometry*/
+export type Mesh_BG = Mesh<BufferGeometry, Material>;
 
-export type MeshBgBm = Mesh<BufferGeometry, MeshBasicMaterial>;
-
-export type MeshBgAm = Mesh<BufferGeometry, Material>;
+/**three.js Mesh with BufferGeometry and MeshBasicMaterial*/
+export type Mesh_BG_BM = Mesh<BufferGeometry, MeshBasicMaterial>;
 
 export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -59,18 +59,18 @@ export interface ColoringInfo {
 
 export interface ModelGeometryInfo {
   name: string;
-  meshes: MeshBgSm[]; 
+  meshes: Mesh_BG[]; 
   handles: Set<string>; 
   vertexCount: number;
 }
 
-export interface RenderGeometry {  
+export interface MergedGeometry {  
   geometry: BufferGeometry;
   positions: Float32BufferAttribute;
   colors: Uint8BufferAttribute;
   rmos: Uint8BufferAttribute;
   indices: Uint32BufferAttribute;
-  indicesBySourceMesh: Map<MeshBgSm, Uint32Array>;
+  indicesBySourceMesh: Map<Mesh, Uint32Array>;
 }
 
 export interface MarkerInfo {

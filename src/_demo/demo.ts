@@ -1,5 +1,5 @@
 import { Subscription } from "rxjs";
-import { GltfViewer, ModelFileInfo, ModelOpenedInfo, ViewerInteractionMode } from "../gltf-viewer";
+import { GltfViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../gltf-viewer";
 import { GltfViewerOptions } from "../gltf-viewer-options";
 class LoadingAnimation {
   protected readonly _loaderElement: HTMLElement;
@@ -186,11 +186,15 @@ class DemoViewer {
     this._loader = new LoadingAnimation();
     this._loader.showAsync(this._outerContainer);
 
-    this._viewer = new GltfViewer(DemoViewer.viewerContainerSel, "/assets/draco/", new GltfViewerOptions(<GltfViewerOptions>{
-      axesHelperPlacement: "top-right",
-      meshMergeType: "scene",     
-      fastRenderType: null, 
-    }));
+    this._viewer = new GltfViewer(DemoViewer.viewerContainerSel, 
+      "/assets/draco/", 
+      "/assets/ifc/",
+      new GltfViewerOptions(<GltfViewerOptions>{
+        axesHelperPlacement: "top-right",
+        meshMergeType: "scene",     
+        fastRenderType: null, 
+        // basePoint: new Vec4DoubleCS(true, -200, 0, 0),
+      }));
 
     this.initEventHandlers();
     this.initSubscriptions();

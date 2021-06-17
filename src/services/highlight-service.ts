@@ -1,4 +1,4 @@
-import { MeshBgSm } from "../common-types";
+import { Mesh_BG } from "../common-types";
 
 import { PickingService } from "./picking-service";
 import { RenderService } from "./render-service";
@@ -6,7 +6,7 @@ import { RenderService } from "./render-service";
 export class HighlightService {
   private readonly _pickingService: PickingService;
   
-  private readonly _highlightedMeshes = new Set<MeshBgSm>();
+  private readonly _highlightedMeshes = new Set<Mesh_BG>();
 
   constructor(pickingService: PickingService) {
     if (!pickingService) {
@@ -42,11 +42,11 @@ export class HighlightService {
     this.highlightMeshes(renderService, []);
   }
 
-  private highlightMeshes(renderService: RenderService, meshes: MeshBgSm[]) {
-    const meshSet = new Set<MeshBgSm>(meshes || []);    
+  private highlightMeshes(renderService: RenderService, meshes: Mesh_BG[]) {
+    const meshSet = new Set<Mesh_BG>(meshes || []);    
 
-    const addToHighlightList: MeshBgSm[] = [];
-    const removeFromHighlightList: MeshBgSm[] = [];
+    const addToHighlightList: Mesh_BG[] = [];
+    const removeFromHighlightList: Mesh_BG[] = [];
 
     this._highlightedMeshes.forEach(mesh => {
       if (!meshSet.has(mesh)) {

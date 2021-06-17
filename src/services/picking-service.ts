@@ -1,7 +1,7 @@
 import { BufferAttribute, Camera, Face, Mesh, Raycaster, Scene, 
   Triangle, Vector2, Vector3, WebGLRenderer } from "three";
 
-import { MeshBgAm, MeshBgSm, SnapPoint, Vec4DoubleCS } from "../common-types";
+import { Mesh_BG, SnapPoint, Vec4DoubleCS } from "../common-types";
 
 import { PickingScene } from "../scenes/picking-scene";
 
@@ -39,14 +39,14 @@ export class PickingService {
     this._pickingScene = null;
   }
   
-  getMeshAt(renderService: RenderService, clientX: number, clientY: number): MeshBgSm {  
+  getMeshAt(renderService: RenderService, clientX: number, clientY: number): Mesh_BG {  
     const position = renderService.convertClientToCanvas(clientX, clientY); 
     return this._pickingScene.getSourceMeshAt(renderService.camera, renderService.renderer, position);
   }
 
   getMeshesInArea(renderService: RenderService, 
     clientStartX: number, clientStartY: number, 
-    clientEndX: number, clientEndY: number): MeshBgSm[] {
+    clientEndX: number, clientEndY: number): Mesh_BG[] {
     
     const canvasStart = renderService.convertClientToCanvas(clientStartX, clientStartY);
     const canvasEnd = renderService.convertClientToCanvas(clientEndX, clientEndY);     
@@ -57,7 +57,7 @@ export class PickingService {
     const maxAreaCY = Math.max(canvasStart.y, canvasEnd.y);    
 
     const centerPointTemp = new Vector3();
-    const meshes: MeshBgSm[] = [];
+    const meshes: Mesh_BG[] = [];
     for (const mesh of this.scene.children) {
       if (!(mesh instanceof Mesh)) {
         // not a mesh. ignore it
@@ -111,24 +111,24 @@ export class PickingService {
     return snapPoint;
   }
 
-  private addMesh(mesh: MeshBgSm) {        
+  private addMesh(mesh: Mesh_BG) {        
     this._pickingScene.add(mesh);
   }
 
-  private removeMesh(mesh: MeshBgSm) {
+  private removeMesh(mesh: Mesh_BG) {
     this._pickingScene.remove(mesh);
   }
   
-  private onLoaderMeshLoaded = (mesh: MeshBgSm) => {    
+  private onLoaderMeshLoaded = (mesh: Mesh_BG) => {    
     this.addMesh(mesh);
   };
 
-  private onLoaderMeshUnloaded = (mesh: MeshBgSm) => {    
+  private onLoaderMeshUnloaded = (mesh: Mesh_BG) => {    
     this.removeMesh(mesh);
   };
   
   private getMeshSnapPointAtPosition(camera: Camera, renderer: WebGLRenderer, 
-    position: Vector2, mesh: MeshBgAm): Vector3 {
+    position: Vector2, mesh: Mesh_BG): Vector3 {
     if (!mesh) {
       return null;
     }
@@ -139,7 +139,7 @@ export class PickingService {
     return this.getPoint(camera, mesh, new Vector2(xNormalized, yNormalized));
   }
 
-  private getPoint(camera: Camera, mesh: MeshBgAm, mousePoint: Vector2): Vector3 {
+  private getPoint(camera: Camera, mesh: Mesh_BG, mousePoint: Vector2): Vector3 {
     this._raycaster.setFromCamera(mousePoint, camera);
     const intersection = this._raycaster.intersectObject(mesh)[0];
     if (!intersection) {
@@ -158,7 +158,7 @@ export class PickingService {
     return snapPoint;
   }
 
-  private getNearestVertex(mesh: MeshBgAm, point: Vector3, face: Face): Vector3 {
+  private getNearestVertex(mesh: Mesh_BG, point: Vector3, face: Face): Vector3 {
     const a = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.a);
     const b = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.b);
     const c = new Vector3().fromBufferAttribute(<BufferAttribute>mesh.geometry.attributes.position, face.c);

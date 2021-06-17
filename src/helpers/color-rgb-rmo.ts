@@ -1,5 +1,7 @@
-import { MeshStandardMaterial } from "three";
-import { MeshBgSm } from "../common-types";
+import { Mesh, Material, 
+  MeshBasicMaterial, MeshLambertMaterial, 
+  MeshPhongMaterial, MeshPhysicalMaterial, 
+  MeshStandardMaterial, MeshToonMaterial } from "three";
 
 /**
  * R - Red
@@ -59,17 +61,31 @@ export class ColorRgbRmo {
     }
   }
 
-  static createFromMaterial(material: MeshStandardMaterial): ColorRgbRmo {
-    return new ColorRgbRmo(
-      material.color.r,
-      material.color.g,
-      material.color.b,
-      material.roughness,
-      material.metalness,
-      material.opacity);
+  static createFromMaterial(material: Material): ColorRgbRmo {
+    if (material instanceof MeshStandardMaterial
+      || material instanceof MeshPhysicalMaterial) {      
+      return new ColorRgbRmo(
+        material.color.r,
+        material.color.g,
+        material.color.b,
+        material.roughness,
+        material.metalness,
+        material.opacity);
+    } 
+    if (material instanceof MeshBasicMaterial
+      || material instanceof MeshPhongMaterial
+      || material instanceof MeshLambertMaterial
+      || material instanceof MeshToonMaterial) {   
+      return new ColorRgbRmo(
+        material.color.r,
+        material.color.g,
+        material.color.b,
+        1, 0, material.opacity);
+    }
+    return new ColorRgbRmo(1, 1, 1, 1, 0, material.opacity);
   }
 
-  static deleteColorFromMesh(mesh: MeshBgSm,
+  static deleteColorFromMesh(mesh: Mesh,
     deleteCustom = false, deleteDefault = false) {
 
     mesh[ColorRgbRmo.overrideColorProp] = null;
@@ -81,13 +97,14 @@ export class ColorRgbRmo {
     }
   }
 
-  static getOriginalColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+  static getOriginalColorFromMesh(mesh: Mesh): ColorRgbRmo {
     if (!mesh[ColorRgbRmo.originalColorProp]) {      
-      mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+      mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(
+        Array.isArray(mesh.material) ? mesh.material[0] : mesh.material);
     }
     return mesh[ColorRgbRmo.originalColorProp];
   }
-  static getPaintColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+  static getPaintColorFromMesh(mesh: Mesh): ColorRgbRmo {
     return mesh[ColorRgbRmo.paintColorProp];
   }
   /**
@@ -97,7 +114,7 @@ export class ColorRgbRmo {
    * @param mesh 
    * @returns 
    */
-  static getFinalColorFromMesh(mesh: MeshBgSm): ColorRgbRmo {
+  static getFinalColorFromMesh(mesh: Mesh): ColorRgbRmo {
     if (mesh[ColorRgbRmo.overrideColorProp]) {
       return mesh[ColorRgbRmo.overrideColorProp];
     }
@@ -107,10 +124,10 @@ export class ColorRgbRmo {
     return ColorRgbRmo.getOriginalColorFromMesh(mesh);
   }
 
-  static setPaintColorToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
+  static setPaintColorToMesh(mesh: Mesh, rgbRmo: ColorRgbRmo) {
     mesh[ColorRgbRmo.paintColorProp] = rgbRmo;
   }
-  static setOverrideColorToMesh(mesh: MeshBgSm, rgbRmo: ColorRgbRmo) {
+  static setOverrideColorToMesh(mesh: Mesh, rgbRmo: ColorRgbRmo) {
     mesh[ColorRgbRmo.overrideColorProp] = rgbRmo;
   }  
 

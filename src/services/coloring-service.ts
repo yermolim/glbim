@@ -1,7 +1,7 @@
 import { BehaviorSubject, Observable } from "rxjs";
 import { Color } from "three";
 
-import { ColoringInfo, MeshBgSm } from "../common-types";
+import { ColoringInfo, Mesh_BG } from "../common-types";
 
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
@@ -24,7 +24,7 @@ export class ColoringService {
   private _queuedColorings: ColoringInfo[] = null;
   private _activeColorings: ColoringInfo[] = null;
 
-  private _coloredMeshes: MeshBgSm[] = [];  
+  private _coloredMeshes: Mesh_BG[] = [];  
 
   constructor(loaderService: ModelLoaderService, selectionService: SelectionService) {
     if (!loaderService) {
@@ -96,11 +96,11 @@ export class ColoringService {
   }
 
   private colorMeshes(renderService: RenderService, coloringInfos: ColoringInfo[]) {
-    const coloredMeshes = new Set<MeshBgSm>();
+    const coloredMeshes = new Set<Mesh_BG>();
     coloringInfos ||= [];
 
     let i: number;
-    let mesh: MeshBgSm;
+    let mesh: Mesh_BG;
     for (const info of [...coloringInfos, this._hiddenColoring]) {
       const threeColor = new Color(info.color);
       const rgbrmoColor = new ColorRgbRmo(threeColor.r, threeColor.g, threeColor.b, 1, 0, info.opacity);
@@ -125,7 +125,7 @@ export class ColoringService {
   }
 
   private clearMeshesColoring(renderService: RenderService) {
-    let mesh: MeshBgSm;
+    let mesh: Mesh_BG;
     for (let i = 0; i < this._coloredMeshes.length; i++) {
       mesh = this._coloredMeshes[i];
       mesh.userData.colored = undefined;

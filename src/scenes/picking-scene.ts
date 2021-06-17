@@ -1,7 +1,7 @@
 import { Scene, Mesh, Color, Vector2, PerspectiveCamera,
   WebGLRenderer, WebGLRenderTarget, MeshBasicMaterial, NoBlending, DoubleSide } from "three";
 
-import { MeshBgBm, MeshBgSm } from "../common-types";
+import { Mesh_BG_BM, Mesh_BG } from "../common-types";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
 export class PickingScene {
@@ -15,8 +15,8 @@ export class PickingScene {
   private _materials: MeshBasicMaterial[] = [];
   private _releasedMaterials: MeshBasicMaterial[] = [];
   
-  private _pickingMeshBySourceMesh = new Map<MeshBgSm, MeshBgBm>();
-  private _sourceMeshByPickingColor = new Map<string, MeshBgSm>();
+  private _pickingMeshBySourceMesh = new Map<Mesh_BG, Mesh_BG_BM>();
+  private _sourceMeshByPickingColor = new Map<string, Mesh_BG>();
   
   private _lastPickingColor = 0;
 
@@ -39,7 +39,7 @@ export class PickingScene {
     this._sourceMeshByPickingColor.clear();
   };
   
-  add(sourceMesh: MeshBgSm) {
+  add(sourceMesh: Mesh_BG) {
     const pickingMeshMaterial = this.getMaterial();
     const colorString = pickingMeshMaterial.color.getHex().toString(16);
     
@@ -47,16 +47,14 @@ export class PickingScene {
     pickingMesh.userData.sourceId = sourceMesh.userData.id;
     pickingMesh.userData.sourceUuid = sourceMesh.uuid;
     pickingMesh.userData.color = colorString;
-    pickingMesh.position.copy(sourceMesh.position);
-    pickingMesh.rotation.copy(sourceMesh.rotation);
-    pickingMesh.scale.copy(sourceMesh.scale);
+    pickingMesh.applyMatrix4(sourceMesh.matrixWorld);
 
     this._scene.add(pickingMesh);
     this._pickingMeshBySourceMesh.set(sourceMesh, pickingMesh);
     this._sourceMeshByPickingColor.set(colorString, sourceMesh);
   }
 
-  remove(sourceMesh: MeshBgSm) {
+  remove(sourceMesh: Mesh_BG) {
     const pickingMesh = this._pickingMeshBySourceMesh.get(sourceMesh);
     if (pickingMesh) {
       this._scene.remove(pickingMesh);
@@ -67,19 +65,19 @@ export class PickingScene {
   }
 
   getSourceMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
-    canvasPosition: Vector2): MeshBgSm { 
+    canvasPosition: Vector2): Mesh_BG { 
     return this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
   }
   
   getPickingMeshAt(camera: PerspectiveCamera, renderer: WebGLRenderer, 
-    canvasPosition: Vector2): MeshBgBm { 
+    canvasPosition: Vector2): Mesh_BG_BM { 
     const sourceMesh = this.getSourceMeshAtPosition(camera, renderer, canvasPosition);
     return sourceMesh
       ? this._pickingMeshBySourceMesh.get(sourceMesh)
       : null;
   }
 
-  getVisibleSourceMeshByColor(color: string): MeshBgSm {
+  getVisibleSourceMeshByColor(color: string): Mesh_BG {
     const sourceMesh = this._sourceMeshByPickingColor.get(color);
     if (!sourceMesh || !ColorRgbRmo.getFinalColorFromMesh(sourceMesh)?.opacity) {
       return null;
@@ -88,7 +86,7 @@ export class PickingScene {
   }
 
   private getSourceMeshAtPosition(camera: PerspectiveCamera, 
-    renderer: WebGLRenderer, position: Vector2): MeshBgSm {   
+    renderer: WebGLRenderer, position: Vector2): Mesh_BG {   
     const context = renderer.getContext();  
 
     // exclude fully transparent elements from render

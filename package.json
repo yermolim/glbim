@@ -1,22 +1,23 @@
 {
-  "name": "globin",
+  "name": "cherubim",
   "version": "1.0.0",
   "description": "Three.js-based GLB model viewer",
-  "module": "dist/globin.esm.js",
-  "types": "dist/globin.d.ts",
+  "module": "dist/cherubim.esm.js",
+  "types": "dist/cherubim.d.ts",
   "scripts": {
     "buildts": "tsc",
     "buildru": "rollup -c",
-    "bundletypes": "dts-bundle-generator -o dist/globin.d.ts src/gltf-viewer.ts",
+    "bundletypes": "dts-bundle-generator -o dist/cherubim.d.ts src/gltf-viewer.ts",
     "copydraco": "copyfiles -f ./node_modules/three/examples/js/libs/draco/* ./demo/assets/draco",
-    "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco",
+    "copyifc": "copyfiles -f ./node_modules/three/examples/jsm/loaders/ifc/* ./demo/assets/ifc",
+    "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco && npm run copyifc",
     "start": "npm run build && lite-server -c ls-config.json",
     "mpublish": "npm version minor && npm publish",
     "ppublish": "npm version patch && npm publish"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yermolim/globin.git"
+    "url": "git+https://github.com/yermolim/cherubim.git"
   },
   "keywords": [
     "3d",
@@ -27,17 +28,19 @@
     "threejs",
     "webgl",
     "draco",
-    "rxjs"
+    "rxjs",
+    "bim",
+    "ifc"
   ],
   "author": "Volodymyr Yermolenko <yermolim@gmail.com> (https://github.com/yermolim)",
   "license": "AGPL",
   "bugs": {
-    "url": "https://github.com/yermolim/globin/issues"
+    "url": "https://github.com/yermolim/cherubim/issues"
   },
-  "homepage": "https://github.com/yermolim/globin#readme",
+  "homepage": "https://github.com/yermolim/cherubim#readme",
   "dependencies": {
-    "rxjs": "^7.0.1",
-    "three": "^0.128.0"
+    "rxjs": "^7.1.0",
+    "three": "^0.129.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^19.0.0",
@@ -47,21 +50,21 @@
     "@rollup/plugin-strip": "^2.0.1",
     "@rollup/plugin-typescript": "^8.2.1",
     "@types/resize-observer-browser": "^0.1.5",
-    "@types/three": "^0.128.0",
-    "@typescript-eslint/eslint-plugin": "^4.23.0",
-    "@typescript-eslint/eslint-plugin-tslint": "^4.23.0",
-    "@typescript-eslint/parser": "^4.23.0",
+    "@types/three": "^0.129.1",
+    "@typescript-eslint/eslint-plugin": "^4.27.0",
+    "@typescript-eslint/eslint-plugin-tslint": "^4.27.0",
+    "@typescript-eslint/parser": "^4.27.0",
     "copyfiles": "^2.4.1",
     "dts-bundle-generator": "^5.9.0",
-    "eslint": "^7.26.0",
-    "eslint-plugin-import": "^2.23.2",
+    "eslint": "^7.28.0",
+    "eslint-plugin-import": "^2.23.4",
     "lite-server": "^2.6.1",
-    "rollup": "^2.48.0",
+    "rollup": "^2.52.1",
     "rollup-plugin-css-porter": "^1.0.2",
-    "rollup-plugin-license": "^2.3.0",
+    "rollup-plugin-license": "^2.5.0",
     "rollup-plugin-node-externals": "^2.2.0",
     "rollup-plugin-terser": "^7.0.2",
-    "tslib": "^2.2.0",
-    "typescript": "^4.2.4"
+    "tslib": "^2.3.0",
+    "typescript": "^4.3.3"
   }
 }

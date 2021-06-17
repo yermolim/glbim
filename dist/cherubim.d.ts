@@ -153,7 +153,7 @@ export declare class GltfViewer {
 	private _optionsChange;
 	private _contextLoss;
 	private _lastFrameTime;
-	constructor(containerSelector: string, dracoDecoderPath: string, options: GltfViewerOptions);
+	constructor(containerSelector: string, dracoLibPath?: string, ifcLibPath?: string, options?: GltfViewerOptions);
 	destroy(): void;
 	updateOptionsAsync(options: GltfViewerOptions): Promise<GltfViewerOptions>;
 	setInteractionMode(value: ViewerInteractionMode): void;

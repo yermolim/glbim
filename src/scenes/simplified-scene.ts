@@ -2,7 +2,7 @@ import { Light, Scene, Mesh, Box3, Vector3, BufferGeometry, BufferAttribute,
   Uint32BufferAttribute, Float32BufferAttribute, MeshPhongMaterial } from "three";
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull";
 
-import { MeshBgSm, FastRenderType } from "../common-types";
+import { Mesh_BG, FastRenderType } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 
 export class SimplifiedScene {
@@ -50,7 +50,7 @@ export class SimplifiedScene {
     this._scene = null;
   }
     
-  async updateSceneAsync(lights: Light[], meshes: MeshBgSm[],
+  async updateSceneAsync(lights: Light[], meshes: Mesh_BG[],
     fastRenderType: FastRenderType): Promise<void> {
     this._scene = null;
     const scene = new Scene(); 
@@ -87,13 +87,13 @@ export class SimplifiedScene {
     this._simpleMaterial.needsUpdate = true;
   }
 
-  private async buildHullGeometryAsync(meshes: MeshBgSm[]): Promise<BufferGeometry> {    
+  private async buildHullGeometryAsync(meshes: Mesh_BG[]): Promise<BufferGeometry> {    
     if (!meshes?.length) {
       return null;
     }
     
     const hullPoints: Vector3[] = [];
-    let mesh: MeshBgSm;
+    let mesh: Mesh_BG;
     let face: any;
     let edge: any;
     let j: number;
@@ -165,7 +165,7 @@ export class SimplifiedScene {
     return outputGeometry;
   }
   
-  private async buildBoxGeometryAsync(meshes: MeshBgSm[]): Promise<BufferGeometry> {
+  private async buildBoxGeometryAsync(meshes: Mesh_BG[]): Promise<BufferGeometry> {
     if (!meshes?.length) {
       return null;
     }
@@ -173,7 +173,7 @@ export class SimplifiedScene {
     const positionArray = new Float32Array(meshes.length * 8 * 3);
     const indexArray = new Uint32Array(meshes.length * 12 * 3);
     
-    let mesh: MeshBgSm;
+    let mesh: Mesh_BG;
     let positionsOffset = 0; 
     let indicesOffset = 0;
     let j: number;
@@ -214,7 +214,7 @@ export class SimplifiedScene {
     return outputGeometry;
   }  
 
-  private getMeshBoxPositions(mesh: MeshBgSm): ArrayLike<number> {    
+  private getMeshBoxPositions(mesh: Mesh_BG): ArrayLike<number> {    
     const box = new Box3().setFromBufferAttribute(<BufferAttribute>mesh.geometry.getAttribute("position"));
     const boxPositionArray = new Float32Array(24);
         

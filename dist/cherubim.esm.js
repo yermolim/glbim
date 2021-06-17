@@ -23,9 +23,10 @@
  */
 
 import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
-import { Matrix4, Mesh, BufferGeometry, MeshStandardMaterial, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshPhysicalMaterial, NormalBlending, DoubleSide, Color, MeshPhongMaterial, MeshBasicMaterial, NoBlending, LineBasicMaterial, SpriteMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Scene, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
+import { Matrix4, Scene, Mesh, BufferGeometry, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial, MeshPhongMaterial, MeshLambertMaterial, MeshToonMaterial, SpriteMaterial, NormalBlending, DoubleSide, Color, NoBlending, LineBasicMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, InterleavedBufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
+import { IFCLoader } from 'three/examples/jsm/loaders/IFCLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry';
 import { Line2 } from 'three/examples/jsm/lines/Line2';
@@ -190,7 +191,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
     });
 };
 class ModelLoaderService {
-    constructor(dracoDecoderPath, basePoint = null) {
+    constructor(dracoLibPath, ifcLibPath, basePoint = null) {
         this._loadingStateChange = new BehaviorSubject(false);
         this._loadingQueueChange = new BehaviorSubject(null);
         this._modelLoadingStart = new Subject();
@@ -223,14 +224,19 @@ class ModelLoaderService {
         this.modelLoadingEnd$ = this._modelLoadingEnd.asObservable();
         this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
         this.modelsOpenedChange$ = this._modelsOpenedChange.asObservable();
-        const loader = new GLTFLoader();
-        if (dracoDecoderPath) {
+        const glbLoader = new GLTFLoader();
+        if (dracoLibPath) {
             const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath(dracoDecoderPath);
+            dracoLoader.setDecoderPath(dracoLibPath);
             dracoLoader.preload();
-            loader.setDRACOLoader(dracoLoader);
+            glbLoader.setDRACOLoader(dracoLoader);
         }
-        this._loader = loader;
+        this._glbLoader = glbLoader;
+        const ifcLoader = new IFCLoader();
+        if (ifcLibPath) {
+            ifcLoader.setWasmPath(ifcLibPath);
+        }
+        this._ifcLoader = ifcLoader;
     }
     get loadedModelsArray() {
         return this._loadedModelsArray;
@@ -255,8 +261,8 @@ class ModelLoaderService {
             x.geometry.dispose();
             x.material.dispose();
         });
-        (_b = this._loader.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
-        this._loader = null;
+        (_b = this._glbLoader.dracoLoader) === null || _b === void 0 ? void 0 : _b.dispose();
+        this._glbLoader = null;
     }
     addQueueCallback(type, cb) {
         switch (type) {
@@ -373,8 +379,7 @@ class ModelLoaderService {
     }
     processLoadingQueueAsync() {
         return __awaiter$4(this, void 0, void 0, function* () {
-            if (!this._loader
-                || this._loadingInProgress
+            if (this._loadingInProgress
                 || !this._loadingQueue.length) {
                 return;
             }
@@ -405,8 +410,23 @@ class ModelLoaderService {
             this.onModelLoadingStart(url, guid);
             let error;
             try {
-                const model = yield this._loader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
-                this.addModelToLoaded(model, guid, name);
+                if (name.endsWith(".glb") || name.endsWith(".gltf")) {
+                    if (!this._glbLoader) {
+                        throw new Error("GLB/GLTF loader is not initialized");
+                    }
+                    const gltfModel = yield this._glbLoader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
+                    this.addModelToLoaded(gltfModel.scene, guid, name);
+                }
+                else if (name.endsWith("ifc")) {
+                    if (!this._ifcLoader) {
+                        throw new Error("GLB/GLTF loader is not initialized");
+                    }
+                    const ifcModel = yield this._ifcLoader.loadAsync(url, (progress) => this.onModelLoadingProgress(progress, url, guid));
+                    this.addModelToLoaded(ifcModel, guid, name);
+                }
+                else {
+                    throw new Error(`Unsupported file format: ${name}`);
+                }
             }
             catch (loadingError) {
                 error = loadingError;
@@ -428,24 +448,26 @@ class ModelLoaderService {
         this._modelLoadingProgress.next({ url, guid, progress: 0 });
         this._modelLoadingEnd.next(info);
     }
-    addModelToLoaded(gltf, modelGuid, modelName) {
+    addModelToLoaded(modelRoot, modelGuid, modelName) {
         const name = modelName || modelGuid;
-        const scene = gltf.scene;
-        scene.userData.guid = modelGuid;
-        scene.name = name;
+        const tempScene = new Scene();
+        tempScene.add(modelRoot);
+        if (this._wcsToUcsMatrix) {
+            modelRoot.position.applyMatrix4(this._wcsToUcsMatrix);
+        }
+        modelRoot.matrixWorldNeedsUpdate = true;
+        modelRoot.updateMatrixWorld(true);
+        tempScene.remove(modelRoot);
         let vertexCount = 0;
-        const meshes = [];
-        const handles = new Set();
-        scene.traverse(x => {
+        const modelMeshes = [];
+        const modelHandles = new Set();
+        modelRoot.traverse(x => {
             if (x instanceof Mesh
-                && x.geometry instanceof BufferGeometry
-                && x.material instanceof MeshStandardMaterial) {
-                const id = `${modelGuid}|${x.name}`;
+                && x.geometry instanceof BufferGeometry) {
+                const handle = x.name || x.uuid;
+                const id = `${modelGuid}|${handle}`;
                 x.userData.id = id;
                 x.userData.modelGuid = modelGuid;
-                if (this._wcsToUcsMatrix) {
-                    x.position.applyMatrix4(this._wcsToUcsMatrix);
-                }
                 this._loadedMeshes.add(x);
                 if (this._loadedMeshesById.has(id)) {
                     this._loadedMeshesById.get(id).push(x);
@@ -453,8 +475,8 @@ class ModelLoaderService {
                 else {
                     this._loadedMeshesById.set(id, [x]);
                 }
-                meshes.push(x);
-                handles.add(x.name);
+                modelMeshes.push(x);
+                modelHandles.add(handle);
                 if (this._onMeshLoaded.size) {
                     for (const callback of this._onMeshLoaded) {
                         callback(x);
@@ -463,7 +485,7 @@ class ModelLoaderService {
                 vertexCount += x.geometry.getAttribute("position").count;
             }
         });
-        const modelInfo = { name, meshes, handles, vertexCount };
+        const modelInfo = { name, meshes: modelMeshes, handles: modelHandles, vertexCount };
         this._loadedModels.add(modelInfo);
         this._loadedModelsByGuid.set(modelGuid, modelInfo);
         if (this._onModelLoaded.size) {
@@ -745,7 +767,17 @@ class ColorRgbRmo {
         return this.opacity * 255;
     }
     static createFromMaterial(material) {
-        return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
+        if (material instanceof MeshStandardMaterial
+            || material instanceof MeshPhysicalMaterial) {
+            return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, material.roughness, material.metalness, material.opacity);
+        }
+        if (material instanceof MeshBasicMaterial
+            || material instanceof MeshPhongMaterial
+            || material instanceof MeshLambertMaterial
+            || material instanceof MeshToonMaterial) {
+            return new ColorRgbRmo(material.color.r, material.color.g, material.color.b, 1, 0, material.opacity);
+        }
+        return new ColorRgbRmo(1, 1, 1, 1, 0, material.opacity);
     }
     static deleteColorFromMesh(mesh, deleteCustom = false, deleteDefault = false) {
         mesh[ColorRgbRmo.overrideColorProp] = null;
@@ -758,7 +790,7 @@ class ColorRgbRmo {
     }
     static getOriginalColorFromMesh(mesh) {
         if (!mesh[ColorRgbRmo.originalColorProp]) {
-            mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(mesh.material);
+            mesh[ColorRgbRmo.originalColorProp] = ColorRgbRmo.createFromMaterial(Array.isArray(mesh.material) ? mesh.material[0] : mesh.material);
         }
         return mesh[ColorRgbRmo.originalColorProp];
     }
@@ -2074,7 +2106,7 @@ class RenderScene {
         return [...this._renderMeshBySourceMesh.values()];
     }
     destroy() {
-        this.destroyScene();
+        this.deleteScene();
         this.destroyMaterials();
     }
     updateSceneAsync(lights, meshes, models, meshMergeType) {
@@ -2127,7 +2159,7 @@ class RenderScene {
                     if (!meshGroup.length) {
                         continue;
                     }
-                    const geometry = yield this.buildRenderGeometryAsync(meshGroup);
+                    const geometry = yield this.buildMergedGeometryAsync(meshGroup);
                     if (!geometry) {
                         continue;
                     }
@@ -2148,7 +2180,6 @@ class RenderScene {
                 for (const sourceMesh of meshes) {
                     const rgbRmo = ColorRgbRmo.getFinalColorFromMesh(sourceMesh);
                     const material = this.getMaterialByColor(rgbRmo);
-                    sourceMesh.updateMatrixWorld();
                     const renderMesh = new Mesh(sourceMesh.geometry, material);
                     renderMesh.applyMatrix4(sourceMesh.matrixWorld);
                     this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
@@ -2190,7 +2221,7 @@ class RenderScene {
             return grouppedMeshes;
         });
     }
-    buildRenderGeometryAsync(meshes) {
+    buildMergedGeometryAsync(meshes) {
         return __awaiter$3(this, void 0, void 0, function* () {
             let positionsLen = 0;
             let indicesLen = 0;
@@ -2201,17 +2232,19 @@ class RenderScene {
             if (positionsLen === 0) {
                 return null;
             }
-            const indexBuffer = new Uint32BufferAttribute(new Uint32Array(indicesLen), 1);
-            const colorBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
-            const rmoBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
-            const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
-            const indexArray = indexBuffer.array;
-            const colorArray = colorBuffer.array;
-            const rmoArray = rmoBuffer.array;
-            const positionArray = positionBuffer.array;
+            const mergedIndexAttr = new Uint32BufferAttribute(new Uint32Array(indicesLen), 1);
+            const mergedColorAttr = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
+            const mergedRmoAttr = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
+            const mergedPositionAttr = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
+            const mergedIndexArray = mergedIndexAttr.array;
+            const mergedColorArray = mergedColorAttr.array;
+            const mergedRmoArray = mergedRmoAttr.array;
+            const mergedPositionArray = mergedPositionAttr.array;
             const indicesBySourceMesh = new Map();
+            let positionsCursor = 0;
             let positionsOffset = 0;
-            let indicesOffset = 0;
+            let positionsStride = 3;
+            let indicesCursor = 0;
             let mesh;
             let index;
             let rgbRmo;
@@ -2237,12 +2270,16 @@ class RenderScene {
                     lastBreakTime = performance.now();
                 }
                 mesh = meshes[i];
-                mesh.updateMatrixWorld();
                 const geometry = mesh.geometry
                     .clone()
                     .applyMatrix4(mesh.matrixWorld);
-                const positions = geometry.getAttribute("position").array;
-                const indices = geometry.getIndex().array;
+                const positionAttr = geometry.getAttribute("position");
+                if (positionAttr instanceof InterleavedBufferAttribute) {
+                    positionsOffset = positionAttr.offset;
+                    positionsStride = positionAttr.data.stride;
+                }
+                const positionArray = positionAttr.array;
+                const indexArray = geometry.getIndex().array;
                 rgbRmo = ColorRgbRmo.getFinalColorFromMesh(mesh);
                 r = rgbRmo.rByte;
                 g = rgbRmo.gByte;
@@ -2250,41 +2287,42 @@ class RenderScene {
                 roughness = rgbRmo.roughnessByte;
                 metalness = rgbRmo.metalnessByte;
                 opacity = rgbRmo.opacityByte;
-                const meshIndices = new Uint32Array(indices.length);
+                const meshIndices = new Uint32Array(indexArray.length);
                 indicesBySourceMesh.set(mesh, meshIndices);
-                for (m = 0; m < indices.length; m++) {
-                    index = indices[m] + positionsOffset;
+                for (m = 0; m < indexArray.length; m++) {
+                    index = indexArray[m] + positionsCursor;
                     meshIndices[m] = index;
-                    indexArray[indicesOffset++] = index;
+                    mergedIndexArray[indicesCursor++] = index;
                 }
-                for (n = 0; n < positions.length;) {
-                    p1 = positionsOffset * 3;
+                for (n = positionsOffset; n < positionArray.length;) {
+                    p1 = positionsCursor * 3;
                     p2 = p1 + 1;
                     p3 = p2 + 1;
-                    colorArray[p1] = r;
-                    colorArray[p2] = g;
-                    colorArray[p3] = b;
-                    rmoArray[p1] = roughness;
-                    rmoArray[p2] = metalness;
-                    rmoArray[p3] = opacity;
-                    positionArray[p1] = positions[n++];
-                    positionArray[p2] = positions[n++];
-                    positionArray[p3] = positions[n++];
-                    positionsOffset++;
+                    mergedColorArray[p1] = r;
+                    mergedColorArray[p2] = g;
+                    mergedColorArray[p3] = b;
+                    mergedRmoArray[p1] = roughness;
+                    mergedRmoArray[p2] = metalness;
+                    mergedRmoArray[p3] = opacity;
+                    mergedPositionArray[p1] = positionArray[n];
+                    mergedPositionArray[p2] = positionArray[n + 1];
+                    mergedPositionArray[p3] = positionArray[n + 2];
+                    positionsCursor++;
+                    n += positionsStride;
                 }
                 geometry.dispose();
             }
-            const renderGeometry = new BufferGeometry();
-            renderGeometry.setIndex(indexBuffer);
-            renderGeometry.setAttribute("color", colorBuffer);
-            renderGeometry.setAttribute("rmo", rmoBuffer);
-            renderGeometry.setAttribute("position", positionBuffer);
+            const mergedBufferGeometry = new BufferGeometry();
+            mergedBufferGeometry.setIndex(mergedIndexAttr);
+            mergedBufferGeometry.setAttribute("color", mergedColorAttr);
+            mergedBufferGeometry.setAttribute("rmo", mergedRmoAttr);
+            mergedBufferGeometry.setAttribute("position", mergedPositionAttr);
             return {
-                geometry: renderGeometry,
-                positions: positionBuffer,
-                colors: colorBuffer,
-                rmos: rmoBuffer,
-                indices: indexBuffer,
+                geometry: mergedBufferGeometry,
+                positions: mergedPositionAttr,
+                colors: mergedColorAttr,
+                rmos: mergedRmoAttr,
+                indices: mergedIndexAttr,
                 indicesBySourceMesh,
             };
         });
@@ -2422,12 +2460,6 @@ class RenderScene {
             renderGeometry.indices.needsUpdate = true;
         }
         this._geometryIndicesNeedSort.clear();
-    }
-    destroyScene() {
-        var _a;
-        this._scene = null;
-        (_a = this._geometries) === null || _a === void 0 ? void 0 : _a.forEach(x => x.geometry.dispose());
-        this._geometries = null;
     }
     getMaterialByColor(rgbRmo) {
         const key = rgbRmo.toString();
@@ -2996,9 +3028,7 @@ class PickingScene {
         pickingMesh.userData.sourceId = sourceMesh.userData.id;
         pickingMesh.userData.sourceUuid = sourceMesh.uuid;
         pickingMesh.userData.color = colorString;
-        pickingMesh.position.copy(sourceMesh.position);
-        pickingMesh.rotation.copy(sourceMesh.rotation);
-        pickingMesh.scale.copy(sourceMesh.scale);
+        pickingMesh.applyMatrix4(sourceMesh.matrixWorld);
         this._scene.add(pickingMesh);
         this._pickingMeshBySourceMesh.set(sourceMesh, pickingMesh);
         this._sourceMeshByPickingColor.set(colorString, sourceMesh);
@@ -3600,7 +3630,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 class GltfViewer {
-    constructor(containerSelector, dracoDecoderPath, options) {
+    constructor(containerSelector, dracoLibPath, ifcLibPath, options) {
         this._subscriptions = [];
         this._pointerEventHelper = PointerEventHelper.default;
         this._modeChange = new BehaviorSubject(null);
@@ -3730,7 +3760,7 @@ class GltfViewer {
         }
         this._options = new GltfViewerOptions(options);
         this._optionsChange.next(Object.assign({}, this._options));
-        this.initLoaderService(dracoDecoderPath);
+        this.initLoaderService(dracoLibPath, ifcLibPath);
         this.initCameraService();
         this.initPickingService();
         this.initHighlightService();
@@ -3935,8 +3965,8 @@ class GltfViewer {
         this._pointerEventHelper.downX = null;
         this._pointerEventHelper.downY = null;
     }
-    initLoaderService(dracoDecoderPath) {
-        this._loaderService = new ModelLoaderService(dracoDecoderPath, this._options.basePoint);
+    initLoaderService(dracoLibPath, ifcLibPath) {
+        this._loaderService = new ModelLoaderService(dracoLibPath, ifcLibPath, this._options.basePoint);
         this._loaderService.addQueueCallback("queue-loaded", () => __awaiter(this, void 0, void 0, function* () {
             this._coloringService.runQueuedColoring(this._renderService);
             this._selectionService.runQueuedSelection(this._renderService);

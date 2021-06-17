@@ -3,7 +3,7 @@ import { NoToneMapping, Object3D, PerspectiveCamera,
   sRGBEncoding, Vector2, Vector3, WebGLRenderer } from "three";
 
 import { GltfViewerOptions } from "../gltf-viewer-options";
-import { MeshBgSm } from "../common-types";
+import { Mesh_BG } from "../common-types";
 
 import { CameraService } from "./camera-service";
 import { ModelLoaderService } from "./model-loader-service";
@@ -37,7 +37,7 @@ export class RenderService {
   private _rendererEventListeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
   
   private _deferRender: number;
-  private _meshesNeedColorUpdate = new Set<MeshBgSm>();
+  private _meshesNeedColorUpdate = new Set<Mesh_BG>();
 
   constructor(container: HTMLElement, loaderService: ModelLoaderService, 
     cameraService: CameraService, scenesService: ScenesService, 
@@ -214,7 +214,7 @@ export class RenderService {
    * force mesh color to be actualized during the next render call
    * @param mesh 
    */
-  enqueueMeshForColorUpdate(mesh: MeshBgSm) {
+  enqueueMeshForColorUpdate(mesh: Mesh_BG) {
     this._meshesNeedColorUpdate.add(mesh);
   }
   //#endregion  

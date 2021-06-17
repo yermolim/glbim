@@ -1,12 +1,13 @@
 import { Observable, Subject, BehaviorSubject, AsyncSubject, firstValueFrom } from "rxjs";
 
-import { Mesh, MeshStandardMaterial, BufferGeometry, Matrix4 } from "three";
+import { Mesh, BufferGeometry, Matrix4, Object3D, Scene } from "three";
 // eslint-disable-next-line import/named
-import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { IFCLoader } from "three/examples/jsm/loaders/IFCLoader";
 
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, LoadingQueueInfo,
-  ModelGeometryInfo, ModelFileInfo, MeshBgSm, Vec4DoubleCS} from "../common-types";
+  ModelGeometryInfo, ModelFileInfo, Mesh_BG, Vec4DoubleCS} from "../common-types";
 
 export class ModelLoaderService {
   // #region public observables
@@ -27,7 +28,8 @@ export class ModelLoaderService {
   private _modelsOpenedChange = new BehaviorSubject<ModelOpenedInfo[]>([]);  
   // #endregion
 
-  private _loader: GLTFLoader;  
+  private _glbLoader: GLTFLoader;  
+  private _ifcLoader: IFCLoader;  
 
   private _loadingInProgress = false;
   private _loadingQueue: (() => Promise<void>)[] = [];
@@ -35,16 +37,16 @@ export class ModelLoaderService {
   private _loadedModels = new Set<ModelGeometryInfo>();
   private _loadedModelsByGuid = new Map<string, ModelGeometryInfo>();
 
-  private _loadedMeshes = new Set<MeshBgSm>();
-  private _loadedMeshesById = new Map<string, MeshBgSm[]>();
+  private _loadedMeshes = new Set<Mesh_BG>();
+  private _loadedMeshesById = new Map<string, Mesh_BG[]>();
 
   private _loadedModelsArray: ModelGeometryInfo[] = [];
-  private _loadedMeshesArray: MeshBgSm[] = [];
+  private _loadedMeshesArray: Mesh_BG[] = [];
 
   get loadedModelsArray(): ModelGeometryInfo[] {
     return this._loadedModelsArray;
   }
-  get loadedMeshesArray(): MeshBgSm[] {
+  get loadedMeshesArray(): Mesh_BG[] {
     return this._loadedMeshesArray;
   }
 
@@ -61,10 +63,10 @@ export class ModelLoaderService {
   private _onQueueLoaded = new Set<() => Promise<void>>();
   private _onModelLoaded = new Set<(guid: string) => void>();
   private _onModelUnloaded = new Set<(guid: string) => void>();
-  private _onMeshLoaded = new Set<(m: MeshBgSm) => void>();
-  private _onMeshUnloaded = new Set<(m: MeshBgSm) => void>();
+  private _onMeshLoaded = new Set<(m: Mesh_BG) => void>();
+  private _onMeshUnloaded = new Set<(m: Mesh_BG) => void>();
   
-  constructor(dracoDecoderPath: string,
+  constructor(dracoLibPath: string, ifcLibPath: string,
     basePoint: Vec4DoubleCS = null) {
     
     const wcsToUcsMatrix = new Matrix4();
@@ -82,14 +84,20 @@ export class ModelLoaderService {
     this.modelLoadingProgress$ = this._modelLoadingProgress.asObservable();
     this.modelsOpenedChange$ = this._modelsOpenedChange.asObservable();
 
-    const loader = new GLTFLoader();
-    if (dracoDecoderPath) {
+    const glbLoader = new GLTFLoader();
+    if (dracoLibPath) {
       const dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath(dracoDecoderPath);
+      dracoLoader.setDecoderPath(dracoLibPath);
       dracoLoader.preload();
-      loader.setDRACOLoader(dracoLoader);
+      glbLoader.setDRACOLoader(dracoLoader);
     }
-    this._loader = loader;
+    this._glbLoader = glbLoader;
+
+    const ifcLoader = new IFCLoader();
+    if (ifcLibPath) {
+      (<any>ifcLoader).setWasmPath(ifcLibPath);
+    }
+    this._ifcLoader = ifcLoader;
   }
 
   destroy() {
@@ -104,8 +112,8 @@ export class ModelLoaderService {
       x.material.dispose();
     });
     
-    this._loader.dracoLoader?.dispose();  
-    this._loader = null;
+    this._glbLoader.dracoLoader?.dispose();  
+    this._glbLoader = null;
   }
 
   //#region callbacks
@@ -130,7 +138,7 @@ export class ModelLoaderService {
   }
   
   addMeshCallback(type: "mesh-loaded" | "mesh-unloaded", 
-    cb: (m: MeshBgSm) => void) {    
+    cb: (m: Mesh_BG) => void) {    
     switch (type) {
       case "mesh-loaded":
         this._onMeshLoaded.add(cb);
@@ -174,7 +182,7 @@ export class ModelLoaderService {
     modelInfos.forEach(x => {
       const resultSubject = new AsyncSubject<ModelLoadedInfo>();
       this._loadingQueue.push(async () => {        
-        const { url, guid, name } = x;      
+        const { url, guid, name } = x;
         const result = !this._loadedModelsByGuid.has(guid)
           ? await this.loadModel(url, guid, name)
           : { url, guid };
@@ -214,12 +222,12 @@ export class ModelLoaderService {
     return this.closeModelsAsync(loadedGuids);
   }
 
-  getLoadedMeshesById(id: string): MeshBgSm[] {
+  getLoadedMeshesById(id: string): Mesh_BG[] {
     return this._loadedMeshesById.get(id);
   }
   
-  findMeshesByIds(ids: Set<string>): {found: MeshBgSm[]; notFound: Set<string>} {
-    const found: MeshBgSm[] = [];
+  findMeshesByIds(ids: Set<string>): {found: Mesh_BG[]; notFound: Set<string>} {
+    const found: Mesh_BG[] = [];
     const notFound = new Set<string>();
 
     ids.forEach(x => {
@@ -235,8 +243,7 @@ export class ModelLoaderService {
   }
 
   private async processLoadingQueueAsync(): Promise<void> {
-    if (!this._loader 
-        || this._loadingInProgress 
+    if (this._loadingInProgress
         || !this._loadingQueue.length) {
       return;
     }
@@ -274,9 +281,23 @@ export class ModelLoaderService {
     this.onModelLoadingStart(url, guid); 
     let error: Error;
     try {
-      const model = await this._loader.loadAsync(url,
-        (progress) => this.onModelLoadingProgress(progress, url, guid));
-      this.addModelToLoaded(model, guid, name);
+      if (name.endsWith(".glb") || name.endsWith(".gltf")) {
+        if (!this._glbLoader) {
+          throw new Error("GLB/GLTF loader is not initialized");
+        }
+        const gltfModel = await this._glbLoader.loadAsync(url,
+          (progress) => this.onModelLoadingProgress(progress, url, guid));
+        this.addModelToLoaded(gltfModel.scene, guid, name);
+      } else if (name.endsWith("ifc")) {
+        if (!this._ifcLoader) {
+          throw new Error("GLB/GLTF loader is not initialized");
+        }
+        const ifcModel: Object3D = await this._ifcLoader.loadAsync(url,
+          (progress) => this.onModelLoadingProgress(progress, url, guid));
+        this.addModelToLoaded(ifcModel, guid, name);
+      } else {
+        throw new Error(`Unsupported file format: ${name}`);
+      }
     } catch (loadingError) {
       error = loadingError;
     }
@@ -300,26 +321,29 @@ export class ModelLoaderService {
     this._modelLoadingEnd.next(info);
   }
 
-  private addModelToLoaded(gltf: GLTF, modelGuid: string, modelName: string) {
+  private addModelToLoaded(modelRoot: Object3D, modelGuid: string, modelName: string) {
     const name = modelName || modelGuid;
-    const scene = gltf.scene;
-    scene.userData.guid = modelGuid;
-    scene.name = name;
+
+    const tempScene = new Scene();
+    tempScene.add(modelRoot);
+    if (this._wcsToUcsMatrix) {
+      modelRoot.position.applyMatrix4(this._wcsToUcsMatrix);
+    }
+    modelRoot.matrixWorldNeedsUpdate = true;
+    modelRoot.updateMatrixWorld(true); 
+    tempScene.remove(modelRoot);
 
     let vertexCount = 0;
-    const meshes: MeshBgSm[] = [];
-    const handles = new Set<string>();
-    scene.traverse(x => {
+    const modelMeshes: Mesh_BG[] = [];
+    const modelHandles = new Set<string>();
+    modelRoot.traverse(x => {
       if (x instanceof Mesh
-          && x.geometry instanceof BufferGeometry
-          && x.material instanceof MeshStandardMaterial) {
-        const id = `${modelGuid}|${x.name}`;
+          // only BufferGeometry is supported
+          && x.geometry instanceof BufferGeometry) {
+        const handle = x.name || x.uuid;
+        const id = `${modelGuid}|${handle}`;
         x.userData.id = id;
-        x.userData.modelGuid = modelGuid;
-
-        if (this._wcsToUcsMatrix) {
-          x.position.applyMatrix4(this._wcsToUcsMatrix);
-        }
+        x.userData.modelGuid = modelGuid; 
 
         this._loadedMeshes.add(x);
         if (this._loadedMeshesById.has(id)) {
@@ -327,8 +351,8 @@ export class ModelLoaderService {
         } else {
           this._loadedMeshesById.set(id, [x]);
         }        
-        meshes.push(x);
-        handles.add(x.name);
+        modelMeshes.push(x);
+        modelHandles.add(handle);
 
         if (this._onMeshLoaded.size) {
           for (const callback of this._onMeshLoaded) {
@@ -340,7 +364,7 @@ export class ModelLoaderService {
       }
     });
     
-    const modelInfo = {name, meshes, handles, vertexCount};
+    const modelInfo = {name, meshes: modelMeshes, handles: modelHandles, vertexCount};
     this._loadedModels.add(modelInfo);
     this._loadedModelsByGuid.set(modelGuid, modelInfo);
     

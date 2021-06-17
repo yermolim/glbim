@@ -1,9 +1,8 @@
 import { Light, Scene, Mesh, Color, MeshStandardMaterial,
   BufferGeometry, Uint32BufferAttribute, Uint8BufferAttribute, 
-  Float32BufferAttribute } from "three";
+  Float32BufferAttribute, InterleavedBufferAttribute} from "three";
 
-import { MeshMergeType, MeshBgSm, 
-  RenderGeometry, ModelGeometryInfo } from "../common-types";
+import { MeshMergeType, Mesh_BG, MergedGeometry, ModelGeometryInfo } from "../common-types";
 import { MaterialBuilder } from "../helpers/material-builder";
 import { ColorRgbRmo } from "../helpers/color-rgb-rmo";
 
@@ -27,41 +26,41 @@ export class RenderScene {
   private _highlightColor: Color;
 
   private _scene: Scene;
-  private _geometries: RenderGeometry[] = [];
+  private _geometries: MergedGeometry[] = [];
   private _globalMaterial: MeshStandardMaterial;
   private _materials = new Map<string, MeshStandardMaterial>();
   
-  private _geometryIndexBySourceMesh = new Map<MeshBgSm, number>();
-  private _sourceMeshesByGeometryIndex = new Map<number, MeshBgSm[]>();
-  private _renderMeshBySourceMesh = new Map<MeshBgSm, MeshBgSm>();  
+  private _geometryIndexBySourceMesh = new Map<Mesh_BG, number>();
+  private _sourceMeshesByGeometryIndex = new Map<number, Mesh_BG[]>();
+  private _renderMeshBySourceMesh = new Map<Mesh_BG, Mesh_BG>();  
   private _geometryIndicesNeedSort = new Set<number>();
   
   get scene(): Scene {
     return this._scene;
   }    
-  get geometries(): RenderGeometry[] {
+  get geometries(): MergedGeometry[] {
     return this._geometries;
   }
-  get meshes(): MeshBgSm[] {
+  get meshes(): Mesh_BG[] {
     return [...this._renderMeshBySourceMesh.values()];
   }
 
   constructor(colors: RenderSceneColors) {
     this.updateCommonColors(colors);
-    this._globalMaterial = MaterialBuilder.buildGlobalMaterial(); 
+    this._globalMaterial = MaterialBuilder.buildGlobalMaterial();
   }
 
   destroy() {    
-    this.destroyScene();
+    this.deleteScene();
     this.destroyMaterials();
   }
   
-  async updateSceneAsync(lights: Light[], meshes: MeshBgSm[], models: ModelGeometryInfo[], 
+  async updateSceneAsync(lights: Light[], meshes: Mesh_BG[], models: ModelGeometryInfo[], 
     meshMergeType: MeshMergeType): Promise<void> {
 
     this.deleteScene();
     await this.createSceneAsync(lights, meshes, models, meshMergeType);
-    this.updateMeshColors(new Set<MeshBgSm>(meshes));
+    this.updateMeshColors(new Set<Mesh_BG>(meshes));
   }    
 
   /**
@@ -76,7 +75,7 @@ export class RenderScene {
    * apply the actual coloring to meshes based on current mesh states 
    * @param sourceMeshes 
    */
-  updateMeshColors(sourceMeshes: Set<MeshBgSm>) {
+  updateMeshColors(sourceMeshes: Set<Mesh_BG>) {
     if (this._currentMergeType) {
       this.updateMeshGeometryColors(sourceMeshes);
     } else {
@@ -115,7 +114,7 @@ export class RenderScene {
     this._scene = null;
   }
 
-  private async createSceneAsync(lights: Light[], meshes: MeshBgSm[], 
+  private async createSceneAsync(lights: Light[], meshes: Mesh_BG[], 
     models: ModelGeometryInfo[], meshMergeType: MeshMergeType): Promise<void> {      
     const scene = new Scene();
     scene.add(...lights);
@@ -129,7 +128,7 @@ export class RenderScene {
           continue;
         }
         
-        const geometry = await this.buildRenderGeometryAsync(meshGroup);        
+        const geometry = await this.buildMergedGeometryAsync(meshGroup);        
         if (!geometry) {
           continue;
         }
@@ -152,7 +151,6 @@ export class RenderScene {
       for (const sourceMesh of meshes) {
         const rgbRmo = ColorRgbRmo.getFinalColorFromMesh(sourceMesh);
         const material = this.getMaterialByColor(rgbRmo);
-        sourceMesh.updateMatrixWorld();
         const renderMesh = new Mesh(sourceMesh.geometry, material);
         renderMesh.applyMatrix4(sourceMesh.matrixWorld);
         this._renderMeshBySourceMesh.set(sourceMesh, renderMesh);
@@ -164,10 +162,10 @@ export class RenderScene {
     this._scene = scene;
   }
 
-  private async groupModelMeshesByMergeType(meshes: MeshBgSm[], models: ModelGeometryInfo[], 
-    meshMergeType: MeshMergeType): Promise<MeshBgSm[][]> {
+  private async groupModelMeshesByMergeType(meshes: Mesh_BG[], models: ModelGeometryInfo[], 
+    meshMergeType: MeshMergeType): Promise<Mesh_BG[][]> {
 
-    let grouppedMeshes: MeshBgSm[][];
+    let grouppedMeshes: Mesh_BG[][];
     switch (meshMergeType) {
       case "scene":
         grouppedMeshes = [meshes];
@@ -201,7 +199,7 @@ export class RenderScene {
    * @param meshes 
    * @returns 
    */
-  private async buildRenderGeometryAsync(meshes: MeshBgSm[]): Promise<RenderGeometry> {
+  private async buildMergedGeometryAsync(meshes: Mesh_BG[]): Promise<MergedGeometry> {
     let positionsLen = 0;
     let indicesLen = 0;
 
@@ -214,21 +212,23 @@ export class RenderScene {
       return null;
     }
 
-    const indexBuffer = new Uint32BufferAttribute(new Uint32Array(indicesLen), 1);
-    const colorBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
-    const rmoBuffer = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
-    const positionBuffer = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
+    const mergedIndexAttr = new Uint32BufferAttribute(new Uint32Array(indicesLen), 1);
+    const mergedColorAttr = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
+    const mergedRmoAttr = new Uint8BufferAttribute(new Uint8Array(positionsLen), 3, true);
+    const mergedPositionAttr = new Float32BufferAttribute(new Float32Array(positionsLen), 3);
 
-    const indexArray = indexBuffer.array as Uint32Array;
-    const colorArray = colorBuffer.array as Uint8Array;
-    const rmoArray = rmoBuffer.array as Uint8Array;
-    const positionArray = positionBuffer.array as Float32Array;
+    const mergedIndexArray = mergedIndexAttr.array as Uint32Array;
+    const mergedColorArray = mergedColorAttr.array as Uint8Array;
+    const mergedRmoArray = mergedRmoAttr.array as Uint8Array;
+    const mergedPositionArray = mergedPositionAttr.array as Float32Array;
 
-    const indicesBySourceMesh = new Map<MeshBgSm, Uint32Array>();    
+    const indicesBySourceMesh = new Map<Mesh_BG, Uint32Array>();    
     
+    let positionsCursor = 0; 
     let positionsOffset = 0; 
-    let indicesOffset = 0;
-    let mesh: MeshBgSm;
+    let positionsStride = 3; 
+    let indicesCursor = 0;
+    let mesh: Mesh_BG;
     let index: number;
 
     let rgbRmo: ColorRgbRmo;
@@ -264,12 +264,17 @@ export class RenderScene {
       mesh = meshes[i];
 
       // get the mesh current positions and indices
-      mesh.updateMatrixWorld();
       const geometry = <BufferGeometry>mesh.geometry
         .clone()
         .applyMatrix4(mesh.matrixWorld);
-      const positions = geometry.getAttribute("position").array;
-      const indices = geometry.getIndex().array;
+
+      const positionAttr = geometry.getAttribute("position");
+      if (positionAttr instanceof InterleavedBufferAttribute) {
+        positionsOffset = positionAttr.offset;
+        positionsStride = positionAttr.data.stride;
+      }
+      const positionArray = positionAttr.array;
+      const indexArray = geometry.getIndex().array;
 
       // get colors
       rgbRmo = ColorRgbRmo.getFinalColorFromMesh(mesh);
@@ -281,56 +286,57 @@ export class RenderScene {
       opacity = rgbRmo.opacityByte;
 
       // fill indices
-      const meshIndices = new Uint32Array(indices.length);
+      const meshIndices = new Uint32Array(indexArray.length);
       indicesBySourceMesh.set(mesh, meshIndices);
-      for (m = 0; m < indices.length; m++) {
-        index = indices[m] + positionsOffset;
+      for (m = 0; m < indexArray.length; m++) {
+        index = indexArray[m] + positionsCursor;
         meshIndices[m] = index;
-        indexArray[indicesOffset++] = index;
+        mergedIndexArray[indicesCursor++] = index;
       }
 
       // fill positions and colors        
-      for (n = 0; n < positions.length;) {   
-        p1 = positionsOffset * 3;
+      for (n = positionsOffset; n < positionArray.length;) {   
+        p1 = positionsCursor * 3;
         p2 = p1 + 1;
         p3 = p2 + 1;
 
-        colorArray[p1] = r;
-        colorArray[p2] = g;
-        colorArray[p3] = b;
+        mergedColorArray[p1] = r;
+        mergedColorArray[p2] = g;
+        mergedColorArray[p3] = b;
 
-        rmoArray[p1] = roughness;
-        rmoArray[p2] = metalness;
-        rmoArray[p3] = opacity;
+        mergedRmoArray[p1] = roughness;
+        mergedRmoArray[p2] = metalness;
+        mergedRmoArray[p3] = opacity;
 
-        positionArray[p1] = positions[n++];
-        positionArray[p2] = positions[n++];
-        positionArray[p3] = positions[n++];
+        mergedPositionArray[p1] = positionArray[n];
+        mergedPositionArray[p2] = positionArray[n + 1];
+        mergedPositionArray[p3] = positionArray[n + 2];
 
-        positionsOffset++;
+        positionsCursor++;
+        n += positionsStride;
       }
       
       geometry.dispose();
     }
 
-    const renderGeometry = new BufferGeometry();
-    renderGeometry.setIndex(indexBuffer);   
-    renderGeometry.setAttribute("color", colorBuffer);      
-    renderGeometry.setAttribute("rmo", rmoBuffer); 
-    renderGeometry.setAttribute("position", positionBuffer); 
+    const mergedBufferGeometry = new BufferGeometry();
+    mergedBufferGeometry.setIndex(mergedIndexAttr);   
+    mergedBufferGeometry.setAttribute("color", mergedColorAttr);      
+    mergedBufferGeometry.setAttribute("rmo", mergedRmoAttr); 
+    mergedBufferGeometry.setAttribute("position", mergedPositionAttr); 
     
     return {
-      geometry: renderGeometry,
-      positions: positionBuffer,
-      colors: colorBuffer,
-      rmos: rmoBuffer,
-      indices: indexBuffer,
+      geometry: mergedBufferGeometry,
+      positions: mergedPositionAttr,
+      colors: mergedColorAttr,
+      rmos: mergedRmoAttr,
+      indices: mergedIndexAttr,
       indicesBySourceMesh,
     };
   }   
 
-  private updateMeshMaterials(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
-    sourceMeshes.forEach((sourceMesh: MeshBgSm) => { 
+  private updateMeshMaterials(sourceMeshes: Set<Mesh_BG> | Mesh_BG[]) {
+    sourceMeshes.forEach((sourceMesh: Mesh_BG) => { 
       const { rgbRmo } = this.refreshMeshColors(sourceMesh);      
       const material = this.getMaterialByColor(rgbRmo);
       const renderMesh = this._renderMeshBySourceMesh.get(sourceMesh);
@@ -344,9 +350,9 @@ export class RenderScene {
    * apply the actual coloring to meshes based on current mesh states 
    * @param sourceMeshes 
    */
-  private updateMeshGeometryColors(sourceMeshes: Set<MeshBgSm> | MeshBgSm[]) {
-    const meshesByRgIndex = new Map<number, MeshBgSm[]>();
-    sourceMeshes.forEach((mesh: MeshBgSm) => {
+  private updateMeshGeometryColors(sourceMeshes: Set<Mesh_BG> | Mesh_BG[]) {
+    const meshesByRgIndex = new Map<number, Mesh_BG[]>();
+    sourceMeshes.forEach((mesh: Mesh_BG) => {
       const rgIndex = this._geometryIndexBySourceMesh.get(mesh);
       if (meshesByRgIndex.has(rgIndex)) {
         meshesByRgIndex.get(rgIndex).push(mesh);
@@ -366,7 +372,7 @@ export class RenderScene {
    * @param meshes 
    * @returns 
    */
-  private updateGeometryColors(rgIndex: number, meshes: MeshBgSm[]) {
+  private updateGeometryColors(rgIndex: number, meshes: Mesh_BG[]) {
     const geometry = this._geometries[rgIndex];
     if (!geometry) {
       return;
@@ -379,7 +385,7 @@ export class RenderScene {
     let anyMeshOpacityChanged = false; 
     let i: number;
     let j: number;
-    let mesh: MeshBgSm;
+    let mesh: Mesh_BG;
     let indices: Uint32Array;
     let initialOpacity: number;
     let refreshColorsResult: RefreshMeshColorsResult;
@@ -450,13 +456,13 @@ export class RenderScene {
     let p: number;
     let q: number;
 
-    let meshes: MeshBgSm[];
-    let opaqueMeshes: MeshBgSm[];
-    let transparentMeshes: MeshBgSm[];
-    let mesh: MeshBgSm;
+    let meshes: Mesh_BG[];
+    let opaqueMeshes: Mesh_BG[];
+    let transparentMeshes: Mesh_BG[];
+    let mesh: Mesh_BG;
 
-    let renderGeometry: RenderGeometry;
-    let indexMap: Map<MeshBgSm, Uint32Array>;
+    let renderGeometry: MergedGeometry;
+    let indexMap: Map<Mesh, Uint32Array>;
     let indexArray: Uint32Array;
     let opaqueIndices: Uint32Array;
     let transparentIndices: Uint32Array;    
@@ -497,13 +503,6 @@ export class RenderScene {
     }
 
     this._geometryIndicesNeedSort.clear();
-  }   
-
-  private destroyScene() {
-    this._scene = null;
-
-    this._geometries?.forEach(x => x.geometry.dispose());
-    this._geometries = null;
   }
   // #endregion
 
@@ -524,7 +523,7 @@ export class RenderScene {
    * @param opacityInitial current mesh opacity (optional)
    * @returns 
    */
-  private refreshMeshColors(mesh: MeshBgSm, 
+  private refreshMeshColors(mesh: Mesh_BG, 
     opacityInitial: number = null): RefreshMeshColorsResult {
 
     opacityInitial = opacityInitial ?? ColorRgbRmo.getFinalColorFromMesh(mesh).opacity;   

@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 
-import { MeshBgSm } from "../common-types";
+import { Mesh_BG } from "../common-types";
 
 import { ModelLoaderService } from "./model-loader-service";
 import { PickingService } from "./picking-service";
@@ -16,8 +16,8 @@ export class SelectionService {
   private readonly _pickingService: PickingService;
   
   private _queuedSelection: {ids: string[]; isolate: boolean} = null;
-  private _selectedMeshes: MeshBgSm[] = [];
-  private _isolatedMeshes: MeshBgSm[] = [];
+  private _selectedMeshes: Mesh_BG[] = [];
+  private _isolatedMeshes: Mesh_BG[] = [];
 
   private _focusOnProgrammaticSelection = true;
   set focusOnProgrammaticSelection(value: boolean) {
@@ -101,7 +101,7 @@ export class SelectionService {
       return;
     }
 
-    let meshes: MeshBgSm[];
+    let meshes: Mesh_BG[];
     if (keepPreviousSelection) {
       if (mesh.userData.selected) {
         meshes = this._selectedMeshes.filter(x => x !== mesh);
@@ -122,7 +122,7 @@ export class SelectionService {
       clientMinX, clientMinY, clientMaxX, clientMaxY) || [];
     const idSet = new Set<string>(found.map(x => x.userData.id));
     
-    let meshes: MeshBgSm[];
+    let meshes: Mesh_BG[];
     if (previousSelection === "keep") {
       meshes = [...found, ...this._selectedMeshes];
     } else if (previousSelection === "subtract") {
@@ -174,7 +174,7 @@ export class SelectionService {
     this._isolatedMeshes.length = 0;
   }
 
-  private applySelection(renderService: RenderService, meshes: MeshBgSm[], 
+  private applySelection(renderService: RenderService, meshes: Mesh_BG[], 
     manual: boolean, isolateSelected: boolean) {
 
     this.clearSelection(renderService);

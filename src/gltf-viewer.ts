@@ -86,10 +86,14 @@ export class GltfViewer {
   /**
    * 
    * @param containerSelector parent HTMLElement selector
-   * @param dracoDecoderPath path to the folder with 'draco_decoder.js' file
+   * @param dracoLibPath path to the folder with 'draco_decoder.wasm'+'draco_wasm_wrapper.js' 
+   * or 'draco_decoder.js' file (https://github.com/google/draco)
+   * @param ifcLibPath path to the folder with 'web-ifc.wasm' file (https://github.com/tomvandig/web-ifc)
    * @param options viewer options
    */
-  constructor(containerSelector: string, dracoDecoderPath: string, options: GltfViewerOptions) {
+  constructor(containerSelector: string, 
+    dracoLibPath?: string, ifcLibPath?: string,
+    options?: GltfViewerOptions) {
     this.initObservables();
 
     this._container = document.getElementById(containerSelector) || document.querySelector(containerSelector);
@@ -101,7 +105,7 @@ export class GltfViewer {
     this._optionsChange.next(Object.assign({}, this._options));
     
     // init services. the order is important
-    this.initLoaderService(dracoDecoderPath);    
+    this.initLoaderService(dracoLibPath, ifcLibPath);    
     this.initCameraService();
     this.initPickingService();
     this.initHighlightService();   
@@ -564,8 +568,8 @@ export class GltfViewer {
   // #endregion
 
   // #region services initialization
-  private initLoaderService(dracoDecoderPath: string) {
-    this._loaderService = new ModelLoaderService(dracoDecoderPath, this._options.basePoint);
+  private initLoaderService(dracoLibPath: string, ifcLibPath: string) {
+    this._loaderService = new ModelLoaderService(dracoLibPath, ifcLibPath, this._options.basePoint);
     this._loaderService.addQueueCallback("queue-loaded", 
       async () => {
         this._coloringService.runQueuedColoring(this._renderService);
