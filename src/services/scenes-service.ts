@@ -1,4 +1,4 @@
-import { CherubimOptions } from "../cherubim-options";
+import { CherubimOptions } from "../glbim-options";
 
 import { Axes } from "../components/axes";
 import { Lights } from "../components/lights";

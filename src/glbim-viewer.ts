@@ -1,6 +1,6 @@
 import { Observable, Subscription, BehaviorSubject } from "rxjs";
 
-import { CherubimOptions } from "./cherubim-options";
+import { CherubimOptions } from "./glbim-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   ColoringInfo, PointerEventHelper, Distance, LoadingQueueInfo,
   Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";

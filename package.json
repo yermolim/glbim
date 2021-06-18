@@ -1,13 +1,13 @@
 {
-  "name": "cherubim",
+  "name": "glbim",
   "version": "1.0.1",
   "description": "Three.js-based GLB model viewer",
-  "module": "dist/cherubim.esm.js",
-  "types": "dist/cherubim.d.ts",
+  "module": "dist/glbim.esm.js",
+  "types": "dist/glbim.d.ts",
   "scripts": {
     "buildts": "tsc",
     "buildru": "rollup -c",
-    "bundletypes": "dts-bundle-generator -o dist/cherubim.d.ts src/cherubim-viewer.ts",
+    "bundletypes": "dts-bundle-generator -o dist/glbim.d.ts src/glbim-viewer.ts",
     "copydraco": "copyfiles -f ./node_modules/three/examples/js/libs/draco/* ./demo/assets/draco",
     "copyifc": "copyfiles -f ./node_modules/web-ifc/*.wasm ./node_modules/web-ifc/*.md ./demo/assets/ifc",
     "build": "npm run buildts && npm run buildru && npm run bundletypes && npm run copydraco && npm run copyifc",
@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yermolim/cherubim.git"
+    "url": "git+https://github.com/yermolim/glbim.git"
   },
   "keywords": [
     "3d",
@@ -35,9 +35,9 @@
   "author": "Volodymyr Yermolenko <yermolim@gmail.com> (https://github.com/yermolim)",
   "license": "AGPL",
   "bugs": {
-    "url": "https://github.com/yermolim/cherubim/issues"
+    "url": "https://github.com/yermolim/glbim/issues"
   },
-  "homepage": "https://github.com/yermolim/cherubim#readme",
+  "homepage": "https://github.com/yermolim/glbim#readme",
   "dependencies": {
     "rxjs": "^7.1.0",
     "three": "^0.129.0",

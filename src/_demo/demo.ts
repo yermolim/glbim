@@ -1,6 +1,6 @@
 import { Subscription } from "rxjs";
-import { CherubimViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../cherubim-viewer";
-import { CherubimOptions } from "../cherubim-options";
+import { CherubimViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../glbim-viewer";
+import { CherubimOptions } from "../glbim-options";
 class LoadingAnimation {
   protected readonly _loaderElement: HTMLElement;
 

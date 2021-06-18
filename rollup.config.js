@@ -7,11 +7,11 @@ import externals from "rollup-plugin-node-externals";
 export default [  
   // main build
   {
-    input: "tsc/cherubim-viewer.js",
+    input: "tsc/glbim-viewer.js",
     output: [
-      { file: "dist/cherubim.esm.js", format: "esm"},
+      { file: "dist/glbim.esm.js", format: "esm"},
       // TODO: configure terser to prevent imports from shadowing variables
-      // { file: "dist/cherubim.esm.min.js", format: "es", plugins: [terser()] },
+      // { file: "dist/glbim.esm.min.js", format: "es", plugins: [terser()] },
     ],
     external: [],
     plugins: [

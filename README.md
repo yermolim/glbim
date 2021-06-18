@@ -1,8 +1,8 @@
-# CheruBIM 😇
+# GLBIM 🏗️
 #### Three.js-based GLB/IFC model viewer
 
-Created for personal use in a specific project, so use cases may be limited, but maybe will still be helpful to someone. 
-The main goal was to make it possible to open dozens of large industrial building models with thousands of elements and millions of polygons while keeping an optimal render performance. Optimized mesh merging to reduce render calls, GPU picking, using only vertex colors, etc. were the ways to achieve it. Target models are static without the need to take into account their internal structure, textures are ignored. 
+Created for personal use in a project focused on BIM, so use cases may be limited, but maybe will still be helpful to someone. 
+The main goal was to make it possible to open dozens of large industrial building models with thousands of elements and millions of polygons while keeping an optimal render performance. Optimized mesh merging to reduce render calls, GPU picking, using only vertex colors, etc. were the ways to achieve it. Target models are static, without the need to take into account their internal structure, textures are ignored. 
 
 ## Main features:
 <ul>
@@ -36,6 +36,6 @@ The support of these possible features are outside of the current module scope a
 </ul>
 
 #### *Mesh ids
-A combination of internal model UUID and mesh 'name' field is used as mesh id (`${modelUuid}|${meshName}`). This id is used for all available manipulations with a mesh (selection/isolation/hiding/coloring etc.). If mesh id is not unique, all manipulations will affect all meshes with this id.
+A combination of model id and mesh 'name' field is used as mesh id (`${modelId}|${meshName}`). This id is used for all available manipulations with a mesh (selection/isolation/hiding/coloring etc.). If mesh id is not unique, any manipulation will affect all meshes with this id.
 
 If I find time for this, or if there are any requests, I will add more details to the description.
