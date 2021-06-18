@@ -676,7 +676,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull';
 
-class CherubimOptions {
+class GlbimOptions {
     constructor(item = null) {
         this.useAntialiasing = true;
         this.usePhysicalLights = true;
@@ -4372,7 +4372,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-class CherubimViewer {
+class GlbimViewer {
     constructor(containerSelector, dracoLibPath, ifcLibPath, options) {
         this._subscriptions = [];
         this._pointerEventHelper = PointerEventHelper.default;
@@ -4501,7 +4501,7 @@ class CherubimViewer {
         if (!this._container) {
             throw new Error("Container not found!");
         }
-        this._options = new CherubimOptions(options);
+        this._options = new GlbimOptions(options);
         this._optionsChange.next(Object.assign({}, this._options));
         this.initLoaderService(dracoLibPath, ifcLibPath);
         this.initCameraService();
@@ -4550,7 +4550,7 @@ class CherubimViewer {
     updateOptionsAsync(options) {
         return __awaiter(this, void 0, void 0, function* () {
             const oldOptions = this._options;
-            this._options = new CherubimOptions(options);
+            this._options = new GlbimOptions(options);
             this._renderService.options = this._options;
             let rendererReinitialized = false;
             let axesHelperUpdated = false;
@@ -4777,4 +4777,4 @@ class CherubimViewer {
     }
 }
 
-export { CherubimOptions, CherubimViewer, Distance, Vec4DoubleCS };
+export { Distance, GlbimOptions, GlbimViewer, Vec4DoubleCS };

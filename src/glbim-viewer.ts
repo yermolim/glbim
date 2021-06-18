@@ -1,6 +1,6 @@
 import { Observable, Subscription, BehaviorSubject } from "rxjs";
 
-import { CherubimOptions } from "./glbim-options";
+import { GlbimOptions } from "./glbim-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   ColoringInfo, PointerEventHelper, Distance, LoadingQueueInfo,
   Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
@@ -16,14 +16,14 @@ import { SelectionService } from "./services/selection-service";
 import { ColoringService } from "./services/coloring-service";
 import { HudService } from "./services/hud-service";
 
-export { CherubimOptions, ModelFileInfo, ModelOpenedInfo,
+export { GlbimOptions, ModelFileInfo, ModelOpenedInfo,
   Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };  
 
 export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 
-export class CherubimViewer {
+export class GlbimViewer {
   // #region public observables
-  optionsChange$: Observable<CherubimOptions>; 
+  optionsChange$: Observable<GlbimOptions>; 
   modeChange$: Observable<ViewerInteractionMode>; 
   
   contextLoss$: Observable<boolean>;
@@ -59,7 +59,7 @@ export class CherubimViewer {
   private _container: HTMLElement;
   private _containerResizeObserver: ResizeObserver;
 
-  private _options: CherubimOptions;  
+  private _options: GlbimOptions;  
   private _interactionMode: ViewerInteractionMode;
 
   private _cameraService: CameraService;   
@@ -78,7 +78,7 @@ export class CherubimViewer {
   
   // #region private rx subjects
   private _modeChange = new BehaviorSubject<ViewerInteractionMode>(null);
-  private _optionsChange = new BehaviorSubject<CherubimOptions>(null);
+  private _optionsChange = new BehaviorSubject<GlbimOptions>(null);
   private _contextLoss = new BehaviorSubject<boolean>(false);  
   private _lastFrameTime = new BehaviorSubject<number>(0);  
   // #endregion
@@ -93,7 +93,7 @@ export class CherubimViewer {
    */
   constructor(containerSelector: string, 
     dracoLibPath?: string, ifcLibPath?: string,
-    options?: CherubimOptions) {
+    options?: GlbimOptions) {
     this.initObservables();
 
     this._container = document.getElementById(containerSelector) || document.querySelector(containerSelector);
@@ -101,7 +101,7 @@ export class CherubimViewer {
       throw new Error("Container not found!");
     }
 
-    this._options = new CherubimOptions(options);  
+    this._options = new GlbimOptions(options);  
     this._optionsChange.next(Object.assign({}, this._options));
     
     // init services. the order is important
@@ -175,9 +175,9 @@ export class CherubimViewer {
    * @param options 
    * @returns 
    */
-  async updateOptionsAsync(options: CherubimOptions): Promise<CherubimOptions> {
+  async updateOptionsAsync(options: GlbimOptions): Promise<GlbimOptions> {
     const oldOptions = this._options;
-    this._options = new CherubimOptions(options);
+    this._options = new GlbimOptions(options);
     this._renderService.options = this._options;
 
     let rendererReinitialized = false;

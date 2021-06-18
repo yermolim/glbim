@@ -1,6 +1,6 @@
 import { Subscription } from "rxjs";
-import { CherubimViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../glbim-viewer";
-import { CherubimOptions } from "../glbim-options";
+import { GlbimViewer, ModelFileInfo, ViewerInteractionMode, Vec4DoubleCS } from "../glbim-viewer";
+import { GlbimOptions } from "../glbim-options";
 class LoadingAnimation {
   protected readonly _loaderElement: HTMLElement;
 
@@ -130,11 +130,11 @@ class DemoViewer {
   //#endregion
 
   private readonly _loader: LoadingAnimation;
-  private readonly _viewer: CherubimViewer;
+  private readonly _viewer: GlbimViewer;
 
   private _subscriptions: Subscription[] = [];
 
-  private _options: CherubimOptions;
+  private _options: GlbimOptions;
   private _openedModelNameByGuid = new Map<string, string>();
   private _selectedMeshIds: string[] = [];
   private _hiddenMeshIds: string[] = [];
@@ -186,10 +186,10 @@ class DemoViewer {
     this._loader = new LoadingAnimation();
     this._loader.showAsync(this._outerContainer);
 
-    this._viewer = new CherubimViewer(DemoViewer.viewerContainerSel, 
+    this._viewer = new GlbimViewer(DemoViewer.viewerContainerSel, 
       "/assets/draco/", 
       "/assets/ifc/",
-      new CherubimOptions(<CherubimOptions>{
+      new GlbimOptions(<GlbimOptions>{
         axesHelperPlacement: "top-right",
         meshMergeType: "scene",     
         fastRenderType: null, 

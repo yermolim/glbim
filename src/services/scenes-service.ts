@@ -1,4 +1,4 @@
-import { CherubimOptions } from "../glbim-options";
+import { GlbimOptions } from "../glbim-options";
 
 import { Axes } from "../components/axes";
 import { Lights } from "../components/lights";
@@ -10,7 +10,7 @@ import { SimplifiedScene } from "../scenes/simplified-scene";
 import { CameraService } from "./camera-service";
 
 export class ScenesService {  
-  private readonly _options: CherubimOptions;
+  private readonly _options: GlbimOptions;
 
   private _lights: Lights; 
   get lights(): Lights {
@@ -35,7 +35,7 @@ export class ScenesService {
   }
 
   constructor(container: HTMLElement, cameraService: CameraService, 
-    options: CherubimOptions) {
+    options: GlbimOptions) {
     if (!options) {
       throw new Error("Options is not defined");
     }

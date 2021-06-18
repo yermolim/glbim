@@ -1,6 +1,6 @@
 import { MeshMergeType, FastRenderType, CornerName, Vec4DoubleCS } from "./common-types";
 
-export class CherubimOptions {
+export class GlbimOptions {
   /**
    * Enable WebGL anti-aliasing 
    */

@@ -2,7 +2,7 @@ import { BehaviorSubject } from "rxjs";
 import { NoToneMapping, Object3D, PerspectiveCamera, 
   sRGBEncoding, Vector2, Vector3, WebGLRenderer } from "three";
 
-import { CherubimOptions } from "../glbim-options";
+import { GlbimOptions } from "../glbim-options";
 import { Mesh_BG } from "../common-types";
 
 import { CameraService } from "./camera-service";
@@ -17,8 +17,8 @@ export class RenderService {
   private readonly _loaderService: ModelLoaderService;  
   private readonly _scenesService: ScenesService;
 
-  private _options: CherubimOptions;    
-  set options(value: CherubimOptions) {
+  private _options: GlbimOptions;    
+  set options(value: GlbimOptions) {
     this._options = value;
   }
 
@@ -41,7 +41,7 @@ export class RenderService {
 
   constructor(container: HTMLElement, loaderService: ModelLoaderService, 
     cameraService: CameraService, scenesService: ScenesService, 
-    options: CherubimOptions, lastFrameTimeSubject?: BehaviorSubject<number>) {
+    options: GlbimOptions, lastFrameTimeSubject?: BehaviorSubject<number>) {
     if (!container) {
       throw new Error("Container is not defined");
     }

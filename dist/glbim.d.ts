@@ -89,7 +89,7 @@ export declare class Distance {
 		z: number;
 	});
 }
-export declare class CherubimOptions {
+export declare class GlbimOptions {
 	useAntialiasing: boolean;
 	usePhysicalLights: boolean;
 	ambientLightIntensity: number;
@@ -111,8 +111,8 @@ export declare class CherubimOptions {
 	constructor(item?: object);
 }
 export declare type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
-export declare class CherubimViewer {
-	optionsChange$: Observable<CherubimOptions>;
+export declare class GlbimViewer {
+	optionsChange$: Observable<GlbimOptions>;
 	modeChange$: Observable<ViewerInteractionMode>;
 	contextLoss$: Observable<boolean>;
 	lastFrameTime$: Observable<number>;
@@ -153,9 +153,9 @@ export declare class CherubimViewer {
 	private _optionsChange;
 	private _contextLoss;
 	private _lastFrameTime;
-	constructor(containerSelector: string, dracoLibPath?: string, ifcLibPath?: string, options?: CherubimOptions);
+	constructor(containerSelector: string, dracoLibPath?: string, ifcLibPath?: string, options?: GlbimOptions);
 	destroy(): void;
-	updateOptionsAsync(options: CherubimOptions): Promise<CherubimOptions>;
+	updateOptionsAsync(options: GlbimOptions): Promise<GlbimOptions>;
 	setInteractionMode(value: ViewerInteractionMode): void;
 	openModelsAsync(modelInfos: ModelFileInfo[]): Promise<ModelLoadedInfo[]>;
 	closeModelsAsync(modelGuids: string[]): Promise<void>;
