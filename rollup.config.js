@@ -18,7 +18,7 @@ export default [
       license({
         banner: `   
           GLB/IFC model viewer
-          Copyright (C) 2020-present, Volodymyr Yermolenko (yermolim@gmail.com)
+          Copyright (C) 2020-present, Volodymyr Yermolenko (yermolim@gmail.com), Chemproject PJSC
       
           This program is free software: you can redistribute it and/or modify
           it under the terms of the GNU Affero General Public License as published
