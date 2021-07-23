@@ -2,6 +2,7 @@ import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import license from "rollup-plugin-license";
 import externals from "rollup-plugin-node-externals";
+import dts from "rollup-plugin-dts";
 // import { terser } from "rollup-plugin-terser";
 
 export default [  
@@ -17,8 +18,8 @@ export default [
     plugins: [
       license({
         banner: `   
-          GLB/IFC model viewer
-          Copyright (C) 2020-present, Volodymyr Yermolenko (yermolim@gmail.com), Chemproject PJSC
+          glbim (GLB/IFC model viewer)
+          Copyright (C) 2020-present Volodymyr Yermolenko (yermolim@gmail.com), Chemproject PJSC
       
           This program is free software: you can redistribute it and/or modify
           it under the terms of the GNU Affero General Public License as published
@@ -32,6 +33,11 @@ export default [
       
           You should have received a copy of the GNU Affero General Public License
           along with this program.  If not, see <https://www.gnu.org/licenses/>.
+          
+          You can be released from the requirements of the license by purchasing
+          a commercial license. Buying such a license is mandatory as soon as you
+          develop commercial activities involving this program without
+          disclosing the source code of your own applications.
         `,
       }),
       externals({
@@ -39,6 +45,15 @@ export default [
         devDeps: false,
       }),
     ]
+  },
+  {
+    input: "tsc/glbim-viewer.d.ts",
+    output: [
+      { file: "dist/glbim.d.ts", format: "esm" },
+    ],
+    plugins: [
+      dts(),
+    ],
   },
   // demo build
   {

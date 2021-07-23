@@ -1,6 +1,6 @@
 /**
- * GLB/IFC model viewer
- * Copyright (C) 2020-present, Volodymyr Yermolenko (yermolim@gmail.com), Chemproject PJSC
+ * glbim (GLB/IFC model viewer)
+ * Copyright (C) 2020-present Volodymyr Yermolenko (yermolim@gmail.com), Chemproject PJSC
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -14,6 +14,11 @@
  * 
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
+ * You can be released from the requirements of the license by purchasing
+ * a commercial license. Buying such a license is mandatory as soon as you
+ * develop commercial activities involving this program without
+ * disclosing the source code of your own applications.
  */
 
 import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
