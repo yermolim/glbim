@@ -564,7 +564,7 @@ class ModelLoaderService {
         modelRoot.traverse(x => {
             if (x instanceof Mesh
                 && x.geometry instanceof BufferGeometry) {
-                const handle = x.name || x.uuid;
+                const handle = x.userData.name || x.name || x.uuid;
                 const id = `${modelGuid}|${handle}`;
                 x.userData.id = id;
                 x.userData.modelGuid = modelGuid;
