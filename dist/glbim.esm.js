@@ -225,7 +225,7 @@ class IFCLoader extends THREE.Loader {
         var _a;
         return __awaiter$5(this, void 0, void 0, function* () {
             const root = new THREE.Group();
-            const modelId = this._ifcAPI.OpenModel(data, { COORDINATE_TO_ORIGIN: false, USE_FAST_BOOLS: true });
+            const modelId = this._ifcAPI.OpenModel(data, { COORDINATE_TO_ORIGIN: false, USE_FAST_BOOLS: false });
             const ifcMeshes = this._ifcAPI.LoadAllGeometry(modelId);
             let lastBreakTime = performance.now();
             for (let i = 0; i < ifcMeshes.size(); i++) {
@@ -275,10 +275,10 @@ class IFCLoader extends THREE.Loader {
     }
     buildThreeGeometry(vertices, indices) {
         const geometry = new THREE.BufferGeometry();
-        const positionNormalBuffer = new THREE.InterleavedBuffer([...vertices], 6);
+        const positionNormalBuffer = new THREE.InterleavedBuffer(vertices, 6);
         geometry.setAttribute("position", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 0));
         geometry.setAttribute("normal", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 3));
-        geometry.setIndex(new THREE.BufferAttribute([...indices], 1));
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         return geometry;
     }
 }
