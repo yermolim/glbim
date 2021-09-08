@@ -328,19 +328,21 @@ export class GlbimViewer {
   /**
    * select items with the specified ids if found
    * @param ids item identifiers represented as `${model_uuid}|${item_name}`
+   * @param manual treat isolation as it was caused by user interaction
    * @returns
    */
-  selectItems(ids: string[]) {
-    this._selectionService.select(this._renderService, ids);
+  selectItems(ids: string[], manual?: boolean) {
+    this._selectionService.select(this._renderService, ids, manual ?? false);
   };
 
   /**
    * make all items semi-transparent except the ones with the specified ids
    * @param ids item identifiers represented as `${model_uuid}|${item_name}`
+   * @param manual treat isolation as it was caused by user interaction
    * @returns 
    */
-  isolateItems(ids: string[]) {
-    this._selectionService.isolate(this._renderService, ids);
+  isolateItems(ids: string[], manual?: boolean) {
+    this._selectionService.isolate(this._renderService, ids, manual ?? false);
   };
   
   /**

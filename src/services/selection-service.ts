@@ -52,7 +52,7 @@ export class SelectionService {
     this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
   }
 
-  select(renderService: RenderService, ids: string[]) {
+  select(renderService: RenderService, ids: string[], manual: boolean) {
     ids ||= [];
 
     if (this._loaderService.loadingInProgress) {
@@ -60,10 +60,10 @@ export class SelectionService {
       return;
     }
 
-    this.findAndSelectMeshes(renderService, ids, false);
+    this.findAndSelectMeshes(renderService, ids, manual, false);
   };
 
-  isolate(renderService: RenderService, ids: string[]) {
+  isolate(renderService: RenderService, ids: string[], manual: boolean) {
     if (!ids?.length) {
       return;
     }
@@ -73,7 +73,7 @@ export class SelectionService {
       return;
     }
 
-    this.findAndSelectMeshes(renderService, ids, true);
+    this.findAndSelectMeshes(renderService, ids, manual, true);
   };
 
   isolateSelected(renderService: RenderService) {
@@ -141,7 +141,7 @@ export class SelectionService {
   runQueuedSelection(renderService: RenderService) {    
     if (this._queuedSelection) {
       const { ids, isolate } = this._queuedSelection;
-      this.findAndSelectMeshes(renderService, ids, isolate);
+      this.findAndSelectMeshes(renderService, ids, false, isolate);
     }
   }
 
@@ -150,12 +150,12 @@ export class SelectionService {
     this.removeModelMeshesFromSelectionArrays(modelGuid);
   };
 
-  private findAndSelectMeshes(renderService: RenderService, ids: string[], isolate: boolean) {    
+  private findAndSelectMeshes(renderService: RenderService, ids: string[], manual: boolean, isolate: boolean) {    
 
     const meshes = ids?.length
       ? this._loaderService.findMeshesByIds(new Set<string>(ids)).found
       : [];
-    this.applySelection(renderService, meshes, false, isolate);
+    this.applySelection(renderService, meshes, manual, isolate);
   }
 
   private clearSelection(renderService: RenderService) {

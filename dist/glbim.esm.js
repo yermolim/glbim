@@ -225,7 +225,7 @@ class IFCLoader extends THREE.Loader {
         var _a;
         return __awaiter$5(this, void 0, void 0, function* () {
             const root = new THREE.Group();
-            const modelId = this._ifcAPI.OpenModel(data, { COORDINATE_TO_ORIGIN: false });
+            const modelId = this._ifcAPI.OpenModel(data, { COORDINATE_TO_ORIGIN: false, USE_FAST_BOOLS: true });
             const ifcMeshes = this._ifcAPI.LoadAllGeometry(modelId);
             let lastBreakTime = performance.now();
             for (let i = 0; i < ifcMeshes.size(); i++) {
@@ -275,10 +275,10 @@ class IFCLoader extends THREE.Loader {
     }
     buildThreeGeometry(vertices, indices) {
         const geometry = new THREE.BufferGeometry();
-        const positionNormalBuffer = new THREE.InterleavedBuffer(vertices, 6);
+        const positionNormalBuffer = new THREE.InterleavedBuffer([...vertices], 6);
         geometry.setAttribute("position", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 0));
         geometry.setAttribute("normal", new THREE.InterleavedBufferAttribute(positionNormalBuffer, 3, 3));
-        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        geometry.setIndex(new THREE.BufferAttribute([...indices], 1));
         return geometry;
     }
 }
@@ -3415,16 +3415,16 @@ class SelectionService {
         this._manualSelectionChange.complete();
         this._loaderService.removeCallback("model-unloaded", this.onLoaderModelUnloaded);
     }
-    select(renderService, ids) {
+    select(renderService, ids, manual) {
         ids || (ids = []);
         if (this._loaderService.loadingInProgress) {
             this._queuedSelection = { ids, isolate: false };
             return;
         }
-        this.findAndSelectMeshes(renderService, ids, false);
+        this.findAndSelectMeshes(renderService, ids, manual, false);
     }
     ;
-    isolate(renderService, ids) {
+    isolate(renderService, ids, manual) {
         if (!(ids === null || ids === void 0 ? void 0 : ids.length)) {
             return;
         }
@@ -3432,7 +3432,7 @@ class SelectionService {
             this._queuedSelection = { ids, isolate: true };
             return;
         }
-        this.findAndSelectMeshes(renderService, ids, true);
+        this.findAndSelectMeshes(renderService, ids, manual, true);
     }
     ;
     isolateSelected(renderService) {
@@ -3493,14 +3493,14 @@ class SelectionService {
     runQueuedSelection(renderService) {
         if (this._queuedSelection) {
             const { ids, isolate } = this._queuedSelection;
-            this.findAndSelectMeshes(renderService, ids, isolate);
+            this.findAndSelectMeshes(renderService, ids, false, isolate);
         }
     }
-    findAndSelectMeshes(renderService, ids, isolate) {
+    findAndSelectMeshes(renderService, ids, manual, isolate) {
         const meshes = (ids === null || ids === void 0 ? void 0 : ids.length)
             ? this._loaderService.findMeshesByIds(new Set(ids)).found
             : [];
-        this.applySelection(renderService, meshes, false, isolate);
+        this.applySelection(renderService, meshes, manual, isolate);
     }
     clearSelection(renderService) {
         for (const mesh of this._selectedMeshes) {
@@ -3613,7 +3613,7 @@ class ColoringService {
         if (!renderService) {
             throw new Error("Render service is not defined");
         }
-        this._selectionService.select(renderService, []);
+        this._selectionService.select(renderService, [], false);
         this.clearMeshesColoring(renderService);
         this.colorMeshes(renderService, coloringInfos);
     }
@@ -4012,12 +4012,12 @@ class GlbimViewer {
     colorItems(coloringInfos) {
         this._coloringService.color(this._renderService, coloringInfos);
     }
-    selectItems(ids) {
-        this._selectionService.select(this._renderService, ids);
+    selectItems(ids, manual) {
+        this._selectionService.select(this._renderService, ids, manual !== null && manual !== void 0 ? manual : false);
     }
     ;
-    isolateItems(ids) {
-        this._selectionService.isolate(this._renderService, ids);
+    isolateItems(ids, manual) {
+        this._selectionService.isolate(this._renderService, ids, manual !== null && manual !== void 0 ? manual : false);
     }
     ;
     zoomToItems(ids) {

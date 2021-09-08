@@ -161,8 +161,8 @@ declare class GlbimViewer {
     closeModelsAsync(modelGuids: string[]): Promise<void>;
     getOpenedModels(): ModelOpenedInfo[];
     colorItems(coloringInfos: ColoringInfo[]): void;
-    selectItems(ids: string[]): void;
-    isolateItems(ids: string[]): void;
+    selectItems(ids: string[], manual?: boolean): void;
+    isolateItems(ids: string[], manual?: boolean): void;
     zoomToItems(ids: string[]): void;
     hideSelectedItems(): void;
     unhideAllItems(): void;

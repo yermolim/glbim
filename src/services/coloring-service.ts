@@ -90,7 +90,7 @@ export class ColoringService {
       throw new Error("Render service is not defined");
     }
 
-    this._selectionService.select(renderService, []);
+    this._selectionService.select(renderService, [], false);
     this.clearMeshesColoring(renderService);
     this.colorMeshes(renderService, coloringInfos);
   }
