@@ -15,8 +15,6 @@ export type Mesh_BG_BM = Mesh<BufferGeometry, MeshBasicMaterial>;
 export type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type AxisName = "x" | "y" | "z" | "-x" | "-y" | "-z";
-
-export type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 // #endregion
 
 // #region interfaces
@@ -77,12 +75,21 @@ export interface MarkerInfo {
   id: string;
   description: string;
   position: Vec4DoubleCS;
-  type: MarkerType;
+  type: string;
 }
 
 export interface SnapPoint {
   meshId: string;
   position: Vec4DoubleCS;
+}
+
+/**data object used to build the texture atlas */
+export interface TextureData {
+  /**path to the asset image will be used to create texture */
+  textureAtlasImageUrl: string;
+  /**a map where the keys are the names of the atlas elements 
+   * and the values are their UV coordinates (from 0 to 1, 0,0 is the bottom-left corner) */
+  uvMap: Map<string, [number, number, number, number]>;
 }
 // #endregion
 

@@ -3,7 +3,6 @@ import { Observable } from 'rxjs';
 declare type MeshMergeType = "scene" | "model" | "model+" | null;
 declare type FastRenderType = "ch" | "aabb" | "ombb" | null;
 declare type CornerName = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-declare type MarkerType = "warn_0" | "warn_1" | "warn_2" | "warn_3" | "photo";
 interface ModelFileInfo {
     url: string;
     guid: string;
@@ -39,11 +38,15 @@ interface MarkerInfo {
     id: string;
     description: string;
     position: Vec4DoubleCS;
-    type: MarkerType;
+    type: string;
 }
 interface SnapPoint {
     meshId: string;
     position: Vec4DoubleCS;
+}
+interface TextureData {
+    textureAtlasImageUrl: string;
+    uvMap: Map<string, [number, number, number, number]>;
 }
 declare class Vec4 {
     x: number;
@@ -107,6 +110,7 @@ declare class GlbimOptions {
     basePoint: Vec4DoubleCS;
     selectionAutoFocusEnabled: boolean;
     cameraControlsDisabled: boolean;
+    markersTextureData: TextureData;
     constructor(item?: object);
 }
 
@@ -188,4 +192,4 @@ declare class GlbimViewer {
     private initRenderService;
 }
 
-export { ColoringInfo, Distance, GlbimOptions, GlbimViewer, MarkerInfo, MarkerType, ModelFileInfo, ModelOpenedInfo, SnapPoint, Vec4DoubleCS, ViewerInteractionMode };
+export { ColoringInfo, Distance, GlbimOptions, GlbimViewer, MarkerInfo, ModelFileInfo, ModelOpenedInfo, SnapPoint, TextureData, Vec4DoubleCS, ViewerInteractionMode };

@@ -25,7 +25,7 @@ export class CanvasTextureBuilder {
     return new CanvasTexture(canvas);
   }  
 
-  static buildSpriteAtlasTexture(): {texture: CanvasTexture; uvMap: Map<string, Vector4>} {
+  static buildDefaultSpriteAtlasTexture(): {texture: CanvasTexture; uvMap: Map<string, Vector4>} {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 256;

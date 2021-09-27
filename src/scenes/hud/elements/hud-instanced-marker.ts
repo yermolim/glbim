@@ -1,5 +1,5 @@
 import { Vector2, Vector4, Matrix4, Object3D, 
-  Sprite, CanvasTexture, InstancedBufferAttribute } from "three";
+  Sprite, InstancedBufferAttribute, Texture } from "three";
 import { Vec4DoubleCS } from "../../../common-types";
 import { MaterialBuilder } from "../../../helpers/material-builder";
 import { HudElement } from "./hud-element";
@@ -17,7 +17,7 @@ export class HudInstancedMarker implements HudElement {
     return this._sprite;
   }
 
-  constructor(hudProjectionMatrix: Matrix4, hudResolution: Vector2, texture: CanvasTexture, 
+  constructor(hudProjectionMatrix: Matrix4, hudResolution: Vector2, texture: Texture, 
     sizePx: number, spriteZIndex: number, cameraZIndex: number, keepVisible: boolean, maxInstances = 10000) {
     const material = MaterialBuilder.buildSpriteMaterial(texture);
     material.onBeforeCompile = shader => {    

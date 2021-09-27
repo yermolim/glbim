@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, Subject } from "rxjs";
-import { Scene, Vector2, Vector3, Matrix4, Vector4 } from "three";
-import { MarkerInfo } from "../../../common-types";
+import { Scene, Vector2, Vector3, Matrix4, Vector4, Texture, TextureLoader } from "three";
+import { MarkerInfo, TextureData } from "../../../common-types";
 import { CanvasTextureBuilder } from "../../../helpers/canvas-texture-builder";
 import { HudTool } from "./hud-tool";
 import { HudInstancedMarkerData, HudInstancedMarker } from "../elements/hud-instanced-marker";
@@ -26,7 +26,7 @@ export class HudMarkers extends HudTool {
   private _tempVec2 = new Vector2();
 
   constructor(hudScene: Scene, hudResolution: Vector2, hudProjectionMatrix: Matrix4, 
-    toolZIndex: number, cameraZIndex: number, spriteSize: number) { 
+    toolZIndex: number, cameraZIndex: number, spriteSize: number, textureData?: TextureData) { 
     super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
 
     this._markersChange = new BehaviorSubject<MarkerInfo[]>([]);
@@ -42,7 +42,7 @@ export class HudMarkers extends HudTool {
     this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
     this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
 
-    this.initSprites();
+    this.initSprites(textureData);
   }
 
   addMarker(marker: MarkerInfo) {
@@ -159,9 +159,21 @@ export class HudMarkers extends HudTool {
     return null;
   }
 
-  private initSprites() {
-    const {texture, uvMap} =  CanvasTextureBuilder.buildSpriteAtlasTexture();
-    this._uvMap = uvMap;
+  private initSprites(textureData?: TextureData) {
+    let texture: Texture;
+    if (textureData && textureData.textureAtlasImageUrl && textureData.uvMap) {
+      texture = new TextureLoader().load(textureData.textureAtlasImageUrl);
+      const uvMap = new Map<string, Vector4>();
+      textureData.uvMap.forEach((v, k) => {
+        uvMap.set(k, new Vector4(v[0], v[1], v[2], v[3]));
+      });
+      this._uvMap = uvMap;
+    } else {
+      const defaultTextureAtlas = CanvasTextureBuilder.buildDefaultSpriteAtlasTexture();
+      texture = defaultTextureAtlas.texture;
+      this._uvMap = defaultTextureAtlas.uvMap;
+    }
+
     this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution,
       texture, this._spriteSize, this._toolZIndex, this._cameraZIndex, true, 1000), "s_warn");
   }  

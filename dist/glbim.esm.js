@@ -23,7 +23,7 @@
 
 import { BehaviorSubject, Subject, AsyncSubject, firstValueFrom } from 'rxjs';
 import * as THREE from 'three';
-import { Matrix4, Scene, Mesh, BufferGeometry, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial, MeshPhongMaterial, MeshLambertMaterial, MeshToonMaterial, SpriteMaterial, NormalBlending, DoubleSide, Color, NoBlending, LineBasicMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, InterleavedBufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
+import { Matrix4, Scene, Mesh, BufferGeometry, MOUSE, TOUCH, Box3, Vector3, Euler, Quaternion, PerspectiveCamera, MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial, MeshPhongMaterial, MeshLambertMaterial, MeshToonMaterial, SpriteMaterial, NormalBlending, DoubleSide, Color, NoBlending, LineBasicMaterial, CanvasTexture, Vector4, Object3D, Vector2, Raycaster, OrthographicCamera, Sprite, AmbientLight, HemisphereLight, DirectionalLight, InstancedBufferAttribute, TextureLoader, Uint32BufferAttribute, Uint8BufferAttribute, Float32BufferAttribute, InterleavedBufferAttribute, WebGLRenderer, sRGBEncoding, NoToneMapping, WebGLRenderTarget, Triangle } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import * as IFC from 'web-ifc';
@@ -53,6 +53,7 @@ class GlbimOptions {
         this.basePoint = null;
         this.selectionAutoFocusEnabled = true;
         this.cameraControlsDisabled = false;
+        this.markersTextureData = null;
         if (item != null) {
             Object.assign(this, item);
         }
@@ -1032,7 +1033,7 @@ class CanvasTextureBuilder {
         }
         return new CanvasTexture(canvas);
     }
-    static buildSpriteAtlasTexture() {
+    static buildDefaultSpriteAtlasTexture() {
         const canvas = document.createElement("canvas");
         canvas.width = 256;
         canvas.height = 256;
@@ -1937,7 +1938,7 @@ class HudDistanceMeasurer extends HudTool {
 }
 
 class HudMarkers extends HudTool {
-    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize) {
+    constructor(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize, textureData) {
         super(hudScene, hudResolution, hudProjectionMatrix, toolZIndex, cameraZIndex, spriteSize);
         this._markers = [];
         this._selectedMarkerIds = new Set();
@@ -1952,7 +1953,7 @@ class HudMarkers extends HudTool {
         this.markersSelectionChange$ = this._markersSelectionChange.asObservable();
         this.markersManualSelectionChange$ = this._markersManualSelectionChange.asObservable();
         this.markersHighlightChange$ = this._markersHighlightChange.asObservable();
-        this.initSprites();
+        this.initSprites(textureData);
     }
     addMarker(marker) {
         if (!marker) {
@@ -2055,9 +2056,21 @@ class HudMarkers extends HudTool {
         }
         return null;
     }
-    initSprites() {
-        const { texture, uvMap } = CanvasTextureBuilder.buildSpriteAtlasTexture();
-        this._uvMap = uvMap;
+    initSprites(textureData) {
+        let texture;
+        if (textureData && textureData.textureAtlasImageUrl && textureData.uvMap) {
+            texture = new TextureLoader().load(textureData.textureAtlasImageUrl);
+            const uvMap = new Map();
+            textureData.uvMap.forEach((v, k) => {
+                uvMap.set(k, new Vector4(v[0], v[1], v[2], v[3]));
+            });
+            this._uvMap = uvMap;
+        }
+        else {
+            const defaultTextureAtlas = CanvasTextureBuilder.buildDefaultSpriteAtlasTexture();
+            texture = defaultTextureAtlas.texture;
+            this._uvMap = defaultTextureAtlas.uvMap;
+        }
         this.addHudElement(new HudInstancedMarker(this._hudProjectionMatrix, this._hudResolution, texture, this._spriteSize, this._toolZIndex, this._cameraZIndex, true, 1000), "s_warn");
     }
     updateSprites() {
@@ -2101,7 +2114,7 @@ class HudMarkers extends HudTool {
 }
 
 class HudScene {
-    constructor() {
+    constructor(markersTextureData) {
         this._cameraZ = 10;
         this._scene = new Scene();
         this._hudResolution = new Vector2();
@@ -2843,7 +2856,7 @@ class ScenesService {
             highlightColor: this._options.highlightColor
         });
         this._simplifiedScene = new SimplifiedScene();
-        this._hudScene = new HudScene();
+        this._hudScene = new HudScene(options.markersTextureData);
     }
     get lights() {
         return this._lights;

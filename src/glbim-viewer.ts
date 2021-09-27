@@ -3,7 +3,7 @@ import { Observable, Subscription, BehaviorSubject } from "rxjs";
 import { GlbimOptions } from "./glbim-options";
 import { ModelLoadedInfo, ModelLoadingInfo, ModelOpenedInfo, ModelFileInfo,
   ColoringInfo, PointerEventHelper, Distance, LoadingQueueInfo,
-  Vec4DoubleCS, SnapPoint, MarkerInfo, MarkerType } from "./common-types";
+  Vec4DoubleCS, SnapPoint, MarkerInfo, TextureData } from "./common-types";
 import { SelectionFrame } from "./components/selection-frame";
 
 import { ModelLoaderService } from "./services/model-loader-service";
@@ -17,7 +17,7 @@ import { ColoringService } from "./services/coloring-service";
 import { HudService } from "./services/hud-service";
 
 export { GlbimOptions, ModelFileInfo, ModelOpenedInfo,
-  Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, MarkerType };  
+  Distance, Vec4DoubleCS, ColoringInfo, SnapPoint, MarkerInfo, TextureData };  
 
 export type ViewerInteractionMode = "select_mesh" | "select_vertex" | "select_sprite" | "measure_distance";
 
@@ -92,7 +92,8 @@ export class GlbimViewer {
    * @param options viewer options
    */
   constructor(containerSelector: string, 
-    dracoLibPath?: string, ifcLibPath?: string,
+    dracoLibPath?: string, 
+    ifcLibPath?: string,
     options?: GlbimOptions) {
     this.initObservables();
 

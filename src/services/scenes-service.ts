@@ -62,7 +62,7 @@ export class ScenesService {
 
     this._simplifiedScene = new SimplifiedScene();
     
-    this._hudScene = new HudScene();
+    this._hudScene = new HudScene(options.markersTextureData);
   }  
 
   destroy() {

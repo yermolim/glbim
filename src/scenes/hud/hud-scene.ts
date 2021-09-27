@@ -2,6 +2,7 @@
 import { Scene, Vector2, Vector3, Matrix4,
   Camera, OrthographicCamera, WebGLRenderer } from "three";
 
+import { TextureData } from "../../common-types";
 import { HudPointSnap } from "./tools/hud-point-snap";
 import { HudDistanceMeasurer } from "./tools/hud-distance-measurer";
 import { HudMarkers } from "./tools/hud-markers";
@@ -31,7 +32,7 @@ export class HudScene {
     return this._markers;
   }
 
-  constructor() { 
+  constructor(markersTextureData?: TextureData) { 
     this._pointSnap = new HudPointSnap(this._scene,
       this._hudResolution, this._hudProjectionMatrix, 9, this._cameraZ, 8);
     this._distanceMeasurer = new HudDistanceMeasurer(this._scene,

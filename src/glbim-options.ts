@@ -1,4 +1,4 @@
-import { MeshMergeType, FastRenderType, CornerName, Vec4DoubleCS } from "./common-types";
+import { MeshMergeType, FastRenderType, CornerName, Vec4DoubleCS, TextureData } from "./common-types";
 
 export class GlbimOptions {
   /**
@@ -94,6 +94,11 @@ export class GlbimOptions {
    * disables panning/zooming and rotating but enables area selection for touch events
    */
   cameraControlsDisabled = false;
+
+  /**
+   * data object that contains the url of the markers texture image and its UV mappings
+   */
+  markersTextureData: TextureData = null;
   
   constructor(item: object = null) {
     if (item != null) {
