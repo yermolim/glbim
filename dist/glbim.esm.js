@@ -170,11 +170,15 @@ class SelectionFrame {
         const yMin = Math.min(y1, y2);
         const xMax = Math.max(x1, x2);
         const yMax = Math.max(y1, y2);
-        const { top, left } = container.getBoundingClientRect();
-        this._element.style.left = xMin - left + "px";
-        this._element.style.top = yMin - top + "px";
-        this._element.style.width = xMax - xMin + "px";
-        this._element.style.height = yMax - yMin + "px";
+        const { top, left, width, height } = container.getBoundingClientRect();
+        const frameLeft = Math.max(xMin - left, 0);
+        const frameTop = Math.max(yMin - top, 0);
+        const frameRight = Math.max(left + width - xMax, 0);
+        const frameBottom = Math.max(top + height - yMax, 0);
+        this._element.style.left = frameLeft + "px";
+        this._element.style.top = frameTop + "px";
+        this._element.style.right = frameRight + "px";
+        this._element.style.bottom = frameBottom + "px";
         container.append(this._element);
     }
     hide() {
@@ -1173,7 +1177,7 @@ class Axes extends Object3D {
         this._axes = new Array(3);
         this._labels = new Array(6);
         this._viewportBak = new Vector4();
-        this.onDivPointerUp = (e) => {
+        this.onDivPointerDown = (e) => {
             if (!this.enabled) {
                 return;
             }
@@ -1349,13 +1353,13 @@ class Axes extends Object3D {
                 div.style.right = 0 + "px";
                 break;
         }
-        div.addEventListener("pointerup", this.onDivPointerUp);
+        div.addEventListener("pointerdown", this.onDivPointerDown);
         this._container.append(div);
         this._div = div;
     }
     destroyDiv() {
         if (this._div) {
-            this._div.removeEventListener("pointerup", this.onDivPointerUp);
+            this._div.removeEventListener("pointerdown", this.onDivPointerDown);
             this._div.remove();
             this._div = null;
         }
@@ -3763,9 +3767,6 @@ class GlbimViewer {
             if (!e.isPrimary) {
                 return;
             }
-            if (!this._options.highlightingEnabled) {
-                return;
-            }
             const x = e.clientX;
             const y = e.clientY;
             if (this._interactionMode === "select_mesh") {
@@ -3775,6 +3776,9 @@ class GlbimViewer {
                     && (Math.abs(x - downX) > maxDiff || Math.abs(y - downY) > maxDiff)) {
                     this._selectionFrame.show(this._container, downX, downY, x, y);
                 }
+            }
+            if (!this._options.highlightingEnabled) {
+                return;
             }
             clearTimeout(this._pointerEventHelper.mouseMoveTimer);
             this._pointerEventHelper.mouseMoveTimer = null;
@@ -4139,11 +4143,9 @@ class GlbimViewer {
         this._renderService = new RenderService(this._container, this._loaderService, this._cameraService, this._scenesService, this._options, this._lastFrameTime);
         this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);
         this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore);
-        this._renderService.addRendererEventListener("pointerdown", this.onRendererPointerDown);
-        this._renderService.addRendererEventListener("pointermove", this.onRendererPointerMove);
-        this._renderService.addRendererEventListener("pointerup", this.onRendererPointerUp);
-        this._renderService.addRendererEventListener("pointerout", this.onRendererPointerUp);
-        this._renderService.addRendererEventListener("pointerleave", this.onRendererPointerUp);
+        this._container.addEventListener("pointerdown", this.onRendererPointerDown);
+        this._container.addEventListener("pointermove", this.onRendererPointerMove);
+        this._container.addEventListener("pointerup", this.onRendererPointerUp);
     }
 }
 

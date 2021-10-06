@@ -234,7 +234,7 @@ export class Axes extends Object3D {
         div.style.right = 0 + "px";
         break;
     }
-    div.addEventListener("pointerup", this.onDivPointerUp);
+    div.addEventListener("pointerdown", this.onDivPointerDown);
 
     this._container.append(div);
     this._div = div;
@@ -242,7 +242,7 @@ export class Axes extends Object3D {
 
   private destroyDiv() {
     if (this._div) {
-      this._div.removeEventListener("pointerup", this.onDivPointerUp);
+      this._div.removeEventListener("pointerdown", this.onDivPointerDown);
       this._div.remove();
       this._div = null;
     }
@@ -258,11 +258,11 @@ export class Axes extends Object3D {
     }
   }
 
-  private onDivPointerUp = (e: PointerEvent) => { 
+  private onDivPointerDown = (e: PointerEvent) => {
     if (!this.enabled) {
       return;
-    }    
-    
+    }
+
     const { clientX, clientY } = e;
     const { left, top, width, height } = this._div.getBoundingClientRect();
 

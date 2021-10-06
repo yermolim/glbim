@@ -39,7 +39,7 @@
   "homepage": "https://github.com/yermolim/glbim#readme",
   "dependencies": {
     "rxjs": "^7.3.1",
-    "three": "^0.133.1",
+    "three": "^0.132.0",
     "web-ifc": "^0.0.25"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
     "@rollup/plugin-strip": "^2.1.0",
     "@rollup/plugin-typescript": "^8.2.5",
     "@types/resize-observer-browser": "^0.1.6",
-    "@types/three": "^0.132.2",
+    "@types/three": "^0.132.0",
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/eslint-plugin-tslint": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",

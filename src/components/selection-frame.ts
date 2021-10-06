@@ -29,11 +29,15 @@ export class SelectionFrame {
     const xMax = Math.max(x1, x2);
     const yMax = Math.max(y1, y2);
 
-    const { top, left } = container.getBoundingClientRect(); 
-    this._element.style.left = xMin - left + "px";
-    this._element.style.top = yMin - top + "px";
-    this._element.style.width = xMax - xMin + "px";
-    this._element.style.height = yMax - yMin + "px";
+    const { top, left, width, height } = container.getBoundingClientRect(); 
+    const frameLeft = Math.max(xMin - left, 0);
+    const frameTop = Math.max(yMin - top, 0);
+    const frameRight = Math.max(left + width - xMax, 0);
+    const frameBottom = Math.max(top + height - yMax, 0);
+    this._element.style.left = frameLeft + "px";
+    this._element.style.top = frameTop + "px";
+    this._element.style.right = frameRight + "px";
+    this._element.style.bottom = frameBottom + "px";
 
     container.append(this._element);
   }

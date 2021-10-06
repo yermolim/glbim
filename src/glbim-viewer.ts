@@ -431,7 +431,7 @@ export class GlbimViewer {
       // ignore all pointer events except the primary one
       return;
     }
-    
+
     this._pointerEventHelper.touch = e.pointerType === "touch";
     this._pointerEventHelper.allowArea = e.pointerType !== "touch" || this._options.cameraControlsDisabled;
     this._pointerEventHelper.downX = e.clientX;
@@ -444,12 +444,6 @@ export class GlbimViewer {
       return;
     }
 
-    if (!this._options.highlightingEnabled) {
-      // return if highlighting is disabled
-      // because the further code affects highlighting only
-      return;
-    } 
-
     const x = e.clientX;
     const y = e.clientY;
     if (this._interactionMode === "select_mesh") {
@@ -461,9 +455,15 @@ export class GlbimViewer {
       }
     }
 
+    if (!this._options.highlightingEnabled) {
+      // return if highlighting is disabled
+      // because the further code affects highlighting only
+      return;
+    }
+
     clearTimeout(this._pointerEventHelper.mouseMoveTimer);
     this._pointerEventHelper.mouseMoveTimer = null;
-    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {      
+    this._pointerEventHelper.mouseMoveTimer = window.setTimeout(() => {
       const { downX, downY, allowArea } = this._pointerEventHelper;
       switch (this._interactionMode) {
         case "select_mesh":
@@ -491,7 +491,7 @@ export class GlbimViewer {
     if (!e.isPrimary || e.button === 1 || e.button === 2) {
       // ignore all pointer events except the primary one
       return;
-    }    
+    }
 
     this._selectionFrame.hide();
     this._highlightService.clearHighlight(this._renderService);
@@ -645,13 +645,12 @@ export class GlbimViewer {
     this._renderService = new RenderService(this._container, this._loaderService, 
       this._cameraService, this._scenesService, this._options, this._lastFrameTime);  
       
-    this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);    
-    this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore); 
-    this._renderService.addRendererEventListener("pointerdown", <any>this.onRendererPointerDown); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("pointermove", <any>this.onRendererPointerMove); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("pointerup", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("pointerout", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
-    this._renderService.addRendererEventListener("pointerleave", <any>this.onRendererPointerUp); // TODO: edit code to keep typings
+    this._renderService.addRendererEventListener("webglcontextlost", this.onRendererContextLoss);
+    this._renderService.addRendererEventListener("webglcontextrestored ", this.onRendererContextRestore);
+
+    this._container.addEventListener("pointerdown", this.onRendererPointerDown);
+    this._container.addEventListener("pointermove", this.onRendererPointerMove);
+    this._container.addEventListener("pointerup", this.onRendererPointerUp);
   }
   // #endregion
 }
