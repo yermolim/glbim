@@ -1,6 +1,6 @@
 {
   "name": "glbim",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Three.js-based GLB model viewer",
   "module": "dist/glbim.esm.js",
   "types": "dist/glbim.d.ts",
