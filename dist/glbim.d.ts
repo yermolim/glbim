@@ -109,6 +109,7 @@ declare class GlbimOptions {
     axesHelperSize: number;
     basePoint: Vec4DoubleCS;
     selectionAutoFocusEnabled: boolean;
+    resetSelectionOnEmptySet: boolean;
     cameraControlsDisabled: boolean;
     markersTextureData: TextureData;
     constructor(item?: object);
@@ -165,7 +166,7 @@ declare class GlbimViewer {
     closeModelsAsync(modelGuids: string[]): Promise<void>;
     getOpenedModels(): ModelOpenedInfo[];
     colorItems(coloringInfos: ColoringInfo[]): void;
-    selectItems(ids: string[], manual?: boolean): void;
+    selectItems(ids: string[], manual?: boolean, force?: boolean): void;
     isolateItems(ids: string[], manual?: boolean): void;
     zoomToItems(ids: string[]): void;
     hideSelectedItems(): void;

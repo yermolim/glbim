@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/member-ordering */
 import { BehaviorSubject } from "rxjs";
 import { NoToneMapping, Object3D, PerspectiveCamera, 
   sRGBEncoding, Vector2, Vector3, WebGLRenderer } from "three";

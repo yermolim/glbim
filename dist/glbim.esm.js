@@ -52,6 +52,7 @@ class GlbimOptions {
         this.axesHelperSize = 128;
         this.basePoint = null;
         this.selectionAutoFocusEnabled = true;
+        this.resetSelectionOnEmptySet = true;
         this.cameraControlsDisabled = false;
         this.markersTextureData = null;
         if (item != null) {
@@ -3406,6 +3407,7 @@ class SelectionService {
         this._selectedMeshes = [];
         this._isolatedMeshes = [];
         this._focusOnProgrammaticSelection = true;
+        this._resetSelectionOnEmptySet = true;
         this.onLoaderModelUnloaded = (modelGuid) => {
             this.removeModelMeshesFromSelectionArrays(modelGuid);
         };
@@ -3423,6 +3425,12 @@ class SelectionService {
     }
     set focusOnProgrammaticSelection(value) {
         this._focusOnProgrammaticSelection = value;
+    }
+    get resetSelectionOnEmptySet() {
+        return this._resetSelectionOnEmptySet;
+    }
+    set resetSelectionOnEmptySet(value) {
+        this._resetSelectionOnEmptySet = value;
     }
     get selectedIds() {
         return this._selectionChange.getValue();
@@ -3500,11 +3508,11 @@ class SelectionService {
         else {
             meshes = found;
         }
-        if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
-            this.clearSelection(renderService);
-        }
-        else {
+        if (meshes === null || meshes === void 0 ? void 0 : meshes.length) {
             this.applySelection(renderService, meshes, true, false);
+        }
+        else if (this._resetSelectionOnEmptySet) {
+            this.clearSelection(renderService);
         }
     }
     runQueuedSelection(renderService) {
@@ -3534,6 +3542,9 @@ class SelectionService {
         this._isolatedMeshes.length = 0;
     }
     applySelection(renderService, meshes, manual, isolateSelected) {
+        if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length) && !this._resetSelectionOnEmptySet) {
+            return;
+        }
         this.clearSelection(renderService);
         this.clearIsolation(renderService);
         if (!(meshes === null || meshes === void 0 ? void 0 : meshes.length)) {
@@ -3983,6 +3994,7 @@ class GlbimViewer {
                 this._cameraService.enableControls();
             }
             this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
+            this._selectionService.resetSelectionOnEmptySet = this._options.resetSelectionOnEmptySet;
             this._optionsChange.next(Object.assign({}, this._options));
             return this._options;
         });
@@ -4029,8 +4041,15 @@ class GlbimViewer {
     colorItems(coloringInfos) {
         this._coloringService.color(this._renderService, coloringInfos);
     }
-    selectItems(ids, manual) {
+    selectItems(ids, manual, force) {
+        const resetSelectionOnEmptySet = this._selectionService.resetSelectionOnEmptySet;
+        if (force && !resetSelectionOnEmptySet) {
+            this._selectionService.resetSelectionOnEmptySet = true;
+        }
         this._selectionService.select(this._renderService, ids, manual !== null && manual !== void 0 ? manual : false);
+        if (!resetSelectionOnEmptySet) {
+            this._selectionService.resetSelectionOnEmptySet = false;
+        }
     }
     ;
     isolateItems(ids, manual) {
@@ -4115,6 +4134,7 @@ class GlbimViewer {
     initSelectionService() {
         this._selectionService = new SelectionService(this._loaderService, this._pickingService);
         this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
+        this._selectionService.resetSelectionOnEmptySet = this._options.resetSelectionOnEmptySet;
         this.meshesSelectionChange$ = this._selectionService.selectionChange$.pipe();
         this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$.pipe();
     }

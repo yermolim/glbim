@@ -78,6 +78,8 @@ class DemoViewer {
   static readonly btnToggleNavigationSel = "#btn-toggle-navigation";
   static readonly btnToggleDataOverlaySel = "#btn-toggle-data-overlay";
   static readonly btnToggleSettingsOverlaySel = "#btn-toggle-settings-overlay";
+  static readonly btnToggleResettingSelectionSel = "#btn-toggle-resetting-selection";
+  static readonly btnResetSelectionSel = "#btn-reset-selection";
   static readonly btnsModeSel = ".btn-mode-selection";
 
   static readonly cbxAntiAliasingSel = "#cb-aa";
@@ -113,6 +115,8 @@ class DemoViewer {
   private readonly _btnToggleNavigation: HTMLDivElement;
   private readonly _btnToggleDataOverlay: HTMLDivElement;
   private readonly _btnToggleSettingsOverlay: HTMLDivElement;
+  private readonly _btnToggleResettingSelection: HTMLDivElement;
+  private readonly _btnResetSelection: HTMLDivElement;
   private readonly _btnModes: HTMLDivElement[] = [];
 
   private readonly _cbxAntiAliasing: HTMLInputElement;
@@ -167,6 +171,8 @@ class DemoViewer {
     this._btnToggleNavigation = document.querySelector(DemoViewer.btnToggleNavigationSel);
     this._btnToggleDataOverlay = document.querySelector(DemoViewer.btnToggleDataOverlaySel);
     this._btnToggleSettingsOverlay = document.querySelector(DemoViewer.btnToggleSettingsOverlaySel);
+    this._btnToggleResettingSelection = document.querySelector(DemoViewer.btnToggleResettingSelectionSel);
+    this._btnResetSelection = document.querySelector(DemoViewer.btnResetSelectionSel);
     const modeSelectionButtons = document.querySelectorAll(DemoViewer.btnsModeSel);
     modeSelectionButtons.forEach(x => this._btnModes.push(x as HTMLDivElement));
 
@@ -255,6 +261,13 @@ class DemoViewer {
       this._settingsOverlay.classList.toggle("hidden");
       this._btnToggleSettingsOverlay.classList.toggle("active");
     });
+    this._btnToggleResettingSelection.addEventListener("click", () => {
+      this._options.resetSelectionOnEmptySet = !this._options.resetSelectionOnEmptySet;
+      this._viewer.updateOptionsAsync(this._options);
+    });
+    this._btnResetSelection.addEventListener("click", async () => {
+      this._viewer.selectItems([], true, true);
+    });
     this._btnModes.forEach(x => {
       x.addEventListener("click", () => this.setMode(<any>x.dataset.mode));
     });
@@ -302,6 +315,11 @@ class DemoViewer {
         } else {
           this._btnToggleAutofocus.classList.remove("active");
         }
+        if (!this._options.resetSelectionOnEmptySet) {
+          this._btnToggleResettingSelection.classList.add("active");
+        } else {
+          this._btnToggleResettingSelection.classList.remove("active");
+        }
         this._cbxAntiAliasing.checked = this._options.useAntialiasing;
         this._cbxPhysicalLights.checked = this._options.usePhysicalLights;
         this._cbxAxesHelper.checked = this._options.axesHelperEnabled;
@@ -330,6 +348,7 @@ class DemoViewer {
           this._btnFitElementsToView.classList.remove("disabled");
           this._btnHideSelected.classList.remove("disabled");
           this._btnPaintSelected.classList.remove("disabled");
+          this._btnResetSelection.classList.remove("disabled");
 
           this._selectionGridPromise = new Promise<void>((resolve, reject) => {
             setTimeout(async () => {
@@ -364,6 +383,7 @@ class DemoViewer {
           this._btnFitElementsToView.classList.add("disabled");
           this._btnHideSelected.classList.add("disabled");
           this._btnPaintSelected.classList.add("disabled");
+          this._btnResetSelection.classList.add("disabled");
         }
       }),
 

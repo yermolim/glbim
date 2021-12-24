@@ -248,6 +248,7 @@ export class GlbimViewer {
     }
     
     this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
+    this._selectionService.resetSelectionOnEmptySet = this._options.resetSelectionOnEmptySet;
 
     this._optionsChange.next(Object.assign({}, this._options));  
     return this._options;
@@ -332,8 +333,20 @@ export class GlbimViewer {
    * @param manual treat isolation as it was caused by user interaction
    * @returns
    */
-  selectItems(ids: string[], manual?: boolean) {
+  selectItems(ids: string[], manual?: boolean, force?: boolean) {
+    const resetSelectionOnEmptySet = this._selectionService.resetSelectionOnEmptySet;
+    if (force && !resetSelectionOnEmptySet) {
+      // if forced, temporarily enable resetting selection on empty set
+      this._selectionService.resetSelectionOnEmptySet = true;
+    }
+
+    // the selection call itself
     this._selectionService.select(this._renderService, ids, manual ?? false);
+
+    if (!resetSelectionOnEmptySet) {
+      // if resetting selection was disabled, enable it again
+      this._selectionService.resetSelectionOnEmptySet = false;
+    }
   };
 
   /**
@@ -609,6 +622,7 @@ export class GlbimViewer {
   private initSelectionService() {    
     this._selectionService = new SelectionService(this._loaderService, this._pickingService);
     this._selectionService.focusOnProgrammaticSelection = this._options.selectionAutoFocusEnabled;
+    this._selectionService.resetSelectionOnEmptySet = this._options.resetSelectionOnEmptySet;
     
     this.meshesSelectionChange$ = this._selectionService.selectionChange$.pipe();
     this.meshesManualSelectionChange$ = this._selectionService.manualSelectionChange$.pipe();

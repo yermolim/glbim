@@ -26,8 +26,8 @@
     <div class="abs-stretch fl-column fl-ai-stretch fl-jc-stretch">
         <div id="outer-container" class="relative fl full-size">    
             <div id="viewer-container" class="abs-stretch"></div>
-            <div class="abs-topleft fl-column margin-3">              
-                <div class="fl-row">
+            <div class="abs-topleft fl-row margin-3">              
+                <div class="fl-column">
                     <div data-mode="select_mesh" title="Enable mesh selection mode" class="viewer-button active btn-mode-selection">
                         <img src="assets/icons/icon_td_mode_select_elements.png"/>
                     </div>
@@ -41,7 +41,7 @@
                         <img src="assets/icons/icon_td_mode_measure.png"/>
                     </div>            
                 </div>  
-                <div class="fl-row">
+                <div class="fl-column">
                     <div id="btn-toggle-autofocus" title="Toggle autofocus on selection" class="viewer-button active">
                         <img src="assets/icons/icon_td_focus_auto.png"/>
                     </div>
@@ -55,7 +55,7 @@
                         <img src="assets/icons/icon_td_fit_screen.png"/>
                     </div>
                 </div>     
-                <div class="fl-row">
+                <div class="fl-column">
                     <div id="btn-hide-selected" title="Hide selected elements" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_hide.png"/>
                     </div>
@@ -63,12 +63,20 @@
                         <img src="assets/icons/icon_td_show_all.png"/>
                     </div>
                 </div>    
-                <div class="fl-row">
+                <div class="fl-column">
                     <div id="btn-paint-selected" title="Paint selected element" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_brush.png"/>
                     </div>
                     <div id="btn-unpaint-all" title="Clear all paint from elements" class="viewer-button disabled">
                         <img src="assets/icons/icon_td_brush_hide.png"/>
+                    </div>
+                </div>   
+                <div class="fl-column">
+                    <div id="btn-toggle-resetting-selection" title="Reset selection using button only" class="viewer-button">
+                        <img src="assets/icons/icon_td_reset_selection_by_button.png"/>
+                    </div>
+                    <div id="btn-reset-selection" title="Reset selection" class="viewer-button disabled">
+                        <img src="assets/icons/icon_td_reset_selection.png"/>
                     </div>
                 </div>   
             </div>        

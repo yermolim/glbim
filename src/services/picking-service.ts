@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/member-ordering */
 import { BufferAttribute, Camera, Face, Mesh, Raycaster, Scene, 
   Triangle, Vector2, Vector3, WebGLRenderer } from "three";
 

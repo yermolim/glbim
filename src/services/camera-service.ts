@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/member-ordering */
 import { Observable, BehaviorSubject } from "rxjs";
-import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera, TOUCH } from "three";
+import { Object3D, Box3, Vector3, Quaternion, Euler, PerspectiveCamera } from "three";
 
 import { AxisName, Vec4DoubleCS } from "../common-types";
 import { CameraControls } from "../helpers/camera-controls";

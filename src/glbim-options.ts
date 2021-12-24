@@ -89,6 +89,11 @@ export class GlbimOptions {
    * defines if the camera focus should move to the programmatically selected items
    */
   selectionAutoFocusEnabled = true;
+  /**
+   * defines if the empty selection set will reset the current selection.
+   * f.e. clicking on an empty spot inside the viewer or dragging an empty selection area
+   */
+  resetSelectionOnEmptySet = true;
 
   /**
    * disables panning/zooming and rotating but enables area selection for touch events

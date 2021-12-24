@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/member-ordering */
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 
 import { Mesh_BG } from "../common-types";
@@ -22,6 +23,17 @@ export class SelectionService {
   private _focusOnProgrammaticSelection = true;
   set focusOnProgrammaticSelection(value: boolean) {
     this._focusOnProgrammaticSelection = value;
+  }
+  
+  /**
+   * reset current selection if selection set is empty
+   */
+  private _resetSelectionOnEmptySet = true;
+  get resetSelectionOnEmptySet(): boolean {
+    return this._resetSelectionOnEmptySet;
+  }
+  set resetSelectionOnEmptySet(value: boolean) {
+    this._resetSelectionOnEmptySet = value;
   }
 
   get selectedIds(): Set<string> {    
@@ -131,10 +143,10 @@ export class SelectionService {
       meshes = found;
     }
 
-    if (!meshes?.length) {
-      this.clearSelection(renderService);
-    } else {
+    if (meshes?.length) {
       this.applySelection(renderService, meshes, true, false);
+    } else if (this._resetSelectionOnEmptySet) {
+      this.clearSelection(renderService);
     }
   }
 
@@ -176,6 +188,10 @@ export class SelectionService {
 
   private applySelection(renderService: RenderService, meshes: Mesh_BG[], 
     manual: boolean, isolateSelected: boolean) {
+
+    if (!meshes?.length && !this._resetSelectionOnEmptySet) {
+      return;
+    }
 
     this.clearSelection(renderService);
     this.clearIsolation(renderService);
