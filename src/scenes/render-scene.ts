@@ -34,6 +34,11 @@ export class RenderScene {
   private _sourceMeshesByGeometryIndex = new Map<number, Mesh_BG[]>();
   private _renderMeshBySourceMesh = new Map<Mesh_BG, Mesh_BG>();  
   private _geometryIndicesNeedSort = new Set<number>();
+
+  constructor(colors: RenderSceneColors) {
+    this.updateCommonColors(colors);
+    this._globalMaterial = MaterialBuilder.buildGlobalMaterial();
+  }
   
   get scene(): Scene {
     return this._scene;
@@ -43,11 +48,6 @@ export class RenderScene {
   }
   get meshes(): Mesh_BG[] {
     return [...this._renderMeshBySourceMesh.values()];
-  }
-
-  constructor(colors: RenderSceneColors) {
-    this.updateCommonColors(colors);
-    this._globalMaterial = MaterialBuilder.buildGlobalMaterial();
   }
 
   destroy() {    
@@ -479,7 +479,7 @@ export class RenderScene {
         } else {
           transparentMeshes.push(mesh);
         }
-      }
+      }      
 
       renderGeometry = this._geometries[index];
       indexArray = renderGeometry.indices.array as Uint32Array;

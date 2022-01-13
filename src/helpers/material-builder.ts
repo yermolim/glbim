@@ -33,7 +33,16 @@ export class MaterialBuilder {
       );      
       shader.fragmentShader = shader.fragmentShader.replace("uniform float roughness;", "varying float roughness;");
       shader.fragmentShader = shader.fragmentShader.replace("uniform float metalness;", "varying float metalness;");
-      shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");  
+      shader.fragmentShader = shader.fragmentShader.replace("uniform float opacity;", "varying float opacity;");
+      // filter out opaque fragments
+      shader.fragmentShader = shader.fragmentShader.replace("vec4 diffuseColor = vec4( diffuse, opacity );", 
+        `
+        if (opacity <= 0.0) {
+          discard;
+        }
+        vec4 diffuseColor = vec4( diffuse, opacity );
+        `
+      );
     };
     return material;
   }    
